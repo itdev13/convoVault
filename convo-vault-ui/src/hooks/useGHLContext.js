@@ -54,7 +54,7 @@ export const useGHLContext = () => {
                 resolvedRef.current = true;
                 
                 // Use cloudflare tunnel for backend
-                const backendUrl = 'https://convo-vault-rho2kslh4-vara-prasads-projects.vercel.app';
+                const backendUrl = 'https://convo-vault.vercel.app';
                 const decryptUrl = `${backendUrl}/api/auth/decrypt-user-data`;
                 
                 console.log('Decrypt URL:', decryptUrl);
@@ -164,7 +164,7 @@ export const useGHLContext = () => {
               window.location.href = 'http://localhost:3003/about.html';
             } else {
               // Redirect to about page on cloudflare backend
-              window.location.href = 'https://convo-vault-rho2kslh4-vara-prasads-projects.vercel.app/about.html';
+              window.location.href = 'https://convo-vault.vercel.app/about.html';
             }
           }
         }

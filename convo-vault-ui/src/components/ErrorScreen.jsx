@@ -28,7 +28,7 @@ export default function ErrorScreen({ error }) {
                     <strong>Install ConvoVault via OAuth:</strong>
                     <br />
                     <a 
-                      href="https://convo-vault-rho2kslh4-vara-prasads-projects.vercel.app/oauth/authorize" 
+                      href="https://convo-vault.vercel.app/oauth/authorize" 
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-block mt-2 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
@@ -70,7 +70,7 @@ export default function ErrorScreen({ error }) {
             )}
             {(isNotConnected || isInstallRequired) && (
               <a
-                href="https://convo-vault-rho2kslh4-vara-prasads-projects.vercel.app/oauth/authorize"
+                href="https://convo-vault.vercel.app/oauth/authorize"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-center font-medium"

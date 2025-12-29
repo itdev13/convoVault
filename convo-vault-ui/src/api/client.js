@@ -3,7 +3,7 @@ import axios from 'axios';
 // Create axios instance
 // Use cloudflare tunnel for backend
 const apiClient = axios.create({
-  baseURL: 'https://convo-vault-rho2kslh4-vara-prasads-projects.vercel.app/api',
+  baseURL: 'https://convo-vault.vercel.app/api',
   headers: {
     'Content-Type': 'application/json',
   },
