@@ -53,7 +53,7 @@ export const useGHLContext = () => {
                 }
                 resolvedRef.current = true;
                 
-                // Use cloudflare tunnel for backend
+                // Use Render.com for backend
                 const backendUrl = 'https://marketplace-fpq5.onrender.com';
                 const decryptUrl = `${backendUrl}/api/auth/decrypt-user-data`;
                 
@@ -152,20 +152,11 @@ export const useGHLContext = () => {
                 });
                 setLoading(false);
           } else {
-            // No context available - redirect to about page
+            // No context available - redirect to about page on FRONTEND
             console.warn('❌ No context available - redirecting to about page');
             
-            // Check if we're on localhost
-            const isLocalhost = window.location.hostname === 'localhost' || 
-                               window.location.hostname === '127.0.0.1';
-            
-            if (isLocalhost) {
-              // Redirect to about page on backend
-              window.location.href = 'http://localhost:3003/about.html';
-            } else {
-              // Redirect to about page on cloudflare backend
-              window.location.href = 'https://marketplace-fpq5.onrender.com/about.html';
-            }
+            // Redirect to about page on Vercel (frontend)
+            window.location.href = 'https://convo-vault.vercel.app/about.html';
           }
         }
       } catch (err) {

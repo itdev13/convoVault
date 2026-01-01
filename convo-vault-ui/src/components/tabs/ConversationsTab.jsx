@@ -151,6 +151,7 @@ export default function ConversationsTab({ onSelectConversation }) {
                 onClick={() => onSelectConversation(conv)}
                 className="group bg-white border-1 border-solid border-gray-200 hover:border-blue-400 rounded-lg shadow-sm hover:shadow-md transition-all cursor-pointer border-2 border-solid border-blue-100"
               >
+                {console.log(conv)}
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Create axios instance
-// Use cloudflare tunnel for backend
+// Use Render.com for backend
 const apiClient = axios.create({
   baseURL: 'https://marketplace-fpq5.onrender.com/api',
   headers: {
