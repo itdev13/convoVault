@@ -13,7 +13,7 @@ const database = require('./config/database');
 class ConversationsManagerApp {
   constructor() {
     this.app = express();
-    this.port = process.env.PORT || 3003;
+    this.port = process.env.PORT || 3000;
     
     this.setupMiddleware();
     this.setupRoutes();
@@ -34,7 +34,8 @@ class ConversationsManagerApp {
             origin.includes('127.0.0.1') ||
             origin.includes('trycloudflare.com') ||
             origin.includes('gohighlevel.com') ||
-            origin.includes('onrender.com') ||
+            origin.includes('vaultsuite.store') ||
+            origin.includes('vercel.app') ||
             origin.includes('leadconnectorhq.com')) {
           return callback(null, true);
         }

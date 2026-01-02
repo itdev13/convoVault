@@ -247,7 +247,7 @@ router.get('/callback', async (req, res) => {
           </div>
           
           <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <a href="https://convo-vault.vercel.app/about.html" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
+            <a href="https://convo.vaultsuite.store/about.html" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
               🌐 Visit ConvoVault Website
             </a>
           </div>
