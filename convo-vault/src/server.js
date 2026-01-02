@@ -86,6 +86,10 @@ class ConversationsManagerApp {
     const authRoutes = require('./routes/auth');
     this.app.use('/api/auth', authRoutes);
 
+    // Webhook routes (must be before other routes - no auth required)
+    const webhookRoutes = require('./routes/webhooks');
+    this.app.use('/api/webhooks', webhookRoutes);
+
     // Feature routes
     const conversationsRoutes = require('./routes/conversations');
     const messagesRoutes = require('./routes/messages');
