@@ -246,9 +246,36 @@
       font-size: 18px;
       word-break: break-all;
     }
+    /* Hide content by default - only show if in iframe */
+    body {
+      display: none;
+    }
+
+    body.in-iframe {
+      display: block;
+    }
   </style>
+  
+  <!-- Immediate iframe check before any content loads -->
+  <script>
+    (function() {
+      // Check if in iframe
+      try {
+        if (window.self !== window.top) {
+          // We're in an iframe - allow display
+          document.documentElement.style.display = 'block';
+        } else {
+          // Not in iframe - redirect immediately
+          window.location.replace('https://convo.vaultsuite.store/about.html');
+        }
+      } catch (e) {
+        // Cross-origin error means we're in iframe - allow display
+        document.documentElement.style.display = 'block';
+      }
+    })();
+  </script>
 </head>
-<body>
+<body class="in-iframe">
   <div class="container">
     <div class="header">
       <h1>🔐 ConvoVault API Documentation</h1>
@@ -722,32 +749,6 @@
   <script>
     // Global token storage
     let currentToken = null;
-
-    // Immediate iframe check (before page loads)
-    (function() {
-      // Check if not in iframe
-      try {
-        if (window.self === window.top || window.parent === window) {
-          // Not in iframe - redirect immediately
-          console.warn('❌ API Docs must be accessed via GHL app');
-          window.location.replace('https://convo.vaultsuite.store/about.html');
-        }
-      } catch (e) {
-        // Cross-origin iframe - this is expected for GHL
-        // Do nothing, we're in an iframe
-      }
-    })();
-
-    // Additional check after DOM loads
-    window.addEventListener('DOMContentLoaded', () => {
-      try {
-        if (window.self === window.top || window.parent === window) {
-          window.location.replace('https://convo.vaultsuite.store/about.html');
-        }
-      } catch (e) {
-        // Cross-origin iframe - we're good
-      }
-    });
 
     // Get user token from GHL context
     async function getMyToken() {
