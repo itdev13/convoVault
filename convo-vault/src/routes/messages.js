@@ -39,8 +39,6 @@ router.get('/:conversationId', authenticateSession, async (req, res) => {
       sortOrder
     });
 
-    console.log('GHL API Response:', JSON.stringify(result, null, 2));
-    
     // GHL API structure: { messages: { messages: [...] } }
     let messages = [];
     let nextCursor = null;
