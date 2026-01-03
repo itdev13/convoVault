@@ -18,7 +18,8 @@ export default function Dashboard() {
     { id: 'conversations', label: 'Conversations', icon: '💬' },
     { id: 'messages', label: 'Messages & Export', icon: '📊' },
     { id: 'import', label: 'Import', icon: '📥' },
-    { id: 'support', label: 'Support', icon: '🆘' }
+    { id: 'support', label: 'Support', icon: '🆘' },
+    { id: 'api-docs', label: 'API Docs', icon: '📚', external: true }
   ];
 
   const handleConversationSelect = (conversation) => {
@@ -39,8 +40,13 @@ export default function Dashboard() {
                 <button
                   key={tab.id}
                   onClick={() => {
-                    setActiveTab(tab.id);
-                    setShowConversationView(false); // Exit conversation view when switching tabs
+                    if (tab.external) {
+                      // Navigate to API docs (stays in iframe context)
+                      window.location.href = 'https://convoapi.vaultsuite.store/api-docs.html';
+                    } else {
+                      setActiveTab(tab.id);
+                      setShowConversationView(false); // Exit conversation view when switching tabs
+                    }
                   }}
                   className={`
                     relative flex items-center justify-center gap-3 px-8 py-4 border-b-3 font-semibold text-sm transition-all flex-1
@@ -52,7 +58,8 @@ export default function Dashboard() {
                 >
                   <span className="text-xl">{tab.icon}</span>
                   <span className="hidden sm:inline">{tab.label}</span>
-                  {(activeTab === tab.id || (showConversationView && tab.id === 'conversations')) && (
+                  {tab.external && <span className="text-xs ml-1">📄</span>}
+                  {(activeTab === tab.id || (showConversationView && tab.id === 'conversations')) && !tab.external && (
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-t-full"></div>
                   )}
                 </button>
