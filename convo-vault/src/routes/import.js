@@ -411,11 +411,11 @@ async function importConversations(jobId, defaultLocationId, contacts) {
  */
 router.get('/template', authenticateSession, (req, res) => {
   const template = 'locationId,contactId,name,email,phone,companyName,address1,city,state,postalCode,country,website,timezone,dateOfBirth,gender,tags\n' +
-                   'rf6ygZQRiMIa82DQ1H06,1q8IO9k4WJVhQ1Diajkl,,,,,,,,,,,,,\n' +
-                   'rf6ygZQRiMIa82DQ1H06,,John Doe,john@example.com,+1234567890,Tech Corp,123 Main St,New York,NY,10001,US,https://techcorp.com,America/New_York,1990-01-15,male,vip\n' +
-                   'rf6ygZQRiMIa82DQ1H06,,Jane Smith,jane@test.com,+9876543210,,,,,,,,,,,customer;lead\n' +
-                   'rf6ygZQRiMIa82DQ1H06,,,emily@test.com,,ABC Inc,,,,,,,,,,\n' +
-                   'rf6ygZQRiMIa82DQ1H06,,Mike Wilson,,+11234567890,,,,,,,,,,male,';
+                   'sampleLocationId,sampleContactId,,,,,,,,,,,,,\n' +
+                   'sampleLocationId,,John Doe,john@example.com,+1234567890,Tech Corp,123 Main St,New York,NY,10001,US,https://techcorp.com,America/New_York,1990-01-15,male,vip\n' +
+                   'sampleLocationId,,Jane Smith,jane@test.com,+9876543210,,,,,,,,,,,customer;lead\n' +
+                   'sampleLocationId,,,emily@test.com,,ABC Inc,,,,,,,,,,\n' +
+                   'sampleLocationId,,Mike Wilson,,+11234567890,,,,,,,,,,male,';
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="conversations_import_template.csv"');

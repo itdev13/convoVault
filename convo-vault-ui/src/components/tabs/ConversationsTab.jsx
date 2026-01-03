@@ -21,10 +21,11 @@ export default function ConversationsTab({ onSelectConversation }) {
   const [downloading, setDownloading] = useState(false);
   const [appliedFilters, setAppliedFilters] = useState(filters); // Filters actually used for API
   const [shouldFetch, setShouldFetch] = useState(true); // Trigger for initial load
+  const [searchTimestamp, setSearchTimestamp] = useState(Date.now()); // Force refetch even with same filters
   const { showError, ErrorModalComponent } = useErrorModal();
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['conversations', location?.id, appliedFilters, shouldFetch],
+    queryKey: ['conversations', location?.id, appliedFilters, shouldFetch, searchTimestamp],
     queryFn: async () => {
       try {
         return await conversationsAPI.download(location.id, appliedFilters);
@@ -318,6 +319,7 @@ export default function ConversationsTab({ onSelectConversation }) {
               onClick={() => {
                 setAppliedFilters({...filters}); // Apply current filters (create new object)
                 setShouldFetch(true); // Enable fetch
+                setSearchTimestamp(Date.now()); // Force refetch even if filters unchanged
               }}
               disabled={isLoading}
               className="w-full px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg disabled:opacity-50 font-medium"

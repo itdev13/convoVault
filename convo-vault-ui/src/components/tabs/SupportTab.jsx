@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Input, Button, Upload, message as antMessage } from 'antd';
-import axios from 'axios';
+import { supportAPI } from '../../api/support';
 
 const { TextArea } = Input;
 
@@ -94,17 +94,11 @@ export default function SupportTab() {
         }
       });
 
-      const token = localStorage.getItem('sessionToken');
-      const response = await axios.post('/api/support/ticket', formDataToSend, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      const response = await supportAPI.submitTicket(formDataToSend);
 
       setResult({
         success: true,
-        message: response.data.message
+        message: response.message
       });
 
       // Reset form
@@ -121,9 +115,9 @@ export default function SupportTab() {
       console.error('Support ticket error:', error);
       setResult({
         success: false,
-        message: error.response?.data?.error || error.message
+        message: error.response?.data?.error || error.message || 'Failed to submit support ticket'
       });
-      antMessage.error('Failed to submit support ticket');
+      antMessage.error('Failed to submit support ticket. Please try again.');
     } finally {
       setSubmitting(false);
     }

@@ -19,10 +19,11 @@ export default function MessagesTab() {
   const [cursor, setCursor] = useState(null);
   const [appliedFilters, setAppliedFilters] = useState(filters); // Filters actually used for API
   const [shouldFetch, setShouldFetch] = useState(true); // Trigger for initial load
+  const [searchTimestamp, setSearchTimestamp] = useState(Date.now()); // Force refetch even with same filters
   const { showError, ErrorModalComponent } = useErrorModal();
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['all-messages', location?.id, appliedFilters, cursor, shouldFetch],
+    queryKey: ['all-messages', location?.id, appliedFilters, cursor, shouldFetch, searchTimestamp],
     queryFn: async () => {
       const response = await exportAPI.exportMessages(location.id, {
         channel: appliedFilters.channel || undefined,
@@ -300,6 +301,7 @@ export default function MessagesTab() {
                 setAppliedFilters({...filters}); // Apply current filters (create new object)
                 setCursor(null); // Reset pagination
                 setShouldFetch(true); // Enable fetch
+                setSearchTimestamp(Date.now()); // Force refetch even if filters unchanged
               }}
               type="primary"
               size="large"
