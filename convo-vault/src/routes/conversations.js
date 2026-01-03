@@ -56,13 +56,45 @@ router.get('/download', authenticateSession, async (req, res) => {
     if (conversationId) {
       logger.info('Fetching specific conversation by ID', { locationId, conversationId });
       
-      const conversation = await ghlService.getConversation(locationId, conversationId);
+      const result = await ghlService.getConversation(locationId, conversationId);
+      
+      // Log raw response for debugging different structures
+      logger.info('📦 Single conversation API response', {
+        topLevelKeys: Object.keys(result || {}),
+        hasConversationKey: !!result.conversation,
+        rawSample: JSON.stringify(result).substring(0, 300)
+      });
+      
+      // Normalize single conversation to match search response format
+      // GHL returns different structures: sometimes { conversation: {...} }, sometimes direct object
+      const conversation = result.conversation || result;
+      
+      const normalized = {
+        id: conversation.id,
+        contactId: conversation.contactId,
+        contactName: conversation.contactName || conversation.contact?.name || '',
+        locationId: conversation.locationId,
+        lastMessageBody: conversation.lastMessageBody || '',
+        lastMessageType: conversation.lastMessageType || conversation.type || '',
+        lastMessageDirection: conversation.lastMessageDirection || '',
+        lastMessageDate: conversation.lastMessageDate || conversation.dateUpdated || '',
+        dateAdded: conversation.dateAdded || conversation.dateCreated || '',
+        unreadCount: conversation.unreadCount || 0,
+        status: conversation.status || '',
+        type: conversation.type || conversation.lastMessageType || ''
+      };
+      
+      logger.info('✅ Normalized conversation for export', {
+        hasType: !!normalized.type,
+        hasDirection: !!normalized.lastMessageDirection,
+        normalized
+      });
       
       return res.json({
         success: true,
         message: 'Conversation retrieved successfully',
         data: {
-          conversations: [conversation],
+          conversations: [normalized],
           total: 1
         }
       });
@@ -72,7 +104,15 @@ router.get('/download', authenticateSession, async (req, res) => {
     const sanitizedLimit = sanitizeLimit(limit, 20, 100);
     const sanitizedOffset = sanitizeOffset(offset, 0);
 
-    logger.info('Downloading conversations', { locationId, limit: sanitizedLimit });
+    logger.info('Downloading conversations', { 
+      locationId, 
+      limit: sanitizedLimit,
+      startDate,
+      endDate,
+      lastMessageType,
+      lastMessageDirection,
+      status
+    });
 
     // Build filters with all parameters
     const filters = { limit: sanitizedLimit };
@@ -84,6 +124,8 @@ router.get('/download', authenticateSession, async (req, res) => {
     if (status) filters.status = status;
     if (lastMessageAction) filters.lastMessageAction = lastMessageAction;
     if (sortBy) filters.sortBy = sortBy;
+
+    logger.info('📤 Filters being sent to GHL API', { filters });
 
     // Fetch conversations from API
     const result = await ghlService.searchConversations(locationId, filters);
@@ -141,12 +183,29 @@ router.get('/search', authenticateSession, async (req, res) => {
     if (conversationId) {
       logger.info('Fetching specific conversation by ID', { locationId, conversationId });
       
-      const conversation = await ghlService.getConversation(locationId, conversationId);
+      const result = await ghlService.getConversation(locationId, conversationId);
+      
+      // Normalize single conversation to match search response format
+      const conversation = result.conversation || result;
+      const normalized = {
+        id: conversation.id,
+        contactId: conversation.contactId,
+        contactName: conversation.contactName || conversation.contact?.name || '',
+        locationId: conversation.locationId,
+        lastMessageBody: conversation.lastMessageBody || '',
+        lastMessageType: conversation.lastMessageType || conversation.type || '',
+        lastMessageDirection: conversation.lastMessageDirection || '',
+        lastMessageDate: conversation.lastMessageDate || conversation.dateUpdated || '',
+        dateAdded: conversation.dateAdded || conversation.dateCreated || '',
+        unreadCount: conversation.unreadCount || 0,
+        status: conversation.status || '',
+        type: conversation.type || conversation.lastMessageType || ''
+      };
       
       return res.json({
         success: true,
         data: {
-          conversations: [conversation],
+          conversations: [normalized],
           total: 1
         }
       });

@@ -62,19 +62,26 @@ export default function ConversationsTab({ onSelectConversation }) {
     try {
       setDownloading(true);
       
+      console.log('🔍 Export starting with filters:', filters);
+      
       let allConversations = [];
       const exportLimit = 100; // Always use max limit for export
       let offset = 0;
       let hasMore = true;
       let batchCount = 0;
       
-      // Fetch all conversations in batches of 100 (ignoring UI limit filter)
+      // Fetch all conversations in batches of 100 (applying ALL filters except limit)
       while (hasMore && batchCount < 20) { // Max 2000 conversations
         const response = await conversationsAPI.download(location.id, {
           limit: exportLimit, // Use 100 for export, not user's filter limit
-          startDate: filters.startDate,
-          endDate: filters.endDate,
+          startDate: filters.startDate || undefined,
+          endDate: filters.endDate || undefined,
           conversationId: filters.conversationId || undefined,
+          lastMessageType: filters.lastMessageType || undefined,
+          lastMessageDirection: filters.lastMessageDirection || undefined,
+          status: filters.status || undefined,
+          lastMessageAction: filters.lastMessageAction || undefined,
+          sortBy: filters.sortBy || undefined,
           offset: offset
         });
         
@@ -93,10 +100,11 @@ export default function ConversationsTab({ onSelectConversation }) {
       }
       
       // Convert to CSV with formatted dates and all available fields
-      const csvHeaders = 'Conversation ID,Contact Name,Contact ID,Last Message Date,Last Message Type,Last Message Direction,Last Message,Unread Count,Status,Type\n';
+      const csvHeaders = 'Conversation ID,Created Date,Contact Name,Contact ID,Last Message Date,Last Message Type,Last Message Direction,Last Message,Unread Count,Status,Last Message Channel\n';
       const csvRows = allConversations.map(conv => {
         const lastMessage = (conv.lastMessageBody || '').replace(/"/g, '""').replace(/\n/g, ' ');
-        const formattedDate = conv.lastMessageDate 
+        
+        const formattedLastMessageDate = conv.lastMessageDate 
           ? new Date(conv.lastMessageDate).toLocaleString('en-US', {
               year: 'numeric',
               month: 'short',
@@ -106,7 +114,19 @@ export default function ConversationsTab({ onSelectConversation }) {
               hour12: true
             })
           : '';
-        return `"${conv.id}","${conv.contactName || ''}","${conv.contactId || ''}","${formattedDate}","${conv.lastMessageType || ''}","${conv.lastMessageDirection || ''}","${lastMessage}","${conv.unreadCount || 0}","${conv.status || ''}","${conv.type || ''}"`;
+        
+        const formattedCreatedDate = conv.dateAdded 
+          ? new Date(conv.dateAdded).toLocaleString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            })
+          : '';
+        
+        return `"${conv.id}","${formattedCreatedDate}","${conv.contactName || ''}","${conv.contactId || ''}","${formattedLastMessageDate}","${conv.lastMessageType || ''}","${conv.lastMessageDirection || ''}","${lastMessage}","${conv.unreadCount || 0}","${conv.status || ''}","${conv.type || ''}"`;
       }).join('\n');
       
       const csv = csvHeaders + csvRows;
@@ -218,9 +238,9 @@ export default function ConversationsTab({ onSelectConversation }) {
               onChange={(value) => setFilters({ ...filters, lastMessageType: value })}
               className="w-full"
               size="large"
-              placeholder="All Types Except Email"
+              placeholder="All Types"
               options={[
-                { value: '', label: 'All Types Except Email' },
+                { value: '', label: 'All Types' },
                 { value: 'TYPE_SMS', label: 'SMS' },
                 { value: 'TYPE_EMAIL', label: 'Email' },
                 { value: 'TYPE_CALL', label: 'Call' },

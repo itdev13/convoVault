@@ -21,6 +21,10 @@ class ConversationsManagerApp {
   }
 
   setupMiddleware() {
+    // Trust proxy - Required for ALB/Load Balancer
+    // This allows Express to read X-Forwarded-* headers correctly
+    this.app.set('trust proxy', 1);
+    
     // Configure Helmet to allow GHL iframe embedding and inline scripts for docs
     this.app.use(helmet({
       contentSecurityPolicy: {

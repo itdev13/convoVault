@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { messagesAPI } from '../api/messages';
 import { exportAPI } from '../api/export';
-import { Button, Select } from 'antd';
+import { Button, Select, Tooltip } from 'antd';
 import { useErrorModal } from './ErrorModal';
 
 export default function ConversationMessages({ conversation, onBack }) {
@@ -32,69 +32,153 @@ export default function ConversationMessages({ conversation, onBack }) {
   const hasMore = data?.data?.pagination?.hasMore || false;
   const nextCursor = data?.data?.pagination?.nextCursor;
 
-  // Download ALL messages for this conversation as CSV (fetch in batches, limit 500)
+  // Download ALL messages for this conversation as CSV
+  // Calls API twice in parallel: once for regular messages, once for emails
+  // Creates two separate CSVs with different headers
   const handleDownload = async () => {
     try {
       setDownloading(true);
       
-      let allMessages = [];
-      let cursor = null;
-      let hasMore = true;
-      const exportLimit = 500; // Use max limit for export
-      let batchCount = 0;
+      const exportLimit = 500;
+      const timestamp = Date.now();
+      const baseName = conversation.contactName || 'messages';
       
-      // Fetch all messages using export API with conversationId filter
-      while (hasMore && batchCount < 20) { // Max 10,000 messages per conversation
-        const response = await exportAPI.exportMessages(location.id, {
-          conversationId: conversation.id, // Filter by this conversation
-          limit: exportLimit,
-          cursor: cursor || undefined
-        });
+      // Fetch regular messages (without channel parameter) and emails (channel=Email) in parallel
+      const fetchMessages = async (channel = null) => {
+        let allMessages = [];
+        let cursor = null;
+        let hasMore = true;
+        let batchCount = 0;
         
-        const batch = response.data.messages || [];
-        allMessages = [...allMessages, ...batch];
-        
-        // Check for next cursor
-        cursor = response.data.pagination?.nextCursor;
-        hasMore = !!cursor && batch.length === exportLimit;
-        batchCount++;
-        
-        // Small delay between requests
-        if (hasMore) {
-          await new Promise(resolve => setTimeout(resolve, 300));
+        while (hasMore && batchCount < 20) {
+          const params = {
+            conversationId: conversation.id,
+            limit: exportLimit,
+            cursor: cursor || undefined
+          };
+          
+          if (channel) {
+            params.channel = channel;
+          }
+          
+          const response = await exportAPI.exportMessages(location.id, params);
+          const batch = response.data.messages || [];
+          allMessages = [...allMessages, ...batch];
+          
+          cursor = response.data.pagination?.nextCursor;
+          hasMore = !!cursor && batch.length === exportLimit;
+          batchCount++;
+          
+          if (hasMore) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
         }
+        
+        return allMessages;
+      };
+      
+      // Fetch both in parallel
+      const [regularMessages, emailMessages] = await Promise.all([
+        fetchMessages(), // No channel = all non-email messages
+        fetchMessages('Email') // channel=Email = email messages only
+      ]);
+      
+      // Create regular messages CSV
+      if (regularMessages.length > 0) {
+        const csvHeaders = 'Message Date,Message ID,Conversation ID,Message Type,Direction,Status,Message Body,Contact ID\n';
+        const csvRows = regularMessages.map(msg => {
+          const formattedDate = msg.dateAdded 
+            ? new Date(msg.dateAdded).toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+              })
+            : '';
+          const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
+          return `"${formattedDate}","${msg.id}","${msg.conversationId || ''}","${msg.type || ''}","${msg.direction || ''}","${msg.status || ''}","${message}","${msg.contactId || ''}"`;
+        }).join('\n');
+        
+        const csv = csvHeaders + csvRows;
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${baseName}_messages_${timestamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
       }
       
-      // Convert to CSV with formatted dates
-      const csvHeaders = 'Message Date,Message ID,Conversation ID,Message Type,Direction,Status,Message Body,Contact ID\n';
-      const csvRows = allMessages.map(msg => {
-        const formattedDate = msg.dateAdded 
-          ? new Date(msg.dateAdded).toLocaleString('en-US', {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-              hour12: true
-            })
-          : '';
-        const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
-        return `"${formattedDate}","${msg.id}","${msg.conversationId || ''}","${msg.type || ''}","${msg.direction || ''}","${msg.status || ''}","${message}","${msg.contactId || ''}"`;
-      }).join('\n');
+      // Create email messages CSV with email-specific fields
+      if (emailMessages.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const csvHeaders = 'Message Date,Message ID,Conversation ID,Subject,From,To,CC,BCC,Direction,Status,Message Body,Contact ID\n';
+        const csvRows = emailMessages.map(msg => {
+          const formattedDate = msg.dateAdded 
+            ? new Date(msg.dateAdded).toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+              })
+            : '';
+          const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
+          const subject = (msg.subject || msg.meta?.email?.subject || '').replace(/"/g, '""');
+          const from = msg.from || msg.meta?.email?.from || msg.meta?.from || '';
+          const to = msg.to ? (Array.isArray(msg.to) ? msg.to.join('; ') : msg.to) : msg.meta?.email?.to || msg.meta?.to || '';
+          const cc = msg.cc ? (Array.isArray(msg.cc) ? msg.cc.join('; ') : msg.cc) : msg.meta?.email?.cc || '';
+          const bcc = msg.bcc ? (Array.isArray(msg.bcc) ? msg.bcc.join('; ') : msg.bcc) : msg.meta?.email?.bcc || '';
+          
+          return `"${formattedDate}","${msg.id}","${msg.conversationId || ''}","${subject}","${from}","${to}","${cc}","${bcc}","${msg.direction || ''}","${msg.status || ''}","${message}","${msg.contactId || ''}"`;
+        }).join('\n');
+        
+        const csv = csvHeaders + csvRows;
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${baseName}_emails_${timestamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
       
-      const csv = csvHeaders + csvRows;
+      // Show detailed success message
+      if (regularMessages.length === 0 && emailMessages.length === 0) {
+        alert('ℹ️ No messages found in this conversation.');
+        return;
+      }
       
-      // Download CSV
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `conversation_${conversation.contactName || 'messages'}_${Date.now()}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      let successMessage = '✅ Export Complete!\n\n';
+      
+      if (regularMessages.length > 0 && emailMessages.length > 0) {
+        successMessage += `📥 Downloaded 2 CSV files:\n\n`;
+        successMessage += `1️⃣ ${baseName}_messages_${timestamp}.csv\n`;
+        successMessage += `   • ${regularMessages.length} messages (SMS, WhatsApp, Calls, etc.)\n\n`;
+        successMessage += `2️⃣ ${baseName}_emails_${timestamp}.csv\n`;
+        successMessage += `   • ${emailMessages.length} email messages with full metadata\n`;
+        successMessage += `   • Includes: Subject, From, To, CC, BCC`;
+      } else if (regularMessages.length > 0) {
+        successMessage += `📥 Downloaded 1 CSV file:\n\n`;
+        successMessage += `${baseName}_messages_${timestamp}.csv\n`;
+        successMessage += `• ${regularMessages.length} messages`;
+      } else {
+        successMessage += `📥 Downloaded 1 CSV file:\n\n`;
+        successMessage += `${baseName}_emails_${timestamp}.csv\n`;
+        successMessage += `• ${emailMessages.length} email messages with metadata`;
+      }
+      
+      alert(successMessage);
       
     } catch (err) {
       showError('Export Failed', 'Failed to export messages from this conversation. Please try again.');
@@ -129,19 +213,43 @@ export default function ConversationMessages({ conversation, onBack }) {
               </p>
             </div>
           </div>
-          <Button
-            onClick={handleDownload}
-            loading={downloading}
-            size="large"
-            className="bg-white text-blue-600 hover:bg-blue-50"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            }
-          >
-            {downloading ? 'Exporting...' : 'Export CSV'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleDownload}
+              loading={downloading}
+              size="large"
+              className="bg-white text-blue-600 hover:bg-blue-50"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              }
+            >
+              {downloading ? 'Exporting...' : 'Export CSV'}
+            </Button>
+            <Tooltip 
+              title={
+                <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                  <strong>📧 Email Messages Export</strong>
+                  <br />
+                  If this conversation contains email messages, they will be downloaded as a separate CSV file.
+                  <br /><br />
+                  You'll receive:
+                  <br />
+                  • <strong>messages.csv</strong> - SMS, WhatsApp, etc.
+                  <br />
+                  • <strong>emails.csv</strong> - Email messages (if any)
+                </div>
+              }
+              placement="left"
+            >
+              <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center cursor-help border-2 border-blue-200">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </Tooltip>
+          </div>
         </div>
       </div>
 
@@ -150,9 +258,14 @@ export default function ConversationMessages({ conversation, onBack }) {
         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-            <span className="text-blue-700 font-medium">
-              Fetching all messages from this conversation... This may take a moment.
-            </span>
+            <div className="flex-1">
+              <span className="text-blue-700 font-medium block">
+                Fetching all messages from this conversation...
+              </span>
+              <span className="text-blue-600 text-sm block mt-1">
+                ℹ️ Email messages will be exported to a separate CSV file
+              </span>
+            </div>
           </div>
         </div>
       )}

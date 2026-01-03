@@ -319,6 +319,15 @@ class GHLService {
   /**
    * Search conversations with advanced filters
    * Reference: https://marketplace.gohighlevel.com/docs/ghl/conversations/search-conversation
+   * 
+   * Supported GHL API Parameters (verify in docs):
+   * - locationId (required)
+   * - limit, offset
+   * - status (all, read, unread, starred)
+   * - sortBy (last_message_date, dateUpdated)
+   * - lastMessageType, lastMessageDirection
+   * 
+   * Note: startDate/endDate support varies by API version
    */
   async searchConversations(locationId, filters = {}) {
     // Build query params with all supported filters
@@ -335,24 +344,63 @@ class GHLService {
       }
     });
 
-    return await this.apiRequest(
-      'GET',
-      '/conversations/search',
-      locationId,
-      null,
-      params
-    );
+    logger.info('🔍 Searching conversations with filters', { 
+      locationId, 
+      params: JSON.stringify(params)
+    });
+
+    try {
+      const result = await this.apiRequest(
+        'GET',
+        '/conversations/search',
+        locationId,
+        null,
+        params
+      );
+      
+      logger.info('✅ Conversations search successful', {
+        count: result.conversations?.length || 0
+      });
+      
+      return result;
+      
+    } catch (error) {
+      logger.error('❌ GHL API rejected conversation search', {
+        status: error.response?.status,
+        error: error.response?.data,
+        sentParams: params
+      });
+      throw error;
+    }
   }
 
   /**
    * Get conversation by ID
    */
   async getConversation(locationId, conversationId) {
-    return await this.apiRequest(
-      'GET',
-      `/conversations/${conversationId}`,
-      locationId
-    );
+    try {
+      const result = await this.apiRequest(
+        'GET',
+        `/conversations/${conversationId}`,
+        locationId
+      );
+      
+      logger.info('✅ Single conversation fetched', {
+        conversationId,
+        hasType: !!result.type,
+        hasLastMessageType: !!result.lastMessageType,
+        hasDirection: !!result.lastMessageDirection
+      });
+      
+      return result;
+      
+    } catch (error) {
+      logger.error('❌ Failed to fetch conversation', {
+        conversationId,
+        error: error.message
+      });
+      throw error;
+    }
   }
 
   /**
