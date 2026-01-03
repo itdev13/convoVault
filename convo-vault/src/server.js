@@ -40,44 +40,48 @@ class ConversationsManagerApp {
     }));
     
     // CORS - Strict whitelist of allowed origins
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'https://convo.vaultsuite.store',
+      'https://convoapi.vaultsuite.store'
+    ];
+    
     this.app.use(cors({
       origin: function(origin, callback) {
         // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) return callback(null, true);
         
-        // Whitelist of allowed origins
-        const allowedOrigins = [
-          'http://localhost:5173',
-          'http://127.0.0.1:5173',
-          'https://convo.vaultsuite.store',
-          'https://convoapi.vaultsuite.store',
-        ];
-        
-        // Allow if origin matches whitelist or contains trusted domains
-        const isTrustedDomain = origin.includes('gohighlevel.com') ||
-                               origin.includes('leadconnectorhq.com') ||
-                               origin.includes('vaultsuite.store') ||
-                               origin.includes('vercel.app') ||
-                               (process.env.NODE_ENV === 'development' && (
-                                 origin.includes('localhost') ||
-                                 origin.includes('127.0.0.1') ||
-                                 origin.includes('trycloudflare.com')
-                               ));
-        
-        if (allowedOrigins.includes(origin) || isTrustedDomain) {
+        // Check if origin is in whitelist
+        if (allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
         
-        // Reject unknown origins in production
-        if (process.env.NODE_ENV === 'production') {
-          logger.warn('CORS blocked origin:', origin);
-          return callback(new Error('Not allowed by CORS'));
+        // Allow trusted domains
+        const isTrustedDomain = origin.includes('gohighlevel.com') ||
+                               origin.includes('leadconnectorhq.com') ||
+                               origin.endsWith('vaultsuite.store') ||
+                               origin.endsWith('vercel.app');
+        
+        // In development, also allow localhost and cloudflare
+        const isDevOrigin = process.env.NODE_ENV !== 'production' && (
+          origin.includes('localhost') ||
+          origin.includes('127.0.0.1') ||
+          origin.includes('trycloudflare.com')
+        );
+        
+        if (isTrustedDomain || isDevOrigin) {
+          return callback(null, true);
         }
         
-        // Allow all in development only
-        callback(null, true);
+        // Log rejected origins
+        logger.warn('❌ CORS blocked origin:', origin);
+        return callback(new Error('Not allowed by CORS'));
       },
-      credentials: true
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      exposedHeaders: ['Content-Disposition']
     }));
     
     this.app.use(express.json());
