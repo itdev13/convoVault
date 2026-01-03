@@ -440,7 +440,7 @@ async function importConversations(jobId, defaultLocationId, contacts) {
     }
   }
 
-  logger.info(`📊 ${results.success} success, ${results.failed} failed`);
+  logger.info(`📊 Import complete: ${results.success} created, ${results.skipped} skipped (duplicates), ${results.failed} failed`);
   return results;
 }
 
