@@ -92,6 +92,7 @@ export default function ConversationsTab({ onSelectConversation }) {
       
       // Convert to CSV with formatted dates and all available fields
       const csvHeaders = 'ID,Contact Name,Contact ID,Last Message Date,Last Message Type,Last Message Direction,Last Message,Unread Count,Status,Type\n';
+      console.log('allConversations', allConversations);
       const csvRows = allConversations.map(conv => {
         const lastMessage = (conv.lastMessageBody || '').replace(/"/g, '""').replace(/\n/g, ' ');
         const formattedDate = conv.lastMessageDate 
