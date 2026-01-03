@@ -41,9 +41,9 @@ export default function Dashboard() {
                   key={tab.id}
                   onClick={() => {
                     if (tab.external) {
-                      // Navigate to protected API docs endpoint with auth
+                      // Open API docs in new window (stays within GHL iframe)
                       const token = localStorage.getItem('sessionToken');
-                      window.location.href = `https://convoapi.vaultsuite.store/api/docs?token=${token}`;
+                      window.open(`https://convoapi.vaultsuite.store/api/docs?token=${token}`, '_blank');
                     } else {
                       setActiveTab(tab.id);
                       setShowConversationView(false); // Exit conversation view when switching tabs
