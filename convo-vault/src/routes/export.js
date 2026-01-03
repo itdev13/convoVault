@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ghlService = require('../services/ghlService');
 const logger = require('../utils/logger');
+const { logError, getUserFriendlyMessage } = require('../utils/errorLogger');
 const { authenticateSession } = require('../middleware/auth');
 const { sanitizeLimit, isValidDate } = require('../utils/sanitize');
 
@@ -103,11 +104,11 @@ router.get('/messages', authenticateSession, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Export messages error:', error);
+    logError('Export messages error', error, { locationId, filters: { channel, startDate, endDate, conversationId } });
     res.status(500).json({
       success: false,
       error: 'Failed to export messages',
-      message: error.message
+      message: getUserFriendlyMessage(error)
     });
   }
 });
@@ -172,11 +173,11 @@ router.get('/messages/all', authenticateSession, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Bulk export error:', error);
+    logError('Bulk export error', error, { locationId });
     res.status(500).json({
       success: false,
       error: 'Failed to bulk export',
-      message: error.message
+      message: getUserFriendlyMessage(error)
     });
   }
 });
@@ -221,10 +222,10 @@ router.get('/csv', authenticateSession, async (req, res) => {
     res.send(csv);
 
   } catch (error) {
-    logger.error('CSV export error:', error);
+    logError('CSV export error', error, { locationId, filters });
     res.status(500).json({
       success: false,
-      error: error.message
+      error: getUserFriendlyMessage(error)
     });
   }
 });

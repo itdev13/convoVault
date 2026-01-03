@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const ghlService = require('../services/ghlService');
 const logger = require('../utils/logger');
+const { logError, logWarning } = require('../utils/errorLogger');
 const ImportJob = require('../models/ImportJob');
 const { authenticateSession } = require('../middleware/auth');
 

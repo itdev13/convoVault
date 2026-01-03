@@ -40,7 +40,7 @@ router.post('/access', authenticateSession, (req, res) => {
     });
     
   } catch (error) {
-    logger.error('Error generating docs token:', error);
+    logger.error('Error generating docs token:', error?.message || error?.response?.data?.message || error);
     res.status(500).json({
       success: false,
       error: 'Failed to generate docs access'
@@ -123,7 +123,7 @@ router.get('/', (req, res) => {
     // Serve the HTML file from protected views folder
     res.sendFile(path.join(__dirname, '../views/api-docs.html'));
   } catch (error) {
-    logger.error('Error serving API docs:', error);
+    logger.error('Error serving API docs:', error.message);
     res.status(500).send('Error loading API documentation');
   }
 });

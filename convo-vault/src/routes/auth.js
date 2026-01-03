@@ -133,7 +133,7 @@ router.post('/verify', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Authentication error:', error);
+    logError('Authentication error', error, { locationId, companyId, userId });
     res.status(500).json({
       success: false,
       error: 'Authentication failed'
@@ -201,7 +201,7 @@ router.post('/refresh', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Token refresh error:', error);
+    logError('Token refresh error', error, { oldToken });
     res.status(401).json({
       success: false,
       error: 'Token refresh failed'
@@ -257,7 +257,7 @@ router.get('/session', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Session info error:', error);
+    logError('Session info error', error, { token });
     res.status(401).json({
       success: false,
       error: 'Invalid session'
@@ -300,7 +300,7 @@ router.get('/locations', async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Get locations error:', error);
+    logError('Get locations error', error, { authHeader });
     res.status(500).json({
       success: false,
       error: 'Failed to get sub-accounts'

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ghlService = require('../services/ghlService');
 const logger = require('../utils/logger');
+const { logError, getUserFriendlyMessage } = require('../utils/errorLogger');
 const { authenticateSession } = require('../middleware/auth');
 const { sanitizeLimit, sanitizeOffset, isValidDate } = require('../utils/sanitize');
 
@@ -155,11 +156,11 @@ router.get('/download', authenticateSession, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Download conversations error:', error);
+    logError('Download conversations error', error, { locationId, filters });
     res.status(500).json({
       success: false,
       error: 'Failed to download conversations',
-      message: error.message
+      message: getUserFriendlyMessage(error)
     });
   }
 });
@@ -219,10 +220,10 @@ router.get('/search', authenticateSession, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Search conversations error:', error);
+    logError('Search conversations error', error, { locationId, filters });
     res.status(500).json({
       success: false,
-      error: error.message
+      error: getUserFriendlyMessage(error)
     });
   }
 });
@@ -251,10 +252,10 @@ router.get('/:conversationId', authenticateSession, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Get conversation error:', error);
+    logError('Get conversation error', error, { locationId, conversationId });
     res.status(500).json({
       success: false,
-      error: error.message
+      error: getUserFriendlyMessage(error)
     });
   }
 });

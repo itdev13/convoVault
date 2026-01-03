@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ghlService = require('../services/ghlService');
 const logger = require('../utils/logger');
+const { logError, getUserFriendlyMessage } = require('../utils/errorLogger');
 const { authenticateSession } = require('../middleware/auth');
 const { sanitizeLimit } = require('../utils/sanitize');
 
@@ -83,11 +84,11 @@ router.get('/:conversationId', authenticateSession, async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Get messages error:', error);
+    logError('Get messages error', error, { locationId, conversationId });
     res.status(500).json({
       success: false,
       error: 'Failed to get messages',
-      message: error.message
+      message: getUserFriendlyMessage(error)
     });
   }
 });
@@ -217,7 +218,7 @@ router.get('/:conversationId/download', authenticateSession, async (req, res) =>
     res.send(csvContent);
 
   } catch (error) {
-    logger.error('Download CSV error:', error);
+    logError('Download CSV error', error, { locationId, conversationId });
     res.status(500).send('Error downloading messages');
   }
 });
