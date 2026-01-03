@@ -723,11 +723,29 @@
     // Global token storage
     let currentToken = null;
 
-    // Check if loaded in GHL iframe on page load
+    // Immediate iframe check (before page loads)
+    (function() {
+      // Check if not in iframe
+      try {
+        if (window.self === window.top || window.parent === window) {
+          // Not in iframe - redirect immediately
+          console.warn('❌ API Docs must be accessed via GHL app');
+          window.location.replace('https://convo.vaultsuite.store/about.html');
+        }
+      } catch (e) {
+        // Cross-origin iframe - this is expected for GHL
+        // Do nothing, we're in an iframe
+      }
+    })();
+
+    // Additional check after DOM loads
     window.addEventListener('DOMContentLoaded', () => {
-      if (window.parent === window) {
-        // Not in iframe - redirect to about page
-        window.location.href = 'https://convo.vaultsuite.store/about.html';
+      try {
+        if (window.self === window.top || window.parent === window) {
+          window.location.replace('https://convo.vaultsuite.store/about.html');
+        }
+      } catch (e) {
+        // Cross-origin iframe - we're good
       }
     });
 
