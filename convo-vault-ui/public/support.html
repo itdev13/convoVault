@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ConvoVault - Support</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f7fa;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 60px 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 42px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      font-size: 18px;
+      opacity: 0.9;
+    }
+
+    .content {
+      padding: 60px 40px;
+    }
+
+    .section {
+      margin-bottom: 50px;
+    }
+
+    h2 {
+      font-size: 28px;
+      color: #2d3748;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #667eea;
+    }
+
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 30px;
+      margin: 40px 0;
+    }
+
+    .contact-card {
+      background: #f7fafc;
+      padding: 30px;
+      border-radius: 12px;
+      border: 2px solid #e2e8f0;
+      text-align: center;
+    }
+
+    .contact-card .icon {
+      font-size: 48px;
+      margin-bottom: 15px;
+    }
+
+    .contact-card h3 {
+      color: #2d3748;
+      margin: 10px 0;
+      font-size: 20px;
+    }
+
+    .contact-card a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 18px;
+    }
+
+    .contact-card a:hover {
+      text-decoration: underline;
+    }
+
+    .faq {
+      background: #f7fafc;
+      padding: 25px;
+      margin: 20px 0;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    .faq h3 {
+      color: #667eea;
+      margin: 0 0 10px 0;
+      font-size: 18px;
+    }
+
+    .faq p {
+      color: #4a5568;
+      margin: 0;
+    }
+
+    .footer {
+      background: #2d3748;
+      color: white;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .footer a {
+      color: #90cdf4;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🆘 ConvoVault Support</h1>
+      <p>We're here to help you get the most out of ConvoVault</p>
+    </div>
+
+    <div class="content">
+      <!-- Contact Us -->
+      <section class="section">
+        <h2>📞 Contact Us</h2>
+        <p>Choose the best way to reach our support team:</p>
+
+        <div class="contact-grid">
+          <div class="contact-card">
+            <div class="icon">📧</div>
+            <h3>Email Support</h3>
+            <p style="margin: 10px 0;">Get help via email</p>
+            <a href="mailto:rapiddev21@gmail.com">rapiddev21@gmail.com</a>
+            <p style="margin-top: 10px; font-size: 14px; color: #718096;">Response within 24 hours</p>
+          </div>
+
+          <div class="contact-card">
+            <div class="icon">📱</div>
+            <h3>Phone Support</h3>
+            <p style="margin: 10px 0;">Call or WhatsApp</p>
+            <a href="tel:+916301199891">+91 630 119 9891</a>
+            <p style="margin-top: 10px; font-size: 14px; color: #718096;">Mon-Fri, 9 AM - 6 PM IST</p>
+          </div>
+
+          <div class="contact-card">
+            <div class="icon">💬</div>
+            <h3>In-App Support</h3>
+            <p style="margin: 10px 0;">Submit tickets with screenshots</p>
+            <a href="/">Open ConvoVault</a>
+            <p style="margin-top: 10px; font-size: 14px; color: #718096;">Fastest response</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Common Issues -->
+      <section class="section">
+        <h2>🔧 Common Issues & Solutions</h2>
+
+        <div class="faq">
+          <h3>App not loading in my sub-account</h3>
+          <p>
+            <strong>Solution:</strong> Make sure you've completed the OAuth installation. Try reconnecting your sub-account from the marketplace.
+          </p>
+        </div>
+
+        <div class="faq">
+          <h3>Import failed - file format error</h3>
+          <p>
+            <strong>Solution:</strong> Download the CSV template from the Import tab and ensure your file matches the format. Required fields: contactId or email/phone, and message.
+          </p>
+        </div>
+
+        <div class="faq">
+          <h3>Export returns no results</h3>
+          <p>
+            <strong>Solution:</strong> Check your filters - try expanding the date range or removing optional filters. Ensure the conversation ID is correct.
+          </p>
+        </div>
+
+        <div class="faq">
+          <h3>API authentication failing</h3>
+          <p>
+            <strong>Solution:</strong> Your session token may have expired. Refresh the app to get a new token, or use the /api/auth/refresh endpoint.
+          </p>
+        </div>
+
+        <div class="faq">
+          <h3>File upload size limit exceeded</h3>
+          <p>
+            <strong>Solution:</strong> Maximum file size is 20MB. Split your CSV into smaller files if needed.
+          </p>
+        </div>
+      </section>
+
+      <!-- Feature Documentation -->
+      <section class="section">
+        <h2>📚 Feature Documentation</h2>
+
+        <h3>Advanced Filtering</h3>
+        <p>ConvoVault supports 8+ filter parameters:</p>
+        <ul>
+          <li><code>startDate</code> & <code>endDate</code> - Filter by date range</li>
+          <li><code>status</code> - Filter by conversation status (active, archived)</li>
+          <li><code>lastMessageType</code> - Filter by message type (SMS, Email, WhatsApp)</li>
+          <li><code>lastMessageDirection</code> - Filter by direction (inbound, outbound)</li>
+          <li><code>limit</code> - Number of results (20, 50, 100)</li>
+          <li><code>conversationId</code> - Get specific conversation</li>
+        </ul>
+
+        <h3>CSV Import Format</h3>
+        <p>Required columns:</p>
+        <ul>
+          <li><code>contactId</code> OR (<code>email</code>/<code>phone</code>)</li>
+          <li><code>message</code> - The message text</li>
+        </ul>
+        <p>Optional columns:</p>
+        <ul>
+          <li><code>locationId</code> - Sub-account ID (uses current if not provided)</li>
+          <li><code>firstName</code>, <code>lastName</code> - Contact details</li>
+        </ul>
+
+        <h3>API Integration</h3>
+        <p>Access the API documentation from within the app:</p>
+        <ol>
+          <li>Click <strong>📚 API Docs</strong> in the header</li>
+          <li>Your personal API token will be displayed</li>
+          <li>Copy the token for use in your applications</li>
+          <li>Follow the documented examples for each endpoint</li>
+        </ol>
+      </section>
+
+      <!-- Video Tutorials -->
+      <section class="section">
+        <h2>🎥 Video Tutorials</h2>
+        <p style="color: #718096; font-style: italic;">
+          Video tutorials coming soon! In the meantime, use the in-app support for guided help.
+        </p>
+      </section>
+
+      <!-- Still Need Help? -->
+      <div class="cta-box">
+        <h3>Still Need Help?</h3>
+        <p style="margin-bottom: 20px; opacity: 0.9;">Our support team is ready to assist you!</p>
+        <a href="mailto:rapiddev21@gmail.com" class="cta-button">
+          Contact Support →
+        </a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>&copy; 2026 ConvoVault. All rights reserved.</p>
+      <p style="margin-top: 10px;">
+        <a href="/about.html">Home</a> · 
+        <a href="/setup.html">Documentation</a> · 
+        <a href="/terms.html">Terms</a> · 
+        <a href="/privacy.html">Privacy</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+
