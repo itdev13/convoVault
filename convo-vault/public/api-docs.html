@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ConvoVault API Documentation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 36px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      font-size: 18px;
+      opacity: 0.9;
+    }
+
+    .nav {
+      background: #f7fafc;
+      padding: 20px 40px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      background: white;
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .nav-link:hover {
+      background: #667eea;
+      color: white;
+    }
+
+    .content {
+      padding: 40px;
+    }
+
+    .section {
+      margin-bottom: 60px;
+    }
+
+    .section-title {
+      font-size: 28px;
+      color: #2d3748;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #667eea;
+    }
+
+    .endpoint {
+      background: #f7fafc;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border-left: 4px solid #667eea;
+    }
+
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .method {
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 14px;
+      color: white;
+    }
+
+    .method.get { background: #48bb78; }
+    .method.post { background: #4299e1; }
+    .method.put { background: #ed8936; }
+    .method.delete { background: #f56565; }
+
+    .endpoint-path {
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      color: #2d3748;
+      font-weight: 600;
+    }
+
+    .endpoint-description {
+      color: #4a5568;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    .code-block {
+      background: #2d3748;
+      color: #e2e8f0;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      overflow-x: auto;
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 6px 12px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .copy-btn:hover {
+      background: #764ba2;
+    }
+
+    .copy-btn.copied {
+      background: #48bb78;
+    }
+
+    .params-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+
+    .params-table th {
+      background: #edf2f7;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #2d3748;
+      border-bottom: 2px solid #cbd5e0;
+    }
+
+    .params-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e2e8f0;
+      color: #4a5568;
+    }
+
+    .required {
+      color: #f56565;
+      font-weight: 600;
+    }
+
+    .optional {
+      color: #718096;
+    }
+
+    .auth-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #fed7d7;
+      color: #c53030;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .auth-badge.public {
+      background: #c6f6d5;
+      color: #22543d;
+    }
+
+    .json {
+      color: #9ae6b4;
+    }
+
+    .key {
+      color: #90cdf4;
+    }
+
+    .string {
+      color: #fbd38d;
+    }
+
+    .number {
+      color: #fc8181;
+    }
+
+    .boolean {
+      color: #b794f4;
+    }
+
+    .base-url {
+      background: #edf2f7;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .base-url-label {
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 8px;
+    }
+
+    .base-url-value {
+      color: #667eea;
+      font-size: 18px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔐 ConvoVault API Documentation</h1>
+      <p>Complete API reference for ConvoVault integration</p>
+    </div>
+
+    <div class="nav">
+      <a href="#authentication" class="nav-link">Authentication</a>
+      <a href="#conversations" class="nav-link">Conversations</a>
+      <a href="#messages" class="nav-link">Messages</a>
+      <a href="#import" class="nav-link">Import</a>
+      <a href="#export" class="nav-link">Export</a>
+      <a href="#webhooks" class="nav-link">Webhooks</a>
+    </div>
+
+    <div class="content">
+      <!-- Base URL -->
+      <div class="base-url">
+        <div class="base-url-label">Base URL:</div>
+        <div class="base-url-value">https://convoapi.vaultsuite.store</div>
+      </div>
+
+      <!-- Authentication Section -->
+      <section id="authentication" class="section">
+        <h2 class="section-title">Authentication</h2>
+
+        <!-- Decrypt User Data -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/api/auth/decrypt-user-data</span>
+            <span class="auth-badge public">Public</span>
+          </div>
+          <p class="endpoint-description">
+            Decrypt encrypted user data from GHL iframe context.
+          </p>
+
+          <h4>Request Body:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>encryptedData</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Encrypted payload from GHL postMessage</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X POST https://convoapi.vaultsuite.store/api/auth/decrypt-user-data \
+  -H "Content-Type: application/json" \
+  -d '{
+    "encryptedData": "encrypted_string_from_ghl"
+  }'</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"userId"</span>: <span class="string">"user123"</span>,
+  <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
+  <span class="key">"companyId"</span>: <span class="string">"comp789"</span>,
+  <span class="key">"email"</span>: <span class="string">"user@example.com"</span>,
+  <span class="key">"sessionToken"</span>: <span class="string">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span>
+}</pre>
+          </div>
+        </div>
+
+        <!-- Refresh Token -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/api/auth/refresh</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Refresh your session token to get a new one.
+          </p>
+
+          <h4>Headers:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Header</th>
+              <th>Value</th>
+            </tr>
+            <tr>
+              <td><code>Authorization</code></td>
+              <td>Bearer {your_session_token}</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X POST https://convoapi.vaultsuite.store/api/auth/refresh \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"success"</span>: <span class="boolean">true</span>,
+  <span class="key">"sessionToken"</span>: <span class="string">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span>
+}</pre>
+          </div>
+        </div>
+
+        <!-- Verify Token -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/auth/verify</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Verify if your session token is valid and get user info.
+          </p>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET https://convoapi.vaultsuite.store/api/auth/verify \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"valid"</span>: <span class="boolean">true</span>,
+  <span class="key">"userId"</span>: <span class="string">"user123"</span>,
+  <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
+  <span class="key">"companyId"</span>: <span class="string">"comp789"</span>
+}</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Conversations Section -->
+      <section id="conversations" class="section">
+        <h2 class="section-title">Conversations</h2>
+
+        <!-- Search Conversations -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/conversations/search</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Search conversations with advanced filtering options.
+          </p>
+
+          <h4>Query Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Sub-account location ID</td>
+            </tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>number</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Number of results (default: 20, max: 100)</td>
+            </tr>
+            <tr>
+              <td><code>offset</code></td>
+              <td>number</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Pagination offset</td>
+            </tr>
+            <tr>
+              <td><code>startDate</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Filter by start date (ISO format)</td>
+            </tr>
+            <tr>
+              <td><code>endDate</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Filter by end date (ISO format)</td>
+            </tr>
+            <tr>
+              <td><code>status</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Conversation status (active, archived, etc.)</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/conversations/search?locationId=loc456&limit=20" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"success"</span>: <span class="boolean">true</span>,
+  <span class="key">"conversations"</span>: [
+    {
+      <span class="key">"id"</span>: <span class="string">"conv123"</span>,
+      <span class="key">"contactId"</span>: <span class="string">"contact456"</span>,
+      <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
+      <span class="key">"lastMessageBody"</span>: <span class="string">"Hello!"</span>,
+      <span class="key">"lastMessageType"</span>: <span class="string">"SMS"</span>,
+      <span class="key">"dateUpdated"</span>: <span class="string">"2026-01-02T12:00:00.000Z"</span>
+    }
+  ],
+  <span class="key">"total"</span>: <span class="number">150</span>,
+  <span class="key">"count"</span>: <span class="number">20</span>
+}</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Messages Section -->
+      <section id="messages" class="section">
+        <h2 class="section-title">Messages</h2>
+
+        <!-- Get Messages -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/messages/:conversationId</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Get all messages for a specific conversation.
+          </p>
+
+          <h4>Path Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>conversationId</code></td>
+              <td>string</td>
+              <td>The conversation ID</td>
+            </tr>
+          </table>
+
+          <h4>Query Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Sub-account location ID</td>
+            </tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>number</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Number of messages (default: 100, max: 500)</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/messages/conv123?locationId=loc456" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Import Section -->
+      <section id="import" class="section">
+        <h2 class="section-title">Import</h2>
+
+        <!-- Upload File -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/api/import/upload</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Upload CSV/Excel file to import conversations (max 20MB).
+          </p>
+
+          <h4>Form Data:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>file</code></td>
+              <td>file</td>
+              <td>CSV or Excel file (.csv, .xlsx, .xls)</td>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td>Sub-account location ID</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X POST https://convoapi.vaultsuite.store/api/import/upload \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
+  -F "file=@conversations.csv" \
+  -F "locationId=loc456"</pre>
+          </div>
+        </div>
+
+        <!-- Download Template -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/import/template</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Download CSV template for importing conversations.
+          </p>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET https://convoapi.vaultsuite.store/api/import/template \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
+  -o template.csv</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Export Section -->
+      <section id="export" class="section">
+        <h2 class="section-title">Export</h2>
+
+        <!-- Export Messages -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/export/messages</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Export messages with advanced filtering.
+          </p>
+
+          <h4>Query Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td>Sub-account location ID (required)</td>
+            </tr>
+            <tr>
+              <td><code>conversationId</code></td>
+              <td>string</td>
+              <td>Filter by specific conversation</td>
+            </tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>number</td>
+              <td>Number of messages (max: 500)</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/export/messages?locationId=loc456&limit=100" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
+          </div>
+        </div>
+
+        <!-- Export as CSV -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/export/csv</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Download messages as CSV file.
+          </p>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/export/csv?locationId=loc456" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
+  -o messages.csv</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Webhooks Section -->
+      <section id="webhooks" class="section">
+        <h2 class="section-title">Webhooks</h2>
+
+        <!-- Webhook Endpoint -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/api/webhooks/convo-vault</span>
+            <span class="auth-badge public">Public</span>
+          </div>
+          <p class="endpoint-description">
+            Webhook endpoint for receiving app install/uninstall events from GHL.
+          </p>
+
+          <h4>Webhook Events:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Event</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>INSTALL</code></td>
+              <td>App installed in a location/agency</td>
+            </tr>
+            <tr>
+              <td><code>UNINSTALL</code></td>
+              <td>App uninstalled from a location/agency</td>
+            </tr>
+          </table>
+
+          <h4>Install Event Example:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"type"</span>: <span class="string">"INSTALL"</span>,
+  <span class="key">"appId"</span>: <span class="string">"app123"</span>,
+  <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
+  <span class="key">"companyId"</span>: <span class="string">"comp789"</span>,
+  <span class="key">"planId"</span>: <span class="string">"plan001"</span>,
+  <span class="key">"trial"</span>: {
+    <span class="key">"onTrial"</span>: <span class="boolean">true</span>,
+    <span class="key">"trialDuration"</span>: <span class="number">7</span>
+  }
+}</pre>
+          </div>
+        </div>
+
+        <!-- Get Installations -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/webhooks/installations</span>
+            <span class="auth-badge public">Public</span>
+          </div>
+          <p class="endpoint-description">
+            Get list of all app installations.
+          </p>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/webhooks/installations?status=active" \</pre>
+          </div>
+        </div>
+
+        <!-- Installation Stats -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/webhooks/installations/stats</span>
+            <span class="auth-badge public">Public</span>
+          </div>
+          <p class="endpoint-description">
+            Get installation statistics.
+          </p>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET https://convoapi.vaultsuite.store/api/webhooks/installations/stats</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"success"</span>: <span class="boolean">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"total"</span>: <span class="number">150</span>,
+    <span class="key">"active"</span>: <span class="number">120</span>,
+    <span class="key">"uninstalled"</span>: <span class="number">30</span>,
+    <span class="key">"onTrial"</span>: <span class="number">45</span>
+  }
+}</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Health Check -->
+      <section id="health" class="section">
+        <h2 class="section-title">Health Check</h2>
+
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/health</span>
+            <span class="auth-badge public">Public</span>
+          </div>
+          <p class="endpoint-description">
+            Check if the API is running.
+          </p>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET https://convoapi.vaultsuite.store/health</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"status"</span>: <span class="string">"healthy"</span>,
+  <span class="key">"app"</span>: <span class="string">"ConvoVault"</span>,
+  <span class="key">"timestamp"</span>: <span class="string">"2026-01-02T12:00:00.000Z"</span>
+}</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Error Codes -->
+      <section id="errors" class="section">
+        <h2 class="section-title">Error Codes</h2>
+
+        <table class="params-table">
+          <tr>
+            <th>Status Code</th>
+            <th>Description</th>
+          </tr>
+          <tr>
+            <td><code>200</code></td>
+            <td>Success</td>
+          </tr>
+          <tr>
+            <td><code>400</code></td>
+            <td>Bad Request - Invalid parameters</td>
+          </tr>
+          <tr>
+            <td><code>401</code></td>
+            <td>Unauthorized - Invalid or missing token</td>
+          </tr>
+          <tr>
+            <td><code>403</code></td>
+            <td>Forbidden - No access to this resource</td>
+          </tr>
+          <tr>
+            <td><code>404</code></td>
+            <td>Not Found - Resource doesn't exist</td>
+          </tr>
+          <tr>
+            <td><code>500</code></td>
+            <td>Internal Server Error - Something went wrong</td>
+          </tr>
+        </table>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    function copyCode(button) {
+      const codeBlock = button.nextElementSibling;
+      const code = codeBlock.textContent;
+      
+      navigator.clipboard.writeText(code).then(() => {
+        button.textContent = 'Copied!';
+        button.classList.add('copied');
+        
+        setTimeout(() => {
+          button.textContent = 'Copy';
+          button.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Smooth scroll for nav links
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const target = document.querySelector(link.getAttribute('href'));
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  </script>
+</body>
+</html>
+
