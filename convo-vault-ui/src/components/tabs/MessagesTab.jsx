@@ -235,7 +235,7 @@ export default function MessagesTab() {
               size="large"
               placeholder="All Channels"
               options={[
-                { value: '', label: 'All Channels' },
+                { value: '', label: 'All Channels Except Email' },
                 { value: 'SMS', label: 'SMS' },
                 { value: 'Email', label: 'Email' },
                 { value: 'WhatsApp', label: 'WhatsApp' },
