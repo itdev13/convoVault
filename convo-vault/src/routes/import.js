@@ -94,7 +94,11 @@ router.post('/upload', authenticateSession, upload.single('file'), async (req, r
     });
 
   } catch (error) {
-    logger.error('Import error:', error);
+    logError('Import upload error', error, { 
+      locationId, 
+      filename: req.file?.originalname,
+      size: req.file?.size 
+    });
     
     // Clean up file if exists
     if (req.file?.path && fs.existsSync(req.file.path)) {
@@ -104,7 +108,7 @@ router.post('/upload', authenticateSession, upload.single('file'), async (req, r
     res.status(500).json({
       success: false,
       error: 'Import failed',
-      message: error.message
+      message: error.message || 'Failed to process import file'
     });
   }
 });
@@ -231,10 +235,15 @@ async function processImportAsync(jobId, defaultLocationId, contacts, filePath) 
     logger.info(`✅ Import job ${jobId} completed: ${results.success} created, ${results.skipped || 0} skipped, ${results.failed} failed`);
 
   } catch (error) {
-    logger.error(`❌ Import job ${jobId} failed:`, error);
+    logError(`Import job ${jobId} failed`, error, { 
+      jobId, 
+      locationId: defaultLocationId,
+      totalRows: contacts?.length 
+    });
+    
     await ImportJob.findByIdAndUpdate(jobId, {
       status: 'failed',
-      errors: [{ row: 0, error: error.message }],
+      errors: [{ row: 0, error: error.message || 'Import processing failed' }],
       completedAt: new Date()
     });
   } finally {
