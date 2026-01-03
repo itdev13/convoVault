@@ -69,9 +69,10 @@ router.get('/messages', authenticateSession, async (req, res) => {
     if (contactId) options.contactId = contactId;
     if (conversationId) options.conversationId = conversationId; // Add conversationId filter
     if (cursor) options.cursor = cursor;
-
+    console.log('options', options);
     // Export messages using advanced endpoint
     const result = await ghlService.exportMessages(locationId, options);
+    console.log('result', result);
 
     const messages = result.messages || [];
 
