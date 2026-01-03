@@ -351,50 +351,6 @@ export default function ConversationMessages({ conversation, onBack }) {
         </div>
       )}
 
-      {/* Messages */}
-      {!isLoading && !error && messages.length > 0 && (
-        <div className="bg-white rounded-xl border-1 border-solid border-gray-200 p-6 min-h-[400px] space-y-4">
-          {messages.map((message) => {
-            const isOutbound = message.direction === 'outbound';
-            return (
-              <div key={message.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[70%] rounded-2xl px-5 py-3 shadow-sm ${
-                    isOutbound
-                      ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white'
-                      : 'bg-gray-100 text-gray-900'
-                  }`}
-                >
-                  <div className={`text-xs mb-1 flex items-center gap-1.5 ${isOutbound ? 'text-blue-100' : 'text-gray-500'}`}>
-                    <span>{getMessageTypeIcon(message.type)}</span>
-                    <span>{getMessageTypeDisplay(message.type)}</span>
-                    <span>•</span>
-                    <span>{formatDate(message.dateAdded)}</span>
-                  </div>
-                  
-                  {/* Email Thread Notice */}
-                  {(message.type === 'TYPE_EMAIL' || message.type === 'Email' || message.type === 3) && 
-                   message.meta?.email?.message_ids && 
-                   message.meta.email.message_ids.length > 1 && (
-                    <div className={`text-xs mb-2 px-2 py-1 rounded flex items-center gap-1.5 ${
-                      isOutbound ? 'bg-blue-500/20 text-blue-100' : 'bg-blue-50 text-blue-700'
-                    }`}>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="font-medium">
-                        Email Thread ({message.meta.email.message_ids.length} messages) - Download to view full thread
-                      </span>
-                    </div>
-                  )}
-                  
-                  <div className="text-sm">{message.body}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {/* No Messages State */}
       {!isLoading && !error && messages.length === 0 && (
