@@ -261,7 +261,6 @@
       <a href="#messages" class="nav-link">Messages</a>
       <a href="#import" class="nav-link">Import</a>
       <a href="#export" class="nav-link">Export</a>
-      <a href="#webhooks" class="nav-link">Webhooks</a>
     </div>
 
     <div class="content">
@@ -274,56 +273,6 @@
       <!-- Authentication Section -->
       <section id="authentication" class="section">
         <h2 class="section-title">Authentication</h2>
-
-        <!-- Decrypt User Data -->
-        <div class="endpoint">
-          <div class="endpoint-header">
-            <span class="method post">POST</span>
-            <span class="endpoint-path">/api/auth/decrypt-user-data</span>
-            <span class="auth-badge public">Public</span>
-          </div>
-          <p class="endpoint-description">
-            Decrypt encrypted user data from GHL iframe context.
-          </p>
-
-          <h4>Request Body:</h4>
-          <table class="params-table">
-            <tr>
-              <th>Parameter</th>
-              <th>Type</th>
-              <th>Required</th>
-              <th>Description</th>
-            </tr>
-            <tr>
-              <td><code>encryptedData</code></td>
-              <td>string</td>
-              <td><span class="required">Required</span></td>
-              <td>Encrypted payload from GHL postMessage</td>
-            </tr>
-          </table>
-
-          <h4>Example Request:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X POST https://convoapi.vaultsuite.store/api/auth/decrypt-user-data \
-  -H "Content-Type: application/json" \
-  -d '{
-    "encryptedData": "encrypted_string_from_ghl"
-  }'</pre>
-          </div>
-
-          <h4>Response:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>{
-  <span class="key">"userId"</span>: <span class="string">"user123"</span>,
-  <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
-  <span class="key">"companyId"</span>: <span class="string">"comp789"</span>,
-  <span class="key">"email"</span>: <span class="string">"user@example.com"</span>,
-  <span class="key">"sessionToken"</span>: <span class="string">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span>
-}</pre>
-          </div>
-        </div>
 
         <!-- Refresh Token -->
         <div class="endpoint">
@@ -675,105 +624,6 @@
             <pre>curl -X GET "https://convoapi.vaultsuite.store/api/export/csv?locationId=loc456" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
   -o messages.csv</pre>
-          </div>
-        </div>
-      </section>
-
-      <!-- Webhooks Section -->
-      <section id="webhooks" class="section">
-        <h2 class="section-title">Webhooks</h2>
-
-        <!-- Webhook Endpoint -->
-        <div class="endpoint">
-          <div class="endpoint-header">
-            <span class="method post">POST</span>
-            <span class="endpoint-path">/api/webhooks/convo-vault</span>
-            <span class="auth-badge public">Public</span>
-          </div>
-          <p class="endpoint-description">
-            Webhook endpoint for receiving app install/uninstall events from GHL.
-          </p>
-
-          <h4>Webhook Events:</h4>
-          <table class="params-table">
-            <tr>
-              <th>Event</th>
-              <th>Description</th>
-            </tr>
-            <tr>
-              <td><code>INSTALL</code></td>
-              <td>App installed in a location/agency</td>
-            </tr>
-            <tr>
-              <td><code>UNINSTALL</code></td>
-              <td>App uninstalled from a location/agency</td>
-            </tr>
-          </table>
-
-          <h4>Install Event Example:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>{
-  <span class="key">"type"</span>: <span class="string">"INSTALL"</span>,
-  <span class="key">"appId"</span>: <span class="string">"app123"</span>,
-  <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
-  <span class="key">"companyId"</span>: <span class="string">"comp789"</span>,
-  <span class="key">"planId"</span>: <span class="string">"plan001"</span>,
-  <span class="key">"trial"</span>: {
-    <span class="key">"onTrial"</span>: <span class="boolean">true</span>,
-    <span class="key">"trialDuration"</span>: <span class="number">7</span>
-  }
-}</pre>
-          </div>
-        </div>
-
-        <!-- Get Installations -->
-        <div class="endpoint">
-          <div class="endpoint-header">
-            <span class="method get">GET</span>
-            <span class="endpoint-path">/api/webhooks/installations</span>
-            <span class="auth-badge public">Public</span>
-          </div>
-          <p class="endpoint-description">
-            Get list of all app installations.
-          </p>
-
-          <h4>Example Request:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/webhooks/installations?status=active" \</pre>
-          </div>
-        </div>
-
-        <!-- Installation Stats -->
-        <div class="endpoint">
-          <div class="endpoint-header">
-            <span class="method get">GET</span>
-            <span class="endpoint-path">/api/webhooks/installations/stats</span>
-            <span class="auth-badge public">Public</span>
-          </div>
-          <p class="endpoint-description">
-            Get installation statistics.
-          </p>
-
-          <h4>Example Request:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X GET https://convoapi.vaultsuite.store/api/webhooks/installations/stats</pre>
-          </div>
-
-          <h4>Response:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>{
-  <span class="key">"success"</span>: <span class="boolean">true</span>,
-  <span class="key">"data"</span>: {
-    <span class="key">"total"</span>: <span class="number">150</span>,
-    <span class="key">"active"</span>: <span class="number">120</span>,
-    <span class="key">"uninstalled"</span>: <span class="number">30</span>,
-    <span class="key">"onTrial"</span>: <span class="number">45</span>
-  }
-}</pre>
           </div>
         </div>
       </section>
