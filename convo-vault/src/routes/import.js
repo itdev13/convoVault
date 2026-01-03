@@ -251,11 +251,15 @@ async function importConversations(jobId, defaultLocationId, contacts) {
   const results = {
     success: 0,
     failed: 0,
+    skipped: 0,
     errors: []
   };
 
   // Cache for validated locations (check once per unique locationId)
   const validatedLocations = new Set();
+  
+  // Track processed contacts to skip duplicates in the same batch
+  const processedContacts = new Set();
 
   for (let i = 0; i < contacts.length; i++) {
     const row = contacts[i];
@@ -323,6 +327,27 @@ async function importConversations(jobId, defaultLocationId, contacts) {
         continue;
       }
 
+      // Check for duplicates in this batch
+      const duplicateKey = contactId || row.email || row.phone;
+      const uniqueKey = `${locationId}:${duplicateKey}`;
+      
+      if (processedContacts.has(uniqueKey)) {
+        logger.info(`Row ${i + 1}: ⏭️ Skipping duplicate - ${duplicateKey}`);
+        results.skipped++;
+        
+        // Update job progress
+        await ImportJob.findByIdAndUpdate(jobId, {
+          processed: i + 1,
+          successful: results.success,
+          failed: results.failed
+        });
+        
+        continue; // Skip this duplicate row
+      }
+      
+      // Mark as processed
+      processedContacts.add(uniqueKey);
+      
       // STEP 1: Get or Create Contact
       if (!contactId) {
         logger.info(`Row ${i + 1}: Creating contact - ${row.name || row.email || row.phone}`);
@@ -364,14 +389,28 @@ async function importConversations(jobId, defaultLocationId, contacts) {
         logger.info(`Row ${i + 1}: ✅ Contact ${contactId}`);
       }
 
-      // STEP 2: Create Conversation
-      await ghlService.createConversation(locationId, {
-        locationId: locationId,
-        contactId: contactId
-      });
-
-      results.success++;
-      logger.info(`Row ${i + 1}: ✅ Conversation created`);
+      // STEP 2: Create Conversation (handle if already exists)
+      try {
+        await ghlService.createConversation(locationId, {
+          locationId: locationId,
+          contactId: contactId
+        });
+        
+        results.success++;
+        logger.info(`Row ${i + 1}: ✅ Conversation created`);
+        
+      } catch (convError) {
+        // Check if conversation already exists
+        if (convError.response?.status === 422 || 
+            convError.message?.includes('already exists') ||
+            convError.message?.includes('duplicate')) {
+          logger.info(`Row ${i + 1}: ℹ️ Conversation already exists for contact ${contactId}, skipping`);
+          results.skipped++;
+        } else {
+          // Real error - count as failed
+          throw convError;
+        }
+      }
 
       // Update job progress
       await ImportJob.findByIdAndUpdate(jobId, {
