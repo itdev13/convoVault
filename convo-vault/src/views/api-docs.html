@@ -246,6 +246,32 @@
       font-size: 18px;
       word-break: break-all;
     }
+    
+    /* Toast notification */
+    .toast {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background: #48bb78;
+      color: white;
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      font-weight: 600;
+      animation: slideIn 0.3s ease-out;
+      z-index: 9999;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateY(100px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
   </style>
 </head>
 <body>
@@ -716,6 +742,24 @@
     // Extract user token from URL on page load
     let currentToken = null;
     
+    // Show toast notification
+    function showToast(message, isSuccess = true) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      if (!isSuccess) {
+        toast.style.background = '#f56565';
+      }
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease-out reverse';
+        setTimeout(() => {
+          document.body.removeChild(toast);
+        }, 300);
+      }, 2000);
+    }
+    
     window.addEventListener('DOMContentLoaded', () => {
       // Get user token from URL parameter (ut = user token)
       const urlParams = new URLSearchParams(window.location.search);
@@ -758,12 +802,14 @@
         }
         
         btn.textContent = '✅ Copied!';
+        showToast('✅ API Token copied to clipboard!');
         setTimeout(() => {
           btn.textContent = originalText;
         }, 2000);
       } catch (err) {
         console.error('Copy failed:', err);
         btn.textContent = '❌ Copy failed';
+        showToast('❌ Failed to copy token', false);
         setTimeout(() => {
           btn.textContent = originalText;
         }, 2000);
@@ -794,6 +840,7 @@
         
         button.textContent = 'Copied!';
         button.classList.add('copied');
+        showToast('✅ Code copied to clipboard!');
         
         setTimeout(() => {
           button.textContent = 'Copy';
@@ -802,6 +849,7 @@
       } catch (err) {
         console.error('Copy failed:', err);
         button.textContent = 'Copy failed';
+        showToast('❌ Failed to copy code', false);
         setTimeout(() => {
           button.textContent = 'Copy';
         }, 2000);
