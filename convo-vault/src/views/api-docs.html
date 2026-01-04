@@ -314,107 +314,6 @@
       <section id="authentication" class="section">
         <h2 class="section-title">Authentication</h2>
 
-        <!-- Decrypt User Data -->
-        <div class="endpoint">
-          <div class="endpoint-header">
-            <span class="method post">POST</span>
-            <span class="endpoint-path">/api/auth/decrypt-user-data</span>
-            <span class="auth-badge public">Public</span>
-          </div>
-          <p class="endpoint-description">
-            Decrypt user data from GHL marketplace using your shared secret.
-          </p>
-
-          <h4>Request Body:</h4>
-          <table class="params-table">
-            <tr>
-              <th>Field</th>
-              <th>Type</th>
-              <th>Required</th>
-              <th>Description</th>
-            </tr>
-            <tr>
-              <td><code>encryptedData</code></td>
-              <td>string</td>
-              <td><span class="required">Required</span></td>
-              <td>Encrypted user data from GHL</td>
-            </tr>
-          </table>
-
-          <h4>Example Request:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X POST https://convoapi.vaultsuite.store/api/auth/decrypt-user-data \
-  -H "Content-Type: application/json" \
-  -d '{"encryptedData": "U2FsdGVkX1..."}'</pre>
-          </div>
-
-          <h4>Response:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>{
-  <span class="key">"success"</span>: <span class="boolean">true</span>,
-  <span class="key">"userId"</span>: <span class="string">"user123"</span>,
-  <span class="key">"companyId"</span>: <span class="string">"comp789"</span>,
-  <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
-  <span class="key">"email"</span>: <span class="string">"user@example.com"</span>
-}</pre>
-          </div>
-        </div>
-
-        <!-- Verify Session -->
-        <div class="endpoint">
-          <div class="endpoint-header">
-            <span class="method post">POST</span>
-            <span class="endpoint-path">/api/auth/verify</span>
-            <span class="auth-badge public">Public</span>
-          </div>
-          <p class="endpoint-description">
-            Verify user context and create a session token for API access.
-          </p>
-
-          <h4>Request Body:</h4>
-          <table class="params-table">
-            <tr>
-              <th>Field</th>
-              <th>Type</th>
-              <th>Required</th>
-              <th>Description</th>
-            </tr>
-            <tr>
-              <td><code>locationId</code></td>
-              <td>string</td>
-              <td><span class="required">Required</span></td>
-              <td>GHL location (sub-account) ID</td>
-            </tr>
-            <tr>
-              <td><code>userId</code></td>
-              <td>string</td>
-              <td><span class="required">Required</span></td>
-              <td>GHL user ID</td>
-            </tr>
-            <tr>
-              <td><code>companyId</code></td>
-              <td>string</td>
-              <td><span class="optional">Optional</span></td>
-              <td>GHL company ID</td>
-            </tr>
-          </table>
-
-          <h4>Response:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>{
-  <span class="key">"success"</span>: <span class="boolean">true</span>,
-  <span class="key">"sessionToken"</span>: <span class="string">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span>,
-  <span class="key">"location"</span>: {
-    <span class="key">"id"</span>: <span class="string">"loc456"</span>,
-    <span class="key">"name"</span>: <span class="string">"My Location"</span>
-  }
-}</pre>
-          </div>
-        </div>
-
         <!-- Refresh Token -->
         <div class="endpoint">
           <div class="endpoint-header">
@@ -442,44 +341,6 @@
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre>curl -X POST https://convoapi.vaultsuite.store/api/auth/refresh \
-  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
-          </div>
-        </div>
-
-        <!-- Get Session Info -->
-        <div class="endpoint">
-          <div class="endpoint-header">
-            <span class="method get">GET</span>
-            <span class="endpoint-path">/api/auth/session</span>
-            <span class="auth-badge">Protected</span>
-          </div>
-          <p class="endpoint-description">
-            Get current session information and location details.
-          </p>
-
-          <h4>Example Request:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X GET https://convoapi.vaultsuite.store/api/auth/session \
-  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
-          </div>
-        </div>
-
-        <!-- Get Locations -->
-        <div class="endpoint">
-          <div class="endpoint-header">
-            <span class="method get">GET</span>
-            <span class="endpoint-path">/api/auth/locations</span>
-            <span class="auth-badge">Protected</span>
-          </div>
-          <p class="endpoint-description">
-            Get all locations (sub-accounts) for your company.
-          </p>
-
-          <h4>Example Request:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X GET https://convoapi.vaultsuite.store/api/auth/locations \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
           </div>
         </div>
@@ -519,18 +380,6 @@
               <td>number</td>
               <td><span class="optional">Optional</span></td>
               <td>Number of results (default: 20, max: 100)</td>
-            </tr>
-            <tr>
-              <td><code>startDate</code></td>
-              <td>string</td>
-              <td><span class="optional">Optional</span></td>
-              <td>ISO 8601 date (e.g., 2026-01-01T00:00:00.000Z)</td>
-            </tr>
-            <tr>
-              <td><code>endDate</code></td>
-              <td>string</td>
-              <td><span class="optional">Optional</span></td>
-              <td>ISO 8601 date</td>
             </tr>
             <tr>
               <td><code>conversationId</code></td>
