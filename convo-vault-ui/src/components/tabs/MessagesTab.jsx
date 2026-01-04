@@ -499,10 +499,21 @@ export default function MessagesTab() {
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <Tooltip title="Click to copy Conversation ID">
                           <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              navigator.clipboard.writeText(message.conversationId);
-                              antMessage.success('Conversation ID copied!');
+                              try {
+                                await navigator.clipboard.writeText(message.conversationId);
+                                antMessage.success('Conversation ID copied!');
+                              } catch (err) {
+                                // Fallback for older browsers
+                                const textArea = document.createElement('textarea');
+                                textArea.value = message.conversationId;
+                                document.body.appendChild(textArea);
+                                textArea.select();
+                                document.execCommand('copy');
+                                document.body.removeChild(textArea);
+                                antMessage.success('Conversation ID copied!');
+                              }
                             }}
                             className="flex items-center gap-1 hover:text-blue-600 transition-colors group/conv"
                           >
@@ -514,10 +525,21 @@ export default function MessagesTab() {
                         </Tooltip>
                         <Tooltip title="Click to copy Contact ID">
                           <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              navigator.clipboard.writeText(message.contactId);
-                              antMessage.success('Contact ID copied!');
+                              try {
+                                await navigator.clipboard.writeText(message.contactId);
+                                antMessage.success('Contact ID copied!');
+                              } catch (err) {
+                                // Fallback for older browsers
+                                const textArea = document.createElement('textarea');
+                                textArea.value = message.contactId;
+                                document.body.appendChild(textArea);
+                                textArea.select();
+                                document.execCommand('copy');
+                                document.body.removeChild(textArea);
+                                antMessage.success('Contact ID copied!');
+                              }
                             }}
                             className="flex items-center gap-1 hover:text-blue-600 transition-colors group/contact"
                           >

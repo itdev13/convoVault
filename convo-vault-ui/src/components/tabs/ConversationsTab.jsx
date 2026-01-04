@@ -467,10 +467,21 @@ export default function ConversationsTab({ onSelectConversation }) {
                     <div className="flex items-center gap-2">
                       <Tooltip title="Click to copy full ID">
                         <button
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            navigator.clipboard.writeText(conv.id);
-                            message.success('ID copied to clipboard!');
+                            try {
+                              await navigator.clipboard.writeText(conv.id);
+                              message.success('Conversation ID copied to clipboard!');
+                            } catch (err) {
+                              // Fallback for older browsers
+                              const textArea = document.createElement('textarea');
+                              textArea.value = conv.id;
+                              document.body.appendChild(textArea);
+                              textArea.select();
+                              document.execCommand('copy');
+                              document.body.removeChild(textArea);
+                              message.success('Conversation ID copied!');
+                            }
                           }}
                           className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors group/copy"
                         >

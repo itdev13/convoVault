@@ -149,8 +149,8 @@ class ConversationsManagerApp {
 
     this.app.use('/api/conversations', apiLimiter, conversationsRoutes);
     this.app.use('/api/messages', apiLimiter, messagesRoutes);
-    this.app.use('/api/import', uploadLimiter, importRoutes);
-    this.app.use('/api/export', exportLimiter, exportRoutes);
+    this.app.use('/api/import', importRoutes);
+    this.app.use('/api/export', exportRoutes);
     this.app.use('/api/support', apiLimiter, supportRoutes);
 
     // Root
