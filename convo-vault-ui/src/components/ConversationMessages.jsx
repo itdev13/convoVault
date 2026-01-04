@@ -122,11 +122,14 @@ export default function ConversationMessages({ conversation, onBack }) {
       
       // Create regular messages CSV
       if (regularMessages.length > 0) {
-        const csvHeaders = 'Message Date,Message ID,Conversation ID,Message Type,Direction,Status,Message Body,Contact ID\n';
+        const csvHeaders = 'Message Date,Message ID,Conversation ID,Message Type,Direction,Status,Message Body,Attachments,Contact ID\n';
         const csvRows = regularMessages.map(msg => {
           const formattedDate = formatDateForCsv(msg.dateAdded);
           const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
-          return `"${formattedDate}","${msg.id}","${msg.conversationId || ''}","${msg.type || ''}","${msg.direction || ''}","${msg.status || ''}","${message}","${msg.contactId || ''}"`;
+          const attachments = msg.attachments && msg.attachments.length > 0 
+            ? msg.attachments.join('; ') 
+            : '';
+          return `"${formattedDate}","${msg.id}","${msg.conversationId || ''}","${getMessageTypeDisplay(msg.type) || ''}","${msg.direction || ''}","${msg.status || ''}","${message}","${attachments}","${msg.contactId || ''}"`;
         }).join('\n');
         
         const csv = csvHeaders + csvRows;
@@ -145,7 +148,7 @@ export default function ConversationMessages({ conversation, onBack }) {
       if (emailMessages.length > 0) {
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        const csvHeaders = 'Message Date,Message ID,Conversation ID,Subject,From,To,CC,BCC,Direction,Status,Message Body,Contact ID\n';
+        const csvHeaders = 'Message Date,Message ID,Conversation ID,Subject,From,To,CC,BCC,Direction,Status,Message Body,Attachments,Contact ID\n';
         const csvRows = emailMessages.map(msg => {
           const formattedDate = formatDateForCsv(msg.dateAdded);
           const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
@@ -154,8 +157,11 @@ export default function ConversationMessages({ conversation, onBack }) {
           const to = msg.to ? (Array.isArray(msg.to) ? msg.to.join('; ') : msg.to) : msg.meta?.email?.to || msg.meta?.to || '';
           const cc = msg.cc ? (Array.isArray(msg.cc) ? msg.cc.join('; ') : msg.cc) : msg.meta?.email?.cc || '';
           const bcc = msg.bcc ? (Array.isArray(msg.bcc) ? msg.bcc.join('; ') : msg.bcc) : msg.meta?.email?.bcc || '';
+          const attachments = msg.attachments && msg.attachments.length > 0 
+            ? msg.attachments.join('; ') 
+            : '';
           
-          return `"${formattedDate}","${msg.id}","${msg.conversationId || ''}","${subject}","${from}","${to}","${cc}","${bcc}","${msg.direction || ''}","${msg.status || ''}","${message}","${msg.contactId || ''}"`;
+          return `"${formattedDate}","${msg.id}","${msg.conversationId || ''}","${subject}","${from}","${to}","${cc}","${bcc}","${msg.direction || ''}","${msg.status || ''}","${message}","${attachments}","${msg.contactId || ''}"`;
         }).join('\n');
         
         const csv = csvHeaders + csvRows;
@@ -386,12 +392,24 @@ export default function ConversationMessages({ conversation, onBack }) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <span className="font-medium">
-                        Email Thread ({message.meta.email.message_ids.length} messages) - Download to view full thread
+                        Email Thread ({message.meta.email.messageIds.length} messages) - Download to view full thread
                       </span>
                     </div>
                   )}
                   
                   <div className="text-sm">{message.body}</div>
+                  
+                  {/* Attachments */}
+                  {message.attachments && message.attachments.length > 0 && (
+                    <div className="mt-2 flex items-center gap-2 text-xs">
+                      <svg className={`w-3.5 h-3.5 ${isOutbound ? 'text-blue-100' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                      <span className={isOutbound ? 'text-blue-100' : 'text-gray-600'}>
+                        {message.attachments.length} attachment{message.attachments.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
