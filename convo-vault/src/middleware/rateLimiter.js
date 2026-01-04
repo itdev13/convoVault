@@ -7,12 +7,12 @@ const logger = require('../utils/logger');
 
 // General API rate limiter
 const apiLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
+  windowMs: 1 * 60 * 1000, // 1 minutes
   max: 100, // Limit each IP to 100 requests per windowMs
   message: {
     success: false,
     error: 'Too many requests, please try again later.',
-    retryAfter: '5 minutes'
+    retryAfter: '1 minutes'
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -24,7 +24,7 @@ const apiLimiter = rateLimit({
     res.status(429).json({
       success: false,
       error: 'Too many requests, please try again later.',
-      retryAfter: '5 minutes'
+      retryAfter: '1 minutes'
     });
   }
 });
@@ -55,7 +55,7 @@ const authLimiter = rateLimit({
 // Rate limiter for file uploads
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 15, // Limit each user to 1 upload per 15 minutes
+  max: 2, // Limit each user to 15 upload per 15 minutes
   message: {
     success: false,
     error: 'Upload limit exceeded. Maximum 15 files per 15 minutes.',
@@ -77,7 +77,7 @@ const uploadLimiter = rateLimit({
 // Rate limiter for export/download endpoints
 const exportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // Limit each user to 50 exports per 15 minutes
+  max: 3, // Limit each user to 50 exports per 15 minutes
   message: {
     success: false,
     error: 'Export limit exceeded. Maximum 50 exports per 15 minutes.',
@@ -87,7 +87,7 @@ const exportLimiter = rateLimit({
 
 // Webhook rate limiter (lenient for GHL webhooks)
 const webhookLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
+  windowMs: 15 * 1000, // 15 seconds
   max: 1000, // Allow 1000 webhooks per minute
   message: {
     success: false,
