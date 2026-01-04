@@ -133,7 +133,8 @@ router.get('/download', authenticateSession, async (req, res) => {
       filters: req.query 
     });
     
-    const statusCode = error.response?.status || 500;
+    // Use error.status if it's a client error, otherwise use response status or 500
+    const statusCode = error.status || error.response?.status || 500;
     const errorMessage = getUserFriendlyMessage(error);
     
     res.status(statusCode).json({
@@ -210,7 +211,7 @@ router.get('/search', authenticateSession, async (req, res) => {
       filters: req.query 
     });
     
-    const statusCode = error.response?.status || 500;
+    const statusCode = error.status || error.response?.status || 500;
     const errorMessage = getUserFriendlyMessage(error);
     
     res.status(statusCode).json({
@@ -250,7 +251,10 @@ router.get('/:conversationId', authenticateSession, async (req, res) => {
       locationId: req.query?.locationId,
       conversationId: req.params?.conversationId 
     });
-    res.status(500).json({
+    
+    const statusCode = error.status || error.response?.status || 500;
+    
+    res.status(statusCode).json({
       success: false,
       error: getUserFriendlyMessage(error)
     });
