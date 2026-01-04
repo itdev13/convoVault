@@ -530,7 +530,7 @@ export default function MessagesTab() {
                             }}
                             className="flex items-center gap-1 hover:text-blue-600 transition-colors group/contact"
                           >
-                            <span className="font-mono">Contact: {message.contactId}</span>
+                            <span className="font-mono">contactId: {message.contactId}</span>
                             <svg className="w-3 h-3 opacity-0 group-hover/contact:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
