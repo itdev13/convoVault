@@ -455,14 +455,14 @@ export default function MessagesTab() {
 
                       {/* Email Thread Notice */}
                       {(message.type === 'TYPE_EMAIL' || message.type === 'Email' || message.type === 3) && 
-                       message.meta?.email?.message_ids && 
-                       message.meta.email.message_ids.length > 1 && (
+                       message.meta?.email?.messageIds && 
+                       message.meta.email.messageIds.length > 1 && (
                         <div className="mb-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-xs text-blue-700">
                           <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                           </svg>
                           <span className="font-medium">
-                            📧 Email Thread ({message.meta.email.message_ids.length} messages) - Download from Conversation view to get full thread
+                            📧 Email Thread ({message.meta.email.messageIds.length} messages) - Download from Conversation view to get full thread
                           </span>
                         </div>
                       )}
