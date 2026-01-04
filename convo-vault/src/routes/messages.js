@@ -89,7 +89,10 @@ router.get('/:conversationId', authenticateSession, async (req, res) => {
       locationId: req.query?.locationId,
       conversationId: req.params?.conversationId 
     });
-    res.status(500).json({
+    
+    const statusCode = error.status || error.response?.status || 500;
+    
+    res.status(statusCode).json({
       success: false,
       error: 'Failed to get messages',
       message: getUserFriendlyMessage(error)

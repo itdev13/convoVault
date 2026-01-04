@@ -109,7 +109,10 @@ router.get('/messages', authenticateSession, async (req, res) => {
       locationId: req.query?.locationId,
       filters: req.query 
     });
-    res.status(500).json({
+    
+    const statusCode = error.status || error.response?.status || 500;
+    
+    res.status(statusCode).json({
       success: false,
       error: 'Failed to export messages',
       message: getUserFriendlyMessage(error)
@@ -180,7 +183,10 @@ router.get('/messages/all', authenticateSession, async (req, res) => {
     logError('Bulk export error', error, { 
       locationId: req.query?.locationId 
     });
-    res.status(500).json({
+    
+    const statusCode = error.status || error.response?.status || 500;
+    
+    res.status(statusCode).json({
       success: false,
       error: 'Failed to bulk export',
       message: getUserFriendlyMessage(error)
@@ -232,7 +238,10 @@ router.get('/csv', authenticateSession, async (req, res) => {
       locationId: req.query?.locationId,
       filters: req.query 
     });
-    res.status(500).json({
+    
+    const statusCode = error.status || error.response?.status || 500;
+    
+    res.status(statusCode).json({
       success: false,
       error: getUserFriendlyMessage(error)
     });
