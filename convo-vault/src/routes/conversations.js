@@ -28,7 +28,7 @@ router.get('/download', authenticateSession, async (req, res) => {
       status,
       lastMessageAction,
       sortBy,
-      offset
+      startAfterId  // Cursor-based pagination (GHL API standard)
     } = req.query;
 
     if (!locationId) {
@@ -55,23 +55,23 @@ router.get('/download', authenticateSession, async (req, res) => {
 
     // Sanitize numeric parameters
     const sanitizedLimit = sanitizeLimit(limit, 20, 100);
-    const sanitizedOffset = sanitizeOffset(offset, 0);
 
     logger.info('Downloading conversations', { 
       locationId, 
       limit: sanitizedLimit,
       startDate,
       endDate,
+      startAfterId,
       lastMessageType,
       lastMessageDirection,
       status
     });
 
-    // Build filters with all parameters
+    // Build filters with all parameters (GHL API uses cursor-based pagination)
     const filters = { limit: sanitizedLimit };
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
-    if (sanitizedOffset > 0) filters.offset = sanitizedOffset;
+    if (startAfterId) filters.startAfterDate = startAfterId;  // Cursor for pagination
     if (lastMessageType) filters.lastMessageType = lastMessageType;
     if (lastMessageDirection) filters.lastMessageDirection = lastMessageDirection;
     if (status) filters.status = status;

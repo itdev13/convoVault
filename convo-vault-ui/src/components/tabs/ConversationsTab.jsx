@@ -67,11 +67,12 @@ export default function ConversationsTab({ onSelectConversation }) {
       
       let allConversations = [];
       const exportLimit = 100; // Always use max limit for export
-      let offset = 0;
+      let startAfterId = null;  // Cursor for pagination (GHL API standard)
       let hasMore = true;
       let batchCount = 0;
       
       // Fetch all conversations in batches of 100 (applying ALL filters except limit)
+      // Uses cursor-based pagination with startAfterId
       while (hasMore && batchCount < 20) { // Max 2000 conversations
         const response = await conversationsAPI.download(location.id, {
           limit: exportLimit, // Use 100 for export, not user's filter limit
@@ -83,15 +84,19 @@ export default function ConversationsTab({ onSelectConversation }) {
           status: filters.status || undefined,
           lastMessageAction: filters.lastMessageAction || undefined,
           sortBy: filters.sortBy || undefined,
-          offset: offset
+          startAfterId: startAfterId || undefined  // Cursor from previous page
         });
         
         const batch = response.data.conversations || [];
         allConversations = [...allConversations, ...batch];
         
-        // Check if there are more
+        // Get cursor for next page (last conversation ID)
+        if (batch.length > 0) {
+          startAfterId = batch[batch.length - 1].id;
+        }
+        
+        // Check if there are more (batch size equals limit means more might exist)
         hasMore = batch.length === exportLimit;
-        offset += exportLimit;
         batchCount++;
         
         // Small delay between requests
@@ -305,30 +310,6 @@ export default function ConversationsTab({ onSelectConversation }) {
                 { value: 'manual', label: 'Manual' },
                 { value: 'automated', label: 'Automated' }
               ]}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-            <DatePicker
-              value={filters.startDate ? dayjs(filters.startDate) : null}
-              onChange={(date) => setFilters({ ...filters, startDate: date ? date.format('YYYY-MM-DD') : '' })}
-              className="w-full"
-              size="large"
-              placeholder="Select start date"
-              format="YYYY-MM-DD"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-            <DatePicker
-              value={filters.endDate ? dayjs(filters.endDate) : null}
-              onChange={(date) => setFilters({ ...filters, endDate: date ? date.format('YYYY-MM-DD') : '' })}
-              className="w-full"
-              size="large"
-              placeholder="Select end date"
-              format="YYYY-MM-DD"
             />
           </div>
 
