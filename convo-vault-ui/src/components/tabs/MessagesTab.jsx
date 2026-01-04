@@ -5,6 +5,7 @@ import { exportAPI } from '../../api/export';
 import { Button, Select, DatePicker, Input, Tooltip, message as antMessage } from 'antd';
 import { useErrorModal } from '../ErrorModal';
 import { getMessageTypeDisplay, getMessageTypeIcon } from '../../utils/messageTypes';
+import { copyToClipboard } from '../../utils/clipboard';
 import dayjs from 'dayjs';
 
 export default function MessagesTab() {
@@ -501,18 +502,11 @@ export default function MessagesTab() {
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
-                              try {
-                                await navigator.clipboard.writeText(message.conversationId);
+                              const success = await copyToClipboard(message.conversationId);
+                              if (success) {
                                 antMessage.success('Conversation ID copied!');
-                              } catch (err) {
-                                // Fallback for older browsers
-                                const textArea = document.createElement('textarea');
-                                textArea.value = message.conversationId;
-                                document.body.appendChild(textArea);
-                                textArea.select();
-                                document.execCommand('copy');
-                                document.body.removeChild(textArea);
-                                antMessage.success('Conversation ID copied!');
+                              } else {
+                                antMessage.error('Failed to copy. Please try selecting and copying manually.');
                               }
                             }}
                             className="flex items-center gap-1 hover:text-blue-600 transition-colors group/conv"
@@ -527,18 +521,11 @@ export default function MessagesTab() {
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
-                              try {
-                                await navigator.clipboard.writeText(message.contactId);
+                              const success = await copyToClipboard(message.contactId);
+                              if (success) {
                                 antMessage.success('Contact ID copied!');
-                              } catch (err) {
-                                // Fallback for older browsers
-                                const textArea = document.createElement('textarea');
-                                textArea.value = message.contactId;
-                                document.body.appendChild(textArea);
-                                textArea.select();
-                                document.execCommand('copy');
-                                document.body.removeChild(textArea);
-                                antMessage.success('Contact ID copied!');
+                              } else {
+                                antMessage.error('Failed to copy. Please try selecting and copying manually.');
                               }
                             }}
                             className="flex items-center gap-1 hover:text-blue-600 transition-colors group/contact"

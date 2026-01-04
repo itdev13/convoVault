@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { conversationsAPI } from '../../api/conversations';
 import { DatePicker, Select, Button, Tooltip, message, Input } from 'antd';
 import { useErrorModal } from '../ErrorModal';
+import { copyToClipboard } from '../../utils/clipboard';
 import dayjs from 'dayjs';
 import { getMessageTypeDisplay } from '../../utils/messageTypes';
 
@@ -469,18 +470,13 @@ export default function ConversationsTab({ onSelectConversation }) {
                         <button
                           onClick={async (e) => {
                             e.stopPropagation();
-                            try {
-                              await navigator.clipboard.writeText(conv.id);
+                            console.log('Copying ID:', conv.id);
+                            const success = await copyToClipboard(conv.id);
+                            console.log('Copy result:', success);
+                            if (success) {
                               message.success('Conversation ID copied to clipboard!');
-                            } catch (err) {
-                              // Fallback for older browsers
-                              const textArea = document.createElement('textarea');
-                              textArea.value = conv.id;
-                              document.body.appendChild(textArea);
-                              textArea.select();
-                              document.execCommand('copy');
-                              document.body.removeChild(textArea);
-                              message.success('Conversation ID copied!');
+                            } else {
+                              message.error('Failed to copy. Please select and copy manually.');
                             }
                           }}
                           className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors group/copy"

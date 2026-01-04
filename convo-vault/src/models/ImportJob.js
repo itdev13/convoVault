@@ -35,6 +35,11 @@ const importJobSchema = new mongoose.Schema({
     default: 0
   },
 
+  skipped: {
+    type: Number,
+    default: 0
+  },
+
   status: {
     type: String,
     enum: ['pending', 'processing', 'completed', 'failed'],

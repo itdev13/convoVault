@@ -205,7 +205,9 @@ export default function ImportTab() {
                     e.preventDefault();
                     e.stopPropagation();
                     setSelectedFile(null);
-                    setResult(null);
+                    setPreviewData(null);  // Reset preview
+                    setJobStatus(null);    // Reset job status
+                    setJobId(null);        // Reset job ID
                     setFileInputKey(Date.now()); // Reset file input
                   }}
                   className="mt-4 text-sm text-red-600 hover:text-red-700 font-medium"
@@ -367,14 +369,18 @@ export default function ImportTab() {
           {/* Results */}
           {(jobStatus.status === 'completed' || jobStatus.status === 'failed') && (
             <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-4 gap-4 text-sm">
                 <div className="bg-white rounded-lg p-3">
                   <div className="text-gray-600">Total Rows</div>
                   <div className="text-2xl font-bold text-gray-900">{jobStatus.totalRows}</div>
                 </div>
                 <div className="bg-white rounded-lg p-3">
-                  <div className="text-gray-600">Successful</div>
+                  <div className="text-gray-600">Created</div>
                   <div className="text-2xl font-bold text-green-600">{jobStatus.successful}</div>
+                </div>
+                <div className="bg-white rounded-lg p-3">
+                  <div className="text-gray-600">Skipped</div>
+                  <div className="text-2xl font-bold text-yellow-600">{jobStatus.skipped || 0}</div>
                 </div>
                 <div className="bg-white rounded-lg p-3">
                   <div className="text-gray-600">Failed</div>
@@ -488,6 +494,8 @@ export default function ImportTab() {
                     <div className="text-sm">
                       <span className="text-green-600 font-semibold">{job.successful}</span>
                       <span className="text-gray-400 mx-1">/</span>
+                      <span className="text-yellow-600 font-semibold">{job.skipped || 0}</span>
+                      <span className="text-gray-400 mx-1">/</span>
                       <span className="text-red-600 font-semibold">{job.failed}</span>
                       <span className="text-gray-400 mx-1">/</span>
                       <span className="text-gray-600">{job.totalRows}</span>
@@ -584,14 +592,18 @@ export default function ImportTab() {
             </div>
 
             {/* Progress Overview */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div className="bg-gray-100 rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-gray-900">{modalJobDetails.totalRows}</div>
                 <div className="text-xs text-gray-600">Total Rows</div>
               </div>
               <div className="bg-green-50 rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-green-600">{modalJobDetails.successful}</div>
-                <div className="text-xs text-green-700">Successful</div>
+                <div className="text-xs text-green-700">Created</div>
+              </div>
+              <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-yellow-600">{modalJobDetails.skipped || 0}</div>
+                <div className="text-xs text-yellow-700">Skipped</div>
               </div>
               <div className="bg-red-50 rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-red-600">{modalJobDetails.failed}</div>
@@ -602,12 +614,23 @@ export default function ImportTab() {
             {/* Processing Details */}
             {modalJobDetails.successful > 0 && (
               <div className="bg-green-50 border-1 border-solid border-green-200 rounded-lg p-4">
-                <h4 className="font-semibold text-green-900 mb-2">✅ Successfully Imported:</h4>
+                <h4 className="font-semibold text-green-900 mb-2">✅ Successfully Created:</h4>
                 <div className="text-sm text-green-800">
                   <div>• {modalJobDetails.successful} contacts created/found</div>
                   <div>• {modalJobDetails.successful} conversations created</div>
-                  <div className="text-xs text-green-700 mt-2">
-                    Rows {modalJobDetails.failed > 0 ? `1-${modalJobDetails.successful} (excluding failed rows)` : `1-${modalJobDetails.successful}`}
+                </div>
+              </div>
+            )}
+            
+            {/* Skipped Details */}
+            {modalJobDetails.skipped > 0 && (
+              <div className="bg-yellow-50 border-1 border-solid border-yellow-200 rounded-lg p-4">
+                <h4 className="font-semibold text-yellow-900 mb-2">⏭️ Skipped (Duplicates):</h4>
+                <div className="text-sm text-yellow-800">
+                  <div>• {modalJobDetails.skipped} duplicate rows detected</div>
+                  <div>• These contacts already existed in the file</div>
+                  <div className="text-xs text-yellow-700 mt-2">
+                    Only the first occurrence of each contact was processed
                   </div>
                 </div>
               </div>

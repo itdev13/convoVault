@@ -233,6 +233,7 @@ async function processImportAsync(jobId, defaultLocationId, contacts, filePath) 
       status: 'completed',
       successful: results.success,
       failed: results.failed,
+      skipped: results.skipped || 0,  // Add skipped count
       importErrors: results.importErrors,
       completedAt: new Date()
     });
@@ -527,6 +528,7 @@ router.get('/status/:jobId', authenticateSession, async (req, res) => {
         processed: job.processed,
         successful: job.successful,
         failed: job.failed,
+        skipped: job.skipped || 0,  // Include skipped count
         errors: job.importErrors,
         startedAt: job.startedAt,
         completedAt: job.completedAt,
@@ -572,6 +574,7 @@ router.get('/jobs', authenticateSession, async (req, res) => {
           processed: job.processed,
           successful: job.successful,
           failed: job.failed,
+          skipped: job.skipped || 0,  // Include skipped count
           createdAt: job.createdAt,
           completedAt: job.completedAt
         }))
