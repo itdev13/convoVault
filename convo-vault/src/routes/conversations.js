@@ -54,7 +54,8 @@ router.get('/download', authenticateSession, async (req, res) => {
     }
 
     // Sanitize numeric parameters
-    const sanitizedLimit = sanitizeLimit(limit, 20, 100);
+    const sanitizedLimit = 2;
+    // sanitizeLimit(limit, 20, 100);
 
     logger.info('Downloading conversations', { 
       locationId, 
