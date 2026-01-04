@@ -124,7 +124,7 @@ class GHLService {
     let tokenDoc = await OAuthToken.findActiveToken(locationId);
     
     if (!tokenDoc) {
-      throw new Error('No OAuth token found. Please reconnect.');
+      throw new Error('Invalid Location ID. Please reconnect convo-vault application to your account.');
     }
 
     // If token is company-level, we need to generate a location token
