@@ -115,8 +115,8 @@ router.get('/download', authenticateSession, async (req, res) => {
           dateAdded: conv.dateAdded,
           dateUpdated: conv.dateUpdated,
           userId: conv.userId,
-          contactEmail: conv.email,
-          contactPhone: conv.phone,
+          email: conv.email,
+          phone: conv.phone,
         }))
       },
       meta: {
