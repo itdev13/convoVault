@@ -247,7 +247,6 @@
       word-break: break-all;
     }
     
-    /* Toast notification */
     .toast {
       position: fixed;
       bottom: 30px;
@@ -301,6 +300,7 @@
       <a href="#messages" class="nav-link">Messages</a>
       <a href="#import" class="nav-link">Import</a>
       <a href="#export" class="nav-link">Export</a>
+      <a href="#support" class="nav-link">Support</a>
     </div>
 
     <div class="content">
@@ -314,6 +314,107 @@
       <section id="authentication" class="section">
         <h2 class="section-title">Authentication</h2>
 
+        <!-- Decrypt User Data -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/api/auth/decrypt-user-data</span>
+            <span class="auth-badge public">Public</span>
+          </div>
+          <p class="endpoint-description">
+            Decrypt user data from GHL marketplace using your shared secret.
+          </p>
+
+          <h4>Request Body:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>encryptedData</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Encrypted user data from GHL</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X POST https://convoapi.vaultsuite.store/api/auth/decrypt-user-data \
+  -H "Content-Type: application/json" \
+  -d '{"encryptedData": "U2FsdGVkX1..."}'</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"success"</span>: <span class="boolean">true</span>,
+  <span class="key">"userId"</span>: <span class="string">"user123"</span>,
+  <span class="key">"companyId"</span>: <span class="string">"comp789"</span>,
+  <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
+  <span class="key">"email"</span>: <span class="string">"user@example.com"</span>
+}</pre>
+          </div>
+        </div>
+
+        <!-- Verify Session -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/api/auth/verify</span>
+            <span class="auth-badge public">Public</span>
+          </div>
+          <p class="endpoint-description">
+            Verify user context and create a session token for API access.
+          </p>
+
+          <h4>Request Body:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>GHL location (sub-account) ID</td>
+            </tr>
+            <tr>
+              <td><code>userId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>GHL user ID</td>
+            </tr>
+            <tr>
+              <td><code>companyId</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>GHL company ID</td>
+            </tr>
+          </table>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"success"</span>: <span class="boolean">true</span>,
+  <span class="key">"sessionToken"</span>: <span class="string">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span>,
+  <span class="key">"location"</span>: {
+    <span class="key">"id"</span>: <span class="string">"loc456"</span>,
+    <span class="key">"name"</span>: <span class="string">"My Location"</span>
+  }
+}</pre>
+          </div>
+        </div>
+
         <!-- Refresh Token -->
         <div class="endpoint">
           <div class="endpoint-header">
@@ -322,7 +423,7 @@
             <span class="auth-badge">Protected</span>
           </div>
           <p class="endpoint-description">
-            Refresh your session token to get a new one.
+            Refresh your session token to get a new one (expires in 1 hour).
           </p>
 
           <h4>Headers:</h4>
@@ -343,44 +444,43 @@
             <pre>curl -X POST https://convoapi.vaultsuite.store/api/auth/refresh \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
           </div>
-
-          <h4>Response:</h4>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>{
-  <span class="key">"success"</span>: <span class="boolean">true</span>,
-  <span class="key">"sessionToken"</span>: <span class="string">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span>
-}</pre>
-          </div>
         </div>
 
-        <!-- Verify Token -->
+        <!-- Get Session Info -->
         <div class="endpoint">
           <div class="endpoint-header">
             <span class="method get">GET</span>
-            <span class="endpoint-path">/api/auth/verify</span>
+            <span class="endpoint-path">/api/auth/session</span>
             <span class="auth-badge">Protected</span>
           </div>
           <p class="endpoint-description">
-            Verify if your session token is valid and get user info.
+            Get current session information and location details.
           </p>
 
           <h4>Example Request:</h4>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X GET https://convoapi.vaultsuite.store/api/auth/verify \
+            <pre>curl -X GET https://convoapi.vaultsuite.store/api/auth/session \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
           </div>
+        </div>
 
-          <h4>Response:</h4>
+        <!-- Get Locations -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/auth/locations</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Get all locations (sub-accounts) for your company.
+          </p>
+
+          <h4>Example Request:</h4>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>{
-  <span class="key">"valid"</span>: <span class="boolean">true</span>,
-  <span class="key">"userId"</span>: <span class="string">"user123"</span>,
-  <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
-  <span class="key">"companyId"</span>: <span class="string">"comp789"</span>
-}</pre>
+            <pre>curl -X GET https://convoapi.vaultsuite.store/api/auth/locations \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
           </div>
         </div>
       </section>
@@ -389,15 +489,15 @@
       <section id="conversations" class="section">
         <h2 class="section-title">Conversations</h2>
 
-        <!-- Search Conversations -->
+        <!-- Download Conversations -->
         <div class="endpoint">
           <div class="endpoint-header">
             <span class="method get">GET</span>
-            <span class="endpoint-path">/api/conversations/search</span>
+            <span class="endpoint-path">/api/conversations/download</span>
             <span class="auth-badge">Protected</span>
           </div>
           <p class="endpoint-description">
-            Search conversations with advanced filtering options.
+            Download conversations with advanced filtering and cursor-based pagination.
           </p>
 
           <h4>Query Parameters:</h4>
@@ -421,56 +521,156 @@
               <td>Number of results (default: 20, max: 100)</td>
             </tr>
             <tr>
-              <td><code>offset</code></td>
-              <td>number</td>
-              <td><span class="optional">Optional</span></td>
-              <td>Pagination offset</td>
-            </tr>
-            <tr>
               <td><code>startDate</code></td>
               <td>string</td>
               <td><span class="optional">Optional</span></td>
-              <td>Filter by start date (ISO format)</td>
+              <td>ISO 8601 date (e.g., 2026-01-01T00:00:00.000Z)</td>
             </tr>
             <tr>
               <td><code>endDate</code></td>
               <td>string</td>
               <td><span class="optional">Optional</span></td>
-              <td>Filter by end date (ISO format)</td>
+              <td>ISO 8601 date</td>
+            </tr>
+            <tr>
+              <td><code>conversationId</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Filter by specific conversation ID</td>
+            </tr>
+            <tr>
+              <td><code>lastMessageType</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>SMS, Email, WhatsApp, Call, etc.</td>
+            </tr>
+            <tr>
+              <td><code>lastMessageDirection</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>inbound or outbound</td>
             </tr>
             <tr>
               <td><code>status</code></td>
               <td>string</td>
               <td><span class="optional">Optional</span></td>
-              <td>Conversation status (active, archived, etc.)</td>
+              <td>Conversation status filter</td>
+            </tr>
+            <tr>
+              <td><code>startAfterId</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Cursor for pagination</td>
+            </tr>
+            <tr>
+              <td><code>sortBy</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Sort criteria</td>
             </tr>
           </table>
 
           <h4>Example Request:</h4>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/conversations/search?locationId=loc456&limit=20" \
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/conversations/download?locationId=loc456&limit=20&lastMessageType=SMS" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
           </div>
+        </div>
 
-          <h4>Response:</h4>
+        <!-- Search Conversations -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/conversations/search</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Search conversations with filters. Supports both general search and specific conversation lookup.
+          </p>
+
+          <h4>Query Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Sub-account location ID</td>
+            </tr>
+            <tr>
+              <td><code>conversationId</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Get specific conversation by ID</td>
+            </tr>
+            <tr>
+              <td><code>limit</code></td>
+              <td>number</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Number of results</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>{
-  <span class="key">"success"</span>: <span class="boolean">true</span>,
-  <span class="key">"conversations"</span>: [
-    {
-      <span class="key">"id"</span>: <span class="string">"conv123"</span>,
-      <span class="key">"contactId"</span>: <span class="string">"contact456"</span>,
-      <span class="key">"locationId"</span>: <span class="string">"loc456"</span>,
-      <span class="key">"lastMessageBody"</span>: <span class="string">"Hello!"</span>,
-      <span class="key">"lastMessageType"</span>: <span class="string">"SMS"</span>,
-      <span class="key">"dateUpdated"</span>: <span class="string">"2026-01-02T12:00:00.000Z"</span>
-    }
-  ],
-  <span class="key">"total"</span>: <span class="number">150</span>,
-  <span class="key">"count"</span>: <span class="number">20</span>
-}</pre>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/conversations/search?locationId=loc456&conversationId=conv123" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
+          </div>
+        </div>
+
+        <!-- Get Specific Conversation -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/conversations/:conversationId</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Get details of a specific conversation.
+          </p>
+
+          <h4>Path Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>conversationId</code></td>
+              <td>string</td>
+              <td>The conversation ID</td>
+            </tr>
+          </table>
+
+          <h4>Query Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Sub-account location ID</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/conversations/conv123?locationId=loc456" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
           </div>
         </div>
       </section>
@@ -487,7 +687,7 @@
             <span class="auth-badge">Protected</span>
           </div>
           <p class="endpoint-description">
-            Get all messages for a specific conversation.
+            Get all messages for a specific conversation with pagination support.
           </p>
 
           <h4>Path Parameters:</h4>
@@ -524,13 +724,92 @@
               <td><span class="optional">Optional</span></td>
               <td>Number of messages (default: 100, max: 500)</td>
             </tr>
+            <tr>
+              <td><code>lastMessageId</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Cursor for pagination</td>
+            </tr>
+            <tr>
+              <td><code>sortOrder</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>asc or desc (default: desc)</td>
+            </tr>
           </table>
 
           <h4>Example Request:</h4>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/messages/conv123?locationId=loc456" \
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/messages/conv123?locationId=loc456&limit=100" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"success"</span>: <span class="boolean">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"conversationId"</span>: <span class="string">"conv123"</span>,
+    <span class="key">"total"</span>: <span class="number">50</span>,
+    <span class="key">"messages"</span>: [...],
+    <span class="key">"pagination"</span>: {
+      <span class="key">"hasMore"</span>: <span class="boolean">true</span>,
+      <span class="key">"nextCursor"</span>: <span class="string">"msg789"</span>
+    }
+  }
+}</pre>
+          </div>
+        </div>
+
+        <!-- Download Messages as CSV -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/messages/:conversationId/download</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Download ALL messages from a conversation as CSV file with automatic pagination.
+          </p>
+
+          <h4>Path Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>conversationId</code></td>
+              <td>string</td>
+              <td>The conversation ID</td>
+            </tr>
+          </table>
+
+          <h4>Query Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Sub-account location ID</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/messages/conv123/download?locationId=loc456" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
+  -o conversation_messages.csv</pre>
           </div>
         </div>
       </section>
@@ -547,7 +826,7 @@
             <span class="auth-badge">Protected</span>
           </div>
           <p class="endpoint-description">
-            Upload CSV/Excel file to import conversations (max 20MB).
+            Upload CSV/Excel file to import conversations. Supports creating contacts and conversations (max 20MB).
           </p>
 
           <h4>Form Data:</h4>
@@ -555,17 +834,99 @@
             <tr>
               <th>Field</th>
               <th>Type</th>
+              <th>Required</th>
               <th>Description</th>
             </tr>
             <tr>
               <td><code>file</code></td>
               <td>file</td>
+              <td><span class="required">Required</span></td>
               <td>CSV or Excel file (.csv, .xlsx, .xls)</td>
             </tr>
             <tr>
               <td><code>locationId</code></td>
               <td>string</td>
-              <td>Sub-account location ID</td>
+              <td><span class="required">Required</span></td>
+              <td>Default location ID for rows without locationId</td>
+            </tr>
+          </table>
+
+          <h4>CSV Columns:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Column</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>Override default locationId per row</td>
+            </tr>
+            <tr>
+              <td><code>contactId</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>If not provided, will create contact</td>
+            </tr>
+            <tr>
+              <td><code>name</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>Contact full name</td>
+            </tr>
+            <tr>
+              <td><code>email</code></td>
+              <td><span class="optional">Optional*</span></td>
+              <td>Contact email (required if no contactId)</td>
+            </tr>
+            <tr>
+              <td><code>phone</code></td>
+              <td><span class="optional">Optional*</span></td>
+              <td>Contact phone with country code (e.g., +1234567890)</td>
+            </tr>
+            <tr>
+              <td><code>companyName</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>Contact company name</td>
+            </tr>
+            <tr>
+              <td><code>address1</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>Street address</td>
+            </tr>
+            <tr>
+              <td><code>city</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>City</td>
+            </tr>
+            <tr>
+              <td><code>state</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>State/Province</td>
+            </tr>
+            <tr>
+              <td><code>postalCode</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>Postal/ZIP code</td>
+            </tr>
+            <tr>
+              <td><code>country</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>Country code</td>
+            </tr>
+            <tr>
+              <td><code>website</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>Website URL</td>
+            </tr>
+            <tr>
+              <td><code>timezone</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>Timezone (e.g., America/New_York)</td>
+            </tr>
+            <tr>
+              <td><code>tags</code></td>
+              <td><span class="optional">Optional</span></td>
+              <td>Tags separated by semicolons (e.g., vip;customer)</td>
             </tr>
           </table>
 
@@ -577,6 +938,20 @@
   -F "file=@conversations.csv" \
   -F "locationId=loc456"</pre>
           </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"success"</span>: <span class="boolean">true</span>,
+  <span class="key">"message"</span>: <span class="string">"Import started - processing in background"</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"jobId"</span>: <span class="string">"job123"</span>,
+    <span class="key">"totalRows"</span>: <span class="number">100</span>,
+    <span class="key">"status"</span>: <span class="string">"processing"</span>
+  }
+}</pre>
+          </div>
         </div>
 
         <!-- Download Template -->
@@ -587,7 +962,7 @@
             <span class="auth-badge">Protected</span>
           </div>
           <p class="endpoint-description">
-            Download CSV template for importing conversations.
+            Download CSV template for importing conversations with sample data.
           </p>
 
           <h4>Example Request:</h4>
@@ -596,6 +971,92 @@
             <pre>curl -X GET https://convoapi.vaultsuite.store/api/import/template \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
   -o template.csv</pre>
+          </div>
+        </div>
+
+        <!-- Get Import Status -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/import/status/:jobId</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Get the status and progress of an import job.
+          </p>
+
+          <h4>Path Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>jobId</code></td>
+              <td>string</td>
+              <td>The import job ID</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET https://convoapi.vaultsuite.store/api/import/status/job123 \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"success"</span>: <span class="boolean">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"jobId"</span>: <span class="string">"job123"</span>,
+    <span class="key">"status"</span>: <span class="string">"completed"</span>,
+    <span class="key">"fileName"</span>: <span class="string">"conversations.csv"</span>,
+    <span class="key">"totalRows"</span>: <span class="number">100</span>,
+    <span class="key">"processed"</span>: <span class="number">100</span>,
+    <span class="key">"successful"</span>: <span class="number">95</span>,
+    <span class="key">"failed"</span>: <span class="number">3</span>,
+    <span class="key">"skipped"</span>: <span class="number">2</span>
+  }
+}</pre>
+          </div>
+        </div>
+
+        <!-- Get Import Jobs -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/import/jobs</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Get recent import jobs for a location (last 20 jobs).
+          </p>
+
+          <h4>Query Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Sub-account location ID</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/import/jobs?locationId=loc456" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
           </div>
         </div>
       </section>
@@ -612,7 +1073,7 @@
             <span class="auth-badge">Protected</span>
           </div>
           <p class="endpoint-description">
-            Export messages with advanced filtering.
+            Export messages with advanced filtering and pagination.
           </p>
 
           <h4>Query Parameters:</h4>
@@ -620,29 +1081,122 @@
             <tr>
               <th>Parameter</th>
               <th>Type</th>
+              <th>Required</th>
               <th>Description</th>
             </tr>
             <tr>
               <td><code>locationId</code></td>
               <td>string</td>
-              <td>Sub-account location ID (required)</td>
+              <td><span class="required">Required</span></td>
+              <td>Sub-account location ID</td>
+            </tr>
+            <tr>
+              <td><code>channel</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>SMS, Email, WhatsApp, Call, etc.</td>
+            </tr>
+            <tr>
+              <td><code>startDate</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>ISO 8601 date</td>
+            </tr>
+            <tr>
+              <td><code>endDate</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>ISO 8601 date</td>
+            </tr>
+            <tr>
+              <td><code>contactId</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Filter by specific contact</td>
             </tr>
             <tr>
               <td><code>conversationId</code></td>
               <td>string</td>
+              <td><span class="optional">Optional</span></td>
               <td>Filter by specific conversation</td>
+            </tr>
+            <tr>
+              <td><code>cursor</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Pagination cursor</td>
             </tr>
             <tr>
               <td><code>limit</code></td>
               <td>number</td>
-              <td>Number of messages (max: 500)</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Number of messages (default: 100, max: 500)</td>
             </tr>
           </table>
 
           <h4>Example Request:</h4>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/export/messages?locationId=loc456&limit=100" \
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/export/messages?locationId=loc456&channel=SMS&limit=100" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
+          </div>
+        </div>
+
+        <!-- Export All Messages -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method get">GET</span>
+            <span class="endpoint-path">/api/export/messages/all</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Export ALL messages for a location with automatic pagination handling.
+          </p>
+
+          <h4>Query Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Sub-account location ID</td>
+            </tr>
+            <tr>
+              <td><code>channel</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Filter by channel type</td>
+            </tr>
+            <tr>
+              <td><code>startDate</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>ISO 8601 date</td>
+            </tr>
+            <tr>
+              <td><code>endDate</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>ISO 8601 date</td>
+            </tr>
+            <tr>
+              <td><code>contactId</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Filter by contact</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X GET "https://convoapi.vaultsuite.store/api/export/messages/all?locationId=loc456" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"</pre>
           </div>
         </div>
@@ -658,12 +1212,138 @@
             Download messages as CSV file.
           </p>
 
+          <h4>Query Parameters:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Parameter</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Sub-account location ID</td>
+            </tr>
+            <tr>
+              <td><code>channel</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Filter by channel type</td>
+            </tr>
+            <tr>
+              <td><code>startDate</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>ISO 8601 date</td>
+            </tr>
+            <tr>
+              <td><code>endDate</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>ISO 8601 date</td>
+            </tr>
+          </table>
+
           <h4>Example Request:</h4>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre>curl -X GET "https://convoapi.vaultsuite.store/api/export/csv?locationId=loc456" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
   -o messages.csv</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Support Section -->
+      <section id="support" class="section">
+        <h2 class="section-title">Support</h2>
+
+        <!-- Submit Support Ticket -->
+        <div class="endpoint">
+          <div class="endpoint-header">
+            <span class="method post">POST</span>
+            <span class="endpoint-path">/api/support/ticket</span>
+            <span class="auth-badge">Protected</span>
+          </div>
+          <p class="endpoint-description">
+            Submit a support ticket with optional image attachments (max 5 images, 5MB total).
+          </p>
+
+          <h4>Form Data:</h4>
+          <table class="params-table">
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Description</th>
+            </tr>
+            <tr>
+              <td><code>email</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Your email address</td>
+            </tr>
+            <tr>
+              <td><code>subject</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Ticket subject</td>
+            </tr>
+            <tr>
+              <td><code>message</code></td>
+              <td>string</td>
+              <td><span class="required">Required</span></td>
+              <td>Support request details</td>
+            </tr>
+            <tr>
+              <td><code>name</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Your name</td>
+            </tr>
+            <tr>
+              <td><code>locationId</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Related location ID</td>
+            </tr>
+            <tr>
+              <td><code>userId</code></td>
+              <td>string</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Your user ID</td>
+            </tr>
+            <tr>
+              <td><code>images</code></td>
+              <td>file[]</td>
+              <td><span class="optional">Optional</span></td>
+              <td>Up to 5 images (JPEG, PNG, GIF, WebP)</td>
+            </tr>
+          </table>
+
+          <h4>Example Request:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>curl -X POST https://convoapi.vaultsuite.store/api/support/ticket \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
+  -F "email=user@example.com" \
+  -F "subject=Help with Import" \
+  -F "message=I'm having trouble importing my CSV file" \
+  -F "name=John Doe" \
+  -F "locationId=loc456" \
+  -F "images=@screenshot1.png" \
+  -F "images=@screenshot2.png"</pre>
+          </div>
+
+          <h4>Response:</h4>
+          <div class="code-block">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre>{
+  <span class="key">"success"</span>: <span class="boolean">true</span>,
+  <span class="key">"message"</span>: <span class="string">"Support ticket submitted successfully. We will get back to you soon!"</span>
+}</pre>
           </div>
         </div>
       </section>
@@ -679,7 +1359,7 @@
             <span class="auth-badge public">Public</span>
           </div>
           <p class="endpoint-description">
-            Check if the API is running.
+            Check if the API is running and healthy.
           </p>
 
           <h4>Example Request:</h4>
@@ -694,7 +1374,7 @@
             <pre>{
   <span class="key">"status"</span>: <span class="string">"healthy"</span>,
   <span class="key">"app"</span>: <span class="string">"ConvoVault"</span>,
-  <span class="key">"timestamp"</span>: <span class="string">"2026-01-02T12:00:00.000Z"</span>
+  <span class="key">"timestamp"</span>: <span class="string">"2026-01-04T12:00:00.000Z"</span>
 }</pre>
           </div>
         </div>
@@ -715,11 +1395,11 @@
           </tr>
           <tr>
             <td><code>400</code></td>
-            <td>Bad Request - Invalid parameters</td>
+            <td>Bad Request - Invalid parameters or missing required fields</td>
           </tr>
           <tr>
             <td><code>401</code></td>
-            <td>Unauthorized - Invalid or missing token</td>
+            <td>Unauthorized - Invalid, missing, or expired token</td>
           </tr>
           <tr>
             <td><code>403</code></td>
@@ -730,10 +1410,50 @@
             <td>Not Found - Resource doesn't exist</td>
           </tr>
           <tr>
+            <td><code>422</code></td>
+            <td>Unprocessable Entity - Validation failed or duplicate resource</td>
+          </tr>
+          <tr>
             <td><code>500</code></td>
-            <td>Internal Server Error - Something went wrong</td>
+            <td>Internal Server Error - Something went wrong on our end</td>
           </tr>
         </table>
+      </section>
+
+      <!-- Rate Limits -->
+      <section id="rate-limits" class="section">
+        <h2 class="section-title">Rate Limits</h2>
+        
+        <p style="margin-bottom: 16px; color: #4a5568;">
+          The API implements rate limiting to ensure fair usage and system stability:
+        </p>
+
+        <table class="params-table">
+          <tr>
+            <th>Endpoint Type</th>
+            <th>Rate Limit</th>
+            <th>Window</th>
+          </tr>
+          <tr>
+            <td>Authentication</td>
+            <td>10 requests</td>
+            <td>Per minute</td>
+          </tr>
+          <tr>
+            <td>General API</td>
+            <td>60 requests</td>
+            <td>Per minute</td>
+          </tr>
+          <tr>
+            <td>Import/Export</td>
+            <td>Handled internally with delays</td>
+            <td>-</td>
+          </tr>
+        </table>
+
+        <p style="margin-top: 16px; color: #718096; font-size: 14px;">
+          <strong>Note:</strong> Rate limit exceeded errors will return HTTP 429 status code.
+        </p>
       </section>
     </div>
   </div>
@@ -867,4 +1587,3 @@
   </script>
 </body>
 </html>
-

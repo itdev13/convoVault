@@ -232,8 +232,8 @@ export default function MessagesTab() {
                       <p className="text-sm text-gray-700 mb-2">{message.body}</p>
 
                       <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>Conv: {message.conversationId?.slice(0, 12)}...</span>
-                        <span>Contact: {message.contactId?.slice(0, 12)}...</span>
+                        <span>conversationId: {message.conversationId?.slice(0, 12)}...</span>
+                        <span>contactId: {message.contactId?.slice(0, 12)}...</span>
                       </div>
                     </div>
                   </div>
