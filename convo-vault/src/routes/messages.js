@@ -64,7 +64,7 @@ router.get('/:conversationId', authenticateSession, async (req, res) => {
           id: msg.id,
           type: msg.type,
           body: msg.body,
-          direction: msg.direction || msg?.meta?.email?.direction,
+          direction: msg.direction || msg?.meta?.email?.direction || "outbound",
           status: msg.status,
           dateAdded: msg.dateAdded,
           attachments: msg.attachments || [],

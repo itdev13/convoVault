@@ -377,8 +377,8 @@ export default function ConversationMessages({ conversation, onBack }) {
                   
                   {/* Email Thread Notice */}
                   {(message.type === 'TYPE_EMAIL' || message.type === 'Email' || message.type === 3) && 
-                   message.meta?.email?.message_ids && 
-                   message.meta.email.message_ids.length > 1 && (
+                  message.meta?.email?.message_ids && 
+                  message.meta.email?.messageIds?.length > 1 && (
                     <div className={`text-xs mb-2 px-2 py-1 rounded flex items-center gap-1.5 ${
                       isOutbound ? 'bg-blue-500/20 text-blue-100' : 'bg-blue-50 text-blue-700'
                     }`}>
