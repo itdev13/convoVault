@@ -66,7 +66,7 @@ export default function ConversationsTab({ onSelectConversation }) {
       console.log('🔍 Export starting with filters:', filters);
       
       let allConversations = [];
-      const exportLimit = 2; // Always use max limit for export
+      const exportLimit = 100; // Always use max limit for export
       let startAfterId = null;  // Cursor for pagination (GHL API standard)
       let hasMore = true;
       let batchCount = 0;
