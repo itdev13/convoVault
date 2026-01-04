@@ -356,8 +356,7 @@ export default function ConversationsTab({ onSelectConversation }) {
               size="large"
               options={[
                 { value: 'last_message_date', label: 'Last Message Date' },
-                { value: 'last_manual_message_date', label: 'Last Manual Message' },
-                { value: 'score_profile', label: 'Score Profile' }
+                { value: 'last_manual_message_date', label: 'Last Manual Message' }
               ]}
             />
           </div>
