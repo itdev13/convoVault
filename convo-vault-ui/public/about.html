@@ -31,8 +31,21 @@
       
       // Track important actions when DOM is ready
       document.addEventListener('DOMContentLoaded', function() {
+        // Track specific "Get Started Now" button in hero section
+        const getStartedHeroBtn = document.querySelector('a[data-analytics="cta_get_started_hero"]');
+        if (getStartedHeroBtn) {
+          getStartedHeroBtn.addEventListener('click', function() {
+            trackEvent('cta_get_started_hero', {
+              location: 'about_page',
+              button_text: 'Get Started Now',
+              button_position: 'hero',
+              section: 'hero_cta'
+            });
+          });
+        }
+        
         // Track CTA button clicks - Most Important Action
-        const ctaButtons = document.querySelectorAll('a[href*="marketplace.gohighlevel.com"]');
+        const ctaButtons = document.querySelectorAll('a[href*="marketplace.gohighlevel.com"]:not([data-analytics])');
         ctaButtons.forEach(button => {
           button.addEventListener('click', function() {
             const buttonText = this.textContent.trim();
@@ -347,6 +360,40 @@
       line-height: 1.8;
     }
     
+    /* Video Section */
+    .video-section {
+      padding: 80px 20px;
+      background: #F9FAFB;
+    }
+    
+    .video-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    
+    .video-wrapper {
+      position: relative;
+      padding-bottom: 56.25%; /* 16:9 aspect ratio */
+      height: 0;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #000;
+      margin-top: 30px;
+    }
+    
+    .video-wrapper iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    
     /* Use Cases */
     .use-cases {
       padding: 80px 20px;
@@ -482,6 +529,7 @@
       .section-title h2 { font-size: 32px; }
       .cta-section h2 { font-size: 36px; }
       .screenshot-container { padding: 30px; }
+      .video-container { padding: 20px; }
     }
   </style>
 </head>
@@ -499,7 +547,7 @@
         <span style="font-size: 18px; font-weight: 700; color: #ffffff;">⚡ No Developers Needed - 100% User-Friendly</span>
       </div>
       <div class="cta-buttons">
-        <a href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356" class="btn btn-primary">Get Started Now</a>
+        <a href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356" class="btn btn-primary" data-analytics="cta_get_started_hero">Get Started Now</a>
         <a href="#how-it-works" class="btn btn-secondary">See How It Works</a>
       </div>
     </div>
@@ -625,13 +673,45 @@
         <div class="step">
           <div class="step-number">2</div>
           <h3>Access from Sidebar</h3>
-          <p>Find "ConvoVault" in your sub-account's left navigation menu. Click to launch and access all features instantly.</p>
+          <p>After installation, a new "ConvoVault" tab will appear in your sub-account's left navigation menu. Click to launch and access all features seamlessly.</p>
         </div>
         
         <div class="step">
           <div class="step-number">3</div>
           <h3>Start Managing</h3>
           <p>Export conversations, get messages, or import from CSV/Excel. All features are ready to use immediately with no configuration.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video Section -->
+  <div class="video-section">
+    <div class="container">
+      <div class="section-title">
+        <h2>See How to Use ConvoVault</h2>
+        <p>Watch this quick tutorial to learn how to export conversations, import data, and use all features</p>
+      </div>
+      
+      <div class="video-container">
+        <div class="video-wrapper">
+          <iframe 
+            width="100%" 
+            height="100%" 
+            src="https://www.youtube.com/embed/2YxEKvGYNWQ" 
+            title="How to Use ConvoVault" 
+            frameborder="0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+            allowfullscreen>
+          </iframe>
+        </div>
+        <div style="margin-top: 20px; text-align: center;">
+          <p style="color: #6B7280; font-size: 14px;">
+            Having trouble viewing? 
+            <a href="https://youtu.be/2YxEKvGYNWQ" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: underline;">
+              Watch on YouTube
+            </a>
+          </p>
         </div>
       </div>
     </div>
