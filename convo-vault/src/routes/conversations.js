@@ -19,10 +19,12 @@ router.get('/download', authenticateSession, async (req, res) => {
   try {
     const { 
       locationId, 
-      limit, 
+      limit,
+      query,  // Universal search across multiple fields
       startDate, 
       endDate,
       conversationId,
+      contactId,  // Filter by specific contact
       lastMessageType,
       lastMessageDirection,
       status,
@@ -59,6 +61,7 @@ router.get('/download', authenticateSession, async (req, res) => {
     logger.info('Downloading conversations', { 
       locationId, 
       limit: sanitizedLimit,
+      query,
       startDate,
       endDate,
       startAfterId,
@@ -69,9 +72,11 @@ router.get('/download', authenticateSession, async (req, res) => {
 
     // Build filters with all parameters (GHL API uses cursor-based pagination)
     const filters = { limit: sanitizedLimit };
+    if (query) filters.query = query;  // Universal search parameter (searches across contact_name, email, tags, etc.)
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
     if (startAfterId) filters.startAfterDate = startAfterId;  // Cursor for pagination
+    if (contactId) filters.contactId = contactId;  // Filter by specific contact
     if (lastMessageType) filters.lastMessageType = lastMessageType;
     if (lastMessageDirection) filters.lastMessageDirection = lastMessageDirection;
     if (status) filters.status = status;
