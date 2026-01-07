@@ -250,7 +250,6 @@ export default function ConversationsTab({ onSelectConversation }) {
               onChange={(e) => setFilters({ ...filters, query: e.target.value })}
               placeholder="Search conversations..."
               size="large"
-              allowClear
             />
           </div>
 
