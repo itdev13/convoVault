@@ -170,15 +170,16 @@
       width: 120px;
       height: 120px;
       margin: 0 auto 30px;
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      border-radius: 30px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 60px;
-      border: 3px solid rgba(255, 255, 255, 0.3);
       animation: pulse 3s ease-in-out infinite;
+    }
+    
+    .hero-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
     }
     
     @keyframes pulse {
@@ -522,6 +523,84 @@
       opacity: 0.7;
     }
     
+    /* App Updates Badge */
+    .updates-badge {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+    }
+    
+    .updates-button {
+      background: linear-gradient(135deg, #4299e1 0%, #667eea 100%);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 25px;
+      font-weight: 700;
+      font-size: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(66, 153, 225, 0.4);
+      position: relative;
+    }
+    
+    .updates-button::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      width: 12px;
+      height: 12px;
+      background: #48bb78;
+      border-radius: 50%;
+      border: 2px solid white;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.8; }
+    }
+    
+    .updates-popover {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 10px;
+      width: 380px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      display: none;
+      border: 2px solid #e2e8f0;
+    }
+    
+    .updates-badge:hover .updates-popover {
+      display: block;
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .updates-popover::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 20px;
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-top: 2px solid #e2e8f0;
+      border-right: 2px solid #e2e8f0;
+      transform: rotate(-45deg);
+    }
+    
     /* Responsive */
     @media (max-width: 768px) {
       .hero h1 { font-size: 36px; }
@@ -530,14 +609,90 @@
       .cta-section h2 { font-size: 36px; }
       .screenshot-container { padding: 30px; }
       .video-container { padding: 20px; }
+      .updates-badge { top: 10px; right: 10px; }
+      .updates-popover { width: 320px; }
     }
   </style>
 </head>
 <body>
+  
+  <!-- App Updates Badge (Fixed Position) -->
+  <div class="updates-badge">
+    <div class="updates-button">
+      <span>⚡</span>
+      <span>App Updates</span>
+    </div>
+    
+    <!-- Popover (Shows on Hover) -->
+    <div class="updates-popover">
+      <div style="padding: 20px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0;">
+          <span style="background: #4299e1; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">NEW</span>
+          <h3 style="font-size: 16px; font-weight: 700; color: #1F2937; margin: 0;">Latest Updates</h3>
+        </div>
+        
+        <div style="space-y: 12px;">
+          <div style="display: flex; align-items: start; gap: 8px; margin-bottom: 12px;">
+            <span style="color: #48bb78; font-weight: 700; flex-shrink: 0;">✓</span>
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="color: #1F2937; font-size: 14px;">Universal Search</strong>
+                <span style="background: #48bb78; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;">LIVE</span>
+              </div>
+              <p style="color: #6B7280; font-size: 12px; margin: 4px 0 0 0; line-height: 1.4;">
+                Search across name, email, company, tags
+              </p>
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: start; gap: 8px; margin-bottom: 12px;">
+            <span style="color: #4299e1; font-weight: 700; flex-shrink: 0;">🚀</span>
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="color: #1F2937; font-size: 14px;">Date Range Filters</strong>
+                <span style="background: #4299e1; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;">UPCOMING</span>
+              </div>
+              <p style="color: #6B7280; font-size: 12px; margin: 4px 0 0 0; line-height: 1.4;">
+                Start/End date filters for conversations
+              </p>
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: start; gap: 8px; margin-bottom: 12px;">
+            <span style="color: #4299e1; font-weight: 700; flex-shrink: 0;">🚀</span>
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="color: #1F2937; font-size: 14px;">Email Metadata</strong>
+                <span style="background: #4299e1; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;">UPCOMING</span>
+              </div>
+              <p style="color: #6B7280; font-size: 12px; margin: 4px 0 0 0; line-height: 1.4;">
+                Subject, From, To, CC, BCC in email CSVs
+              </p>
+            </div>
+          </div>
+          
+          <div style="background: #EFF6FF; border-radius: 8px; padding: 12px; margin-top: 12px; border: 1px solid #BFDBFE;">
+            <div style="display: flex; align-items: start; gap: 8px;">
+              <span style="color: #2563EB; font-weight: 700; flex-shrink: 0;">💡</span>
+              <div>
+                <strong style="color: #1E40AF; font-size: 13px; display: block;">Need a Feature?</strong>
+                <p style="color: #3B82F6; font-size: 11px; margin: 4px 0 0 0; line-height: 1.4;">
+                  Use Support tab - we'll add it in 24h!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
   <!-- Hero Section -->
   <div class="hero">
     <div class="hero-content">
-      <div class="hero-logo">🔐</div>
+      <div class="hero-logo">
+        <img src="assets/app-icon-marketplace.svg" alt="ConvoVault Logo" />
+      </div>
       <div style="display: inline-block; background: rgba(255,255,255,0.2); padding: 8px 20px; border-radius: 20px; margin-bottom: 20px; border: 2px solid rgba(255,255,255,0.4);">
         <span style="font-size: 16px; font-weight: 700;">🎁 7-Day Free Trial</span>
       </div>
@@ -812,6 +967,65 @@
           <div style="font-size: 36px; margin-bottom: 15px;">📊</div>
           <h3 style="margin-bottom: 10px; color: #1F2937;">Full Context</h3>
           <p style="color: #6B7280;">Every export includes conversationId for proper threading. Perfect for analytics and reporting.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Latest Updates Section -->
+  <div class="features">
+    <div class="container">
+      <div class="section-title">
+        <h2>🎉 Latest Updates</h2>
+        <p>New features and improvements we've added recently</p>
+      </div>
+      
+      <div style="max-width: 800px; margin: 0 auto; space-y: 20px;">
+        <!-- Update 1 - Live -->
+        <div style="background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 4px solid #48bb78; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <span style="background: #48bb78; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">LIVE</span>
+            <h3 style="font-size: 20px; color: #1F2937; margin: 0;">Universal Search</h3>
+          </div>
+          <p style="color: #6B7280; margin: 0;">
+            Search conversations across multiple fields: contact name, email, company name, tags, and message content. Find any conversation instantly!
+          </p>
+        </div>
+
+        <!-- Update 2 - Upcoming -->
+        <div style="background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 4px solid #4299e1; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <span style="background: #4299e1; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">UPCOMING</span>
+            <h3 style="font-size: 20px; color: #1F2937; margin: 0;">Date Range Filters</h3>
+          </div>
+          <p style="color: #6B7280; margin: 0;">
+            Filter conversations by Start Date and End Date. Perfect for monthly reports, compliance audits, and historical data analysis.
+          </p>
+        </div>
+
+        <!-- Update 3 - Upcoming -->
+        <div style="background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 4px solid #4299e1; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <span style="background: #4299e1; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">UPCOMING</span>
+            <h3 style="font-size: 20px; color: #1F2937; margin: 0;">Enhanced Email Exports</h3>
+          </div>
+          <p style="color: #6B7280; margin: 0;">
+            Email messages will export with complete metadata: <strong>Subject, From, To, CC, BCC</strong> in separate CSV files for better email analysis.
+          </p>
+        </div>
+
+        <!-- Coming Soon -->
+        <div style="background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); border-radius: 15px; padding: 30px; border: 2px solid #667eea;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <span style="background: #667eea; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">MORE COMING</span>
+            <h3 style="font-size: 20px; color: #1F2937; margin: 0;">Your Ideas Shape Our Roadmap</h3>
+          </div>
+          <p style="color: #4B5563; margin: 0 0 15px 0;">
+            Many more features in the pipeline! Need a specific field in exports? Want a custom filter? 
+          </p>
+          <p style="color: #667eea; font-weight: 600; margin: 0;">
+            💬 Raise a request in the Support tab - we'll address it immediately (usually within 24 hours)!
+          </p>
         </div>
       </div>
     </div>

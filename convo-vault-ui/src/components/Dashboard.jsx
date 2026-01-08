@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Header from './Header';
+import UpdatesBanner from './UpdatesBanner';
 import ConversationsTab from './tabs/ConversationsTab';
 import MessagesTab from './tabs/MessagesTab';
 import ExportTab from './tabs/ExportTab';
@@ -39,6 +40,9 @@ export default function Dashboard() {
       <Header />
       
       <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Updates Banner */}
+        {/* <UpdatesBanner /> */}
+        
         {/* Tab Navigation */}
         <div className="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
           <div className="border-b border-gray-200">

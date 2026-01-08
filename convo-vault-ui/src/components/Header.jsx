@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authAPI } from '../api/auth';
 import { docsAPI } from '../api/docs';
+import { APP_UPDATES, FEATURE_REQUEST_CTA, BADGE_CONFIGS } from '../constants/updates';
 
 export default function Header() {
   const { location, ghlContext } = useAuth();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showApiTooltip, setShowApiTooltip] = useState(false);
+  const [showUpdates, setShowUpdates] = useState(false);
 
   useEffect(() => {
     loadLocations();
@@ -63,8 +65,73 @@ export default function Header() {
             </div>
           </div>
 
-          {/* API Docs & Sub-Account */}
+          {/* Updates, API Docs & Sub-Account */}
           <div className="flex items-center gap-4">
+            {/* Updates Button with Popover */}
+            <div className="relative">
+              <button
+                onMouseEnter={() => setShowUpdates(true)}
+                onMouseLeave={() => setShowUpdates(false)}
+                className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-lg px-3 py-2 border border-white/20 transition-all flex items-center gap-2 relative"
+              >
+                <span className="text-lg">⚡</span>
+                <span className="text-white font-semibold text-sm hidden sm:inline">Updates</span>
+                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+              </button>
+              
+              {/* Updates Popover */}
+              {showUpdates && (
+                <div 
+                  onMouseEnter={() => setShowUpdates(true)}
+                  onMouseLeave={() => setShowUpdates(false)}
+                  className="absolute top-full right-0 mt-2 w-96 bg-white text-gray-900 rounded-lg shadow-2xl z-50 animate-fade-in border-2 border-blue-200"
+                >
+                  <div className="p-4">
+                    <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-200">
+                      <span className="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded">UPDATES</span>
+                      <h3 className="text-lg font-bold text-gray-900">Latest & Upcoming</h3>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {APP_UPDATES.map((update, index) => (
+                        <div key={index} className="flex items-start gap-2 text-sm">
+                          <span className={`font-bold flex-shrink-0 ${
+                            update.color === 'green' ? 'text-green-600' : 'text-blue-600'
+                          }`}>
+                            {update.icon}
+                          </span>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <strong className="text-gray-900">{update.title}</strong>
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                                update.badge === 'live' 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {BADGE_CONFIGS[update.badge].label}
+                              </span>
+                            </div>
+                            <p className="text-gray-600 text-xs mt-1">{update.description}</p>
+                          </div>
+                        </div>
+                      ))}
+                      
+                      <div className="bg-blue-50 rounded-lg p-3 mt-3 border border-blue-200">
+                        <div className="flex items-start gap-2 text-sm">
+                          <span className="text-blue-600 font-bold flex-shrink-0">{FEATURE_REQUEST_CTA.icon}</span>
+                          <div>
+                            <strong className="text-blue-900">{FEATURE_REQUEST_CTA.title}</strong>
+                            <p className="text-blue-700 text-xs mt-1">{FEATURE_REQUEST_CTA.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="absolute -top-1 right-4 w-2 h-2 bg-white border-t-2 border-r-2 border-blue-200 transform rotate-45"></div>
+                </div>
+              )}
+            </div>
+            
             {/* API Docs Button with Tooltip */}
             <div className="relative">
               <button
