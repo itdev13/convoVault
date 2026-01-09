@@ -28,7 +28,7 @@ export default function ErrorScreen({ error }) {
                     <strong>Install ConvoVault via OAuth:</strong>
                     <br />
                     <a 
-                      href="https://convoapi.vaultsuite.store/oauth/authorize" 
+                      href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356" 
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-block mt-2 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
