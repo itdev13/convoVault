@@ -4,13 +4,13 @@
  */
 
 // Backend API Base URL
-export const API_BASE_URL = 'https://celebs-columbus-duration-combination.trycloudflare.com';
+export const API_BASE_URL = 'https://convoapi.vaultsuite.store';
 
 // API Endpoints
 export const API_URL = `${API_BASE_URL}/api`;
 
 // Frontend URL (for redirects)
-export const FRONTEND_URL = 'http://localhost:5173';
+export const FRONTEND_URL = 'https://convo.vaultsuite.store';
 
 // OAuth Endpoints
 export const OAUTH_AUTHORIZE_URL = `${API_BASE_URL}/oauth/authorize`;
