@@ -4,9 +4,13 @@ import { useAuth } from '../../context/AuthContext';
 import { conversationsAPI } from '../../api/conversations';
 import { DatePicker, Select, Button, Tooltip, message, Input } from 'antd';
 import { useErrorModal } from '../ErrorModal';
+import { useInfoModal } from '../InfoModal';
+import ExportModal from '../ExportModal';
 import { copyToClipboard } from '../../utils/clipboard';
 import dayjs from 'dayjs';
 import { getMessageTypeDisplay } from '../../utils/messageTypes';
+
+const { RangePicker } = DatePicker;
 
 export default function ConversationsTab({ onSelectConversation }) {
   const { location } = useAuth();
@@ -27,7 +31,9 @@ export default function ConversationsTab({ onSelectConversation }) {
   const [appliedFilters, setAppliedFilters] = useState(filters); // Filters actually used for API
   const [shouldFetch, setShouldFetch] = useState(true); // Trigger for initial load
   const [searchTimestamp, setSearchTimestamp] = useState(Date.now()); // Force refetch even with same filters
+  const [exportModalVisible, setExportModalVisible] = useState(false);
   const { showError, ErrorModalComponent } = useErrorModal();
+  const { showInfo, InfoModalComponent } = useInfoModal();
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['conversations', location?.id, appliedFilters, shouldFetch, searchTimestamp],
@@ -60,102 +66,122 @@ export default function ConversationsTab({ onSelectConversation }) {
 
   const conversations = data?.data?.conversations || [];
 
-  // Download ALL conversations as CSV (fetch in batches of 100)
-  // Note: UI shows user's selected limit, but export uses max limit (100)
-  const handleDownload = async () => {
+  // Helper to safely format dates
+  const formatDate = (dateValue) => {
+    if (!dateValue) return '';
+    
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) {
+        return '';
+      }
+      
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return '';
+    }
+  };
+
+  // Download conversations with date range - NO HARD LIMITS, with chunking
+  const handleExport = async (dateRange) => {
     try {
       setDownloading(true);
+      setExportModalVisible(false);
       
-      console.log('🔍 Export starting with filters:', filters);
+      const { startDate, endDate } = dateRange;
+      
+      // Convert date strings to millisecond timestamps for API (start of day to end of day)
+      const startDateTimestamp = dayjs(startDate).startOf('day').valueOf(); // Returns milliseconds
+      const endDateTimestamp = dayjs(endDate).endOf('day').valueOf(); // Returns milliseconds
+      
+      const exportLimit = 100; // Batch size for API calls
+      const chunkSize = 50000; // Conversations per CSV file (chunk)
       
       let allConversations = [];
-      const exportLimit = 100; // Always use max limit for export
-      let startAfterId = null;  // Cursor for pagination (GHL API standard)
+      let startAfterId = null;
       let hasMore = true;
-      let batchCount = 0;
+      let totalFetched = 0;
+      let chunkNumber = 1;
+      const downloadedChunks = []; // Track chunk sizes
+      let estimatedTotalChunks = 1; // For better naming
       
-      // Fetch all conversations in batches of 100 (applying ALL filters except limit)
-      // Uses cursor-based pagination with startAfterId
-      while (hasMore && batchCount < 20) { // Max 2000 conversations
+      // Fetch ALL conversations (no batch limit)
+      while (hasMore) {
         const response = await conversationsAPI.download(location.id, {
-          limit: exportLimit, // Use 100 for export, not user's filter limit
-          query: filters.query || undefined,  // Universal search
-          startDate: filters.startDate || undefined,
-          endDate: filters.endDate || undefined,
+          limit: exportLimit,
+          query: filters.query || undefined,
+          startDate: startDateTimestamp,
+          endDate: endDateTimestamp,
           conversationId: filters.conversationId || undefined,
-          contactId: filters.contactId || undefined,  // Filter by contact ID
+          contactId: filters.contactId || undefined,
           lastMessageType: filters.lastMessageType || undefined,
           lastMessageDirection: filters.lastMessageDirection || undefined,
           status: filters.status || undefined,
           lastMessageAction: filters.lastMessageAction || undefined,
           sortBy: filters.sortBy || undefined,
-          startAfterId: startAfterId || undefined  // Cursor from previous page
+          startAfterId: startAfterId || undefined
         });
         
         const batch = response.data.conversations || [];
         allConversations = [...allConversations, ...batch];
+        totalFetched += batch.length;
         
-        // Get cursor for next page (last conversation ID)
+        // Get cursor for next page
         if (batch.length > 0) {
           startAfterId = batch[batch.length - 1].sort?.[0];
         }
         
-        // Check if there are more (batch size equals limit means more might exist)
         hasMore = batch.length === exportLimit;
-        batchCount++;
         
-        // Small delay between requests
+        // Estimate total chunks (update as we fetch more)
+        estimatedTotalChunks = Math.ceil(totalFetched / chunkSize);
+        
+        // If we've accumulated enough for a chunk, save it
+        if (allConversations.length >= chunkSize) {
+          const chunk = allConversations.splice(0, chunkSize);
+          const totalChunks = estimatedTotalChunks + (allConversations.length > 0 ? 1 : 0);
+          await downloadChunk(chunk, chunkNumber, totalChunks, startDate, endDate);
+          downloadedChunks.push({ number: chunkNumber, size: chunk.length });
+          chunkNumber++;
+        }
+        
+        // Download remaining conversations when no more data
+        if (!hasMore && allConversations.length > 0) {
+          const totalChunks = chunkNumber;
+          await downloadChunk(allConversations, chunkNumber, totalChunks, startDate, endDate);
+          downloadedChunks.push({ number: chunkNumber, size: allConversations.length });
+          allConversations = []; // Clear after download
+        }
+        
+        // Small delay between requests to respect rate limits
         if (hasMore) {
           await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
       
-      // Helper to safely format dates
-      const formatDate = (dateValue) => {
-        if (!dateValue) return '';
-        
-        try {
-          const date = new Date(dateValue);
-          // Check if date is valid
-          if (isNaN(date.getTime())) {
-            return ''; // Invalid date
-          }
-          
-          return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true
-          });
-        } catch (e) {
-          return ''; // Error formatting date
-        }
-      };
-      
-      // Convert to CSV with formatted dates and all available fields
-      const csvHeaders = 'Conversation ID,Created Date,Contact Name,email,phone,Contact ID,Last Message Date,Last Message Action,Last Message Direction,Last Message,Unread Count,Last Message Channel\n';
-      console.log('allConversations', allConversations);
-      const csvRows = allConversations.map(conv => {
-        const lastMessage = (conv.lastMessageBody || '').replace(/"/g, '""').replace(/\n/g, ' ');
-        const formattedLastMessageDate = formatDate(conv.lastMessageDate);
-        const formattedCreatedDate = formatDate(conv.dateAdded);
-        return `"${conv.id}","${formattedCreatedDate}","${conv.contactName || ''}","${conv.email || ''}","${conv.phone || ''}","${conv.contactId || ''}","${formattedLastMessageDate}","${conv.lastOutboundMessageAction || ''}","${conv.lastMessageDirection || ''}","${lastMessage}","${conv.unreadCount || 0}","${getMessageTypeDisplay(conv.lastMessageType) || ''}"`;
-      }).join('\n');
-      
-      const csv = csvHeaders + csvRows;
-      
-      // Download CSV
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `conversations_${Date.now()}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Show success message with chunk info
+      if (downloadedChunks.length > 1) {
+        showInfo(
+          'Export Complete!',
+          `Exported ${totalFetched.toLocaleString()} conversations in ${downloadedChunks.length} files:`,
+          downloadedChunks.map((chunk, i) => ({
+            icon: `${i + 1}️⃣`,
+            title: getConversationChunkFileName(chunk.number, downloadedChunks.length, startDate, endDate),
+            items: [`${chunk.size.toLocaleString()} conversations`]
+          }))
+        );
+      } else if (downloadedChunks.length === 1) {
+        message.success(`Successfully exported ${totalFetched.toLocaleString()} conversations!`);
+      } else {
+        message.info('No conversations found in the selected date range.');
+      }
       
     } catch (error) {
       showError('Export Failed', 'Failed to export conversations. Please try again.');
@@ -164,8 +190,49 @@ export default function ConversationsTab({ onSelectConversation }) {
     }
   };
 
+  // Generate descriptive chunk file name for conversations
+  const getConversationChunkFileName = (chunkNumber, totalChunks, startDate, endDate) => {
+    // startDate and endDate are already in YYYY-MM-DD format from ExportModal
+    const chunkSuffix = totalChunks > 1 ? `_chunk_${String(chunkNumber).padStart(3, '0')}_of_${String(totalChunks).padStart(3, '0')}` : '';
+    return `conversations_${startDate}_to_${endDate}${chunkSuffix}.csv`;
+  };
+
+  // Download a single chunk as CSV
+  const downloadChunk = async (conversations, chunkNumber, totalChunks, startDate, endDate) => {
+    const csvHeaders = 'Conversation ID,Created Date,Contact Name,email,phone,Contact ID,Last Message Date,Last Message Action,Last Message Direction,Last Message,Unread Count,Last Message Channel\n';
+    const csvRows = conversations.map(conv => {
+      const lastMessage = (conv.lastMessageBody || '').replace(/"/g, '""').replace(/\n/g, ' ');
+      const formattedLastMessageDate = formatDate(conv.lastMessageDate);
+      const formattedCreatedDate = formatDate(conv.dateAdded);
+      return `"${conv.id}","${formattedCreatedDate}","${conv.contactName || ''}","${conv.email || ''}","${conv.phone || ''}","${conv.contactId || ''}","${formattedLastMessageDate}","${conv.lastOutboundMessageAction || ''}","${conv.lastMessageDirection || ''}","${lastMessage}","${conv.unreadCount || 0}","${getMessageTypeDisplay(conv.lastMessageType) || ''}"`;
+    }).join('\n');
+    
+    const csv = csvHeaders + csvRows;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = getConversationChunkFileName(chunkNumber, totalChunks, startDate, endDate);
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    // Small delay between downloads
+    await new Promise(resolve => setTimeout(resolve, 500));
+  };
+
   return (
     <div className="space-y-6">
+      {ErrorModalComponent}
+      {InfoModalComponent}
+      <ExportModal
+        visible={exportModalVisible}
+        onCancel={() => setExportModalVisible(false)}
+        onExport={handleExport}
+        loading={downloading}
+      />
+      
       {/* Header with Stats */}
       <div className="flex items-center justify-between">
         <div>
@@ -182,7 +249,7 @@ export default function ConversationsTab({ onSelectConversation }) {
           {conversations.length > 0 && (
             <div className="flex items-center gap-2">
               <Button
-                onClick={handleDownload}
+                onClick={() => setExportModalVisible(true)}
                 loading={downloading}
                 size="large"
                 type="primary"
@@ -220,9 +287,14 @@ export default function ConversationsTab({ onSelectConversation }) {
         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-            <span className="text-blue-700 font-medium">
-              Fetching all conversations... This may take a moment.
-            </span>
+            <div className="flex-1">
+              <span className="text-blue-700 font-medium block">
+                Exporting conversations... This may take a moment for large datasets.
+              </span>
+              <span className="text-blue-600 text-sm block mt-1">
+                Large exports will be split into multiple CSV files (chunks of 50,000 conversations each)
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -270,6 +342,30 @@ export default function ConversationsTab({ onSelectConversation }) {
               onChange={(e) => setFilters({ ...filters, contactId: e.target.value })}
               placeholder="Filter by contact ID"
               size="large"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+            <DatePicker
+              value={filters.startDate ? dayjs(filters.startDate) : null}
+              onChange={(date) => setFilters({ ...filters, startDate: date ? date.format('YYYY-MM-DD') : '' })}
+              className="w-full"
+              size="large"
+              placeholder="Select start date"
+              format="YYYY-MM-DD"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+            <DatePicker
+              value={filters.endDate ? dayjs(filters.endDate) : null}
+              onChange={(date) => setFilters({ ...filters, endDate: date ? date.format('YYYY-MM-DD') : '' })}
+              className="w-full"
+              size="large"
+              placeholder="Select end date"
+              format="YYYY-MM-DD"
             />
           </div>
 

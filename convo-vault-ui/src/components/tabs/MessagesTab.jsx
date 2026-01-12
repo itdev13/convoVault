@@ -4,6 +4,8 @@ import { useAuth } from '../../context/AuthContext';
 import { exportAPI } from '../../api/export';
 import { Button, Select, DatePicker, Input, Tooltip, message as antMessage } from 'antd';
 import { useErrorModal } from '../ErrorModal';
+import { useInfoModal } from '../InfoModal';
+import ExportModal from '../ExportModal';
 import { getMessageTypeDisplay, getMessageTypeIcon } from '../../utils/messageTypes';
 import { copyToClipboard } from '../../utils/clipboard';
 import dayjs from 'dayjs';
@@ -22,7 +24,9 @@ export default function MessagesTab() {
   const [appliedFilters, setAppliedFilters] = useState(filters); // Filters actually used for API
   const [shouldFetch, setShouldFetch] = useState(true); // Trigger for initial load
   const [searchTimestamp, setSearchTimestamp] = useState(Date.now()); // Force refetch even with same filters
+  const [exportModalVisible, setExportModalVisible] = useState(false);
   const { showError, ErrorModalComponent } = useErrorModal();
+  const { showInfo, InfoModalComponent } = useInfoModal();
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['all-messages', location?.id, appliedFilters, cursor, shouldFetch, searchTimestamp],
@@ -74,6 +78,26 @@ export default function MessagesTab() {
   const nextCursorValue = data?.data?.pagination?.nextCursor;
   const [downloading, setDownloading] = useState(false);
 
+  // Helper to safely format dates
+  const formatDate = (dateValue) => {
+    if (!dateValue) return '';
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return '';
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return '';
+    }
+  };
+
   // Check if this is a "no results" situation
   const isNoResults = error && (
     error.message === 'NO_RESULTS_FOUND' ||
@@ -82,87 +106,93 @@ export default function MessagesTab() {
     error.message?.includes('Internal server error')
   );
 
-  // Download ALL messages as CSV (fetch in batches with cursor, limit 500)
-  // Note: UI shows user's selected limit, but export uses max limit (500)
-  const handleDownloadCSV = async () => {
+  // Download messages with date range - NO HARD LIMITS, with chunking
+  const handleExport = async (dateRange) => {
     try {
       setDownloading(true);
+      setExportModalVisible(false);
+      
+      const { startDate, endDate } = dateRange;
+      
+      // Convert date strings to millisecond timestamps for API (start of day to end of day)
+      const startDateTimestamp = dayjs(startDate).startOf('day').valueOf(); // Returns milliseconds
+      const endDateTimestamp = dayjs(endDate).endOf('day').valueOf(); // Returns milliseconds
+      
+      const exportLimit = 500; // Batch size for API calls
+      const chunkSize = 50000; // Messages per CSV file (chunk)
       
       let allMessages = [];
       let cursor = null;
       let hasMore = true;
-      const exportLimit = 500; // Always use max limit for export
-      let batchCount = 0;
+      let totalFetched = 0;
+      let chunkNumber = 1;
+      const downloadedChunks = []; // Track chunk sizes
       
-      // Fetch all messages in batches using cursor pagination (ignoring UI limit filter)
-      while (hasMore && batchCount < 20) { // Max 10,000 messages
+      // Calculate total chunks needed (estimate) for better naming
+      let estimatedTotalChunks = 1;
+      
+      // Fetch ALL messages (no batch limit)
+      while (hasMore) {
         const response = await exportAPI.exportMessages(location.id, {
-        channel: filters.channel || undefined,
-        startDate: filters.startDate || undefined,
-        endDate: filters.endDate || undefined,
+          channel: filters.channel || undefined,
+          startDate: startDateTimestamp,
+          endDate: endDateTimestamp,
           contactId: filters.contactId || undefined,
           conversationId: filters.conversationId || undefined,
-          limit: exportLimit, // Use 500 for export, not user's filter limit
+          limit: exportLimit,
           cursor: cursor || undefined
         });
         
         const batch = response.data.messages || [];
         allMessages = [...allMessages, ...batch];
+        totalFetched += batch.length;
         
         // Check for next cursor
         cursor = response.data.pagination?.nextCursor;
-        hasMore = !!cursor && batch.length === batchLimit;
-        batchCount++;
+        hasMore = !!cursor && batch.length === exportLimit;
         
-        // Small delay between requests
+        // Estimate total chunks (update as we fetch more)
+        estimatedTotalChunks = Math.ceil(totalFetched / chunkSize);
+        
+        // If we've accumulated enough for a chunk, save it
+        if (allMessages.length >= chunkSize) {
+          const chunk = allMessages.splice(0, chunkSize);
+          const totalChunks = estimatedTotalChunks + (allMessages.length > 0 ? 1 : 0);
+          await downloadMessageChunk(chunk, chunkNumber, totalChunks, startDate, endDate, filters.channel);
+          downloadedChunks.push({ number: chunkNumber, size: chunk.length });
+          chunkNumber++;
+        }
+        
+        // Download remaining messages when no more data
+        if (!hasMore && allMessages.length > 0) {
+          const totalChunks = chunkNumber;
+          await downloadMessageChunk(allMessages, chunkNumber, totalChunks, startDate, endDate, filters.channel);
+          downloadedChunks.push({ number: chunkNumber, size: allMessages.length });
+          allMessages = []; // Clear after download
+        }
+        
+        // Small delay between requests to respect rate limits
         if (hasMore) {
           await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
       
-      // Helper to safely format dates
-      const formatDate = (dateValue) => {
-        if (!dateValue) return '';
-        try {
-          const date = new Date(dateValue);
-          if (isNaN(date.getTime())) return '';
-          return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true
-          });
-        } catch (e) {
-          return '';
-        }
-      };
-      
-      // Convert to CSV
-      const csvHeaders = 'Message Date,Conversation ID,Contact ID,Message Type,Direction,Status,Message Body,Attachments\n';
-      const csvRows = allMessages.map(msg => {
-        const formattedDate = formatDate(msg.dateAdded);
-        const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
-        const attachments = msg.attachments && msg.attachments.length > 0 
-          ? msg.attachments.join('; ') 
-          : '';
-        return `"${formattedDate}","${msg.conversationId || ''}","${msg.contactId || ''}","${msg.type || ''}","${msg.direction || ''}","${msg.status || ''}","${message}","${attachments}"`;
-      }).join('\n');
-      
-      const csv = csvHeaders + csvRows;
-      
-      // Download CSV
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `messages_${Date.now()}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Show success message with chunk info
+      if (downloadedChunks.length > 1) {
+        showInfo(
+          'Export Complete!',
+          `Exported ${totalFetched.toLocaleString()} messages in ${downloadedChunks.length} files:`,
+          downloadedChunks.map((chunk, i) => ({
+            icon: `${i + 1}️⃣`,
+            title: getMessageChunkFileName(chunk.number, downloadedChunks.length, startDate, endDate, filters.channel),
+            items: [`${chunk.size.toLocaleString()} messages`]
+          }))
+        );
+      } else if (downloadedChunks.length === 1) {
+        antMessage.success(`Successfully exported ${totalFetched.toLocaleString()} messages!`);
+      } else {
+        antMessage.info('No messages found in the selected date range.');
+      }
       
     } catch (err) {
       showError('Export Failed', 'Failed to export messages. Please try again.');
@@ -171,8 +201,52 @@ export default function MessagesTab() {
     }
   };
 
+  // Generate descriptive chunk file name for messages
+  const getMessageChunkFileName = (chunkNumber, totalChunks, startDate, endDate, channel) => {
+    // startDate and endDate are already in YYYY-MM-DD format from ExportModal
+    const channelSuffix = channel ? `_${channel.toLowerCase()}` : '';
+    const chunkSuffix = totalChunks > 1 ? `_chunk_${String(chunkNumber).padStart(3, '0')}_of_${String(totalChunks).padStart(3, '0')}` : '';
+    return `messages${channelSuffix}_${startDate}_to_${endDate}${chunkSuffix}.csv`;
+  };
+
+  // Download a single message chunk as CSV
+  const downloadMessageChunk = async (messages, chunkNumber, totalChunks, startDate, endDate, channel) => {
+    const csvHeaders = 'Message Date,Message ID,Conversation ID,Contact ID,Message Type,Direction,Status,Message Body,Attachments\n';
+    const csvRows = messages.map(msg => {
+      const formattedDate = formatDate(msg.dateAdded);
+      const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
+      const attachments = msg.attachments && msg.attachments.length > 0 
+        ? msg.attachments.join('; ') 
+        : '';
+      return `"${formattedDate}","${msg.id || ''}","${msg.conversationId || ''}","${msg.contactId || ''}","${getMessageTypeDisplay(msg.type) || ''}","${msg.direction || ''}","${msg.status || ''}","${message}","${attachments}"`;
+    }).join('\n');
+    
+    const csv = csvHeaders + csvRows;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = getMessageChunkFileName(chunkNumber, totalChunks, startDate, endDate, channel);
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    
+    // Small delay between downloads
+    await new Promise(resolve => setTimeout(resolve, 500));
+  };
+
   return (
     <div className="space-y-6">
+      {ErrorModalComponent}
+      {InfoModalComponent}
+      <ExportModal
+        visible={exportModalVisible}
+        onCancel={() => setExportModalVisible(false)}
+        onExport={handleExport}
+        loading={downloading}
+      />
+      
       {/* Header with Stats */}
       <div className="flex items-center justify-between">
         <div>
@@ -188,7 +262,7 @@ export default function MessagesTab() {
           )}
           <div className="flex items-center gap-2">
           <Button
-            onClick={handleDownloadCSV}
+            onClick={() => setExportModalVisible(true)}
             loading={downloading}
             size="large"
             type="primary"
@@ -225,9 +299,14 @@ export default function MessagesTab() {
         <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-            <span className="text-blue-700 font-medium">
-              Fetching all messages with filters... This may take a moment.
-            </span>
+            <div className="flex-1">
+              <span className="text-blue-700 font-medium block">
+                Exporting messages... This may take a moment for large datasets.
+              </span>
+              <span className="text-blue-600 text-sm block mt-1">
+                Large exports will be split into multiple CSV files (chunks of 50,000 messages each)
+              </span>
+            </div>
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { API_URL } from '../constants/api';
 
 export const exportAPI = {
   /**
@@ -38,7 +39,7 @@ export const exportAPI = {
     const token = localStorage.getItem('sessionToken');
     
     // Use fetch with proper headers
-    const response = await fetch(`https://convoapi.vaultsuite.store/api/export/csv?${params}`, {
+    const response = await fetch(`${API_URL}/export/csv?${params}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,

@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { API_URL } from '../constants/api';
 
 export const importAPI = {
   /**
@@ -42,7 +43,7 @@ export const importAPI = {
   downloadTemplate: async () => {
     const token = localStorage.getItem('sessionToken');
     
-    const response = await fetch('https://convoapi.vaultsuite.store/api/import/template', {
+    const response = await fetch(`${API_URL}/import/template`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { API_BASE_URL, FRONTEND_URL } from '../constants/api';
 
 /**
  * Hook to get user context from parent application
@@ -44,8 +45,7 @@ export const useGHLContext = () => {
                 resolvedRef.current = true;
                 
                 // Production backend on AWS ALB
-                const backendUrl = 'https://convoapi.vaultsuite.store';
-                const decryptUrl = `${backendUrl}/api/auth/decrypt-user-data`;
+                const decryptUrl = `${API_BASE_URL}/api/auth/decrypt-user-data`;
                 
                 fetch(decryptUrl, {
                   method: 'POST',
@@ -130,7 +130,7 @@ export const useGHLContext = () => {
                 setLoading(false);
           } else {
             // No context available - redirect to about page on FRONTEND
-            window.location.href = 'https://convo.vaultsuite.store/about.html';
+            window.location.href = `${FRONTEND_URL}/about.html`;
           }
         }
       } catch (err) {

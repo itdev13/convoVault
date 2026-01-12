@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { API_URL } from '../constants/api';
 
 // Create axios instance
 // Production backend on AWS ALB
 const apiClient = axios.create({
-  baseURL: 'https://convoapi.vaultsuite.store/api',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },

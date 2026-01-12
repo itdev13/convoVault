@@ -36,18 +36,18 @@ router.get('/messages', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date formats
+    // Validate date formats (accepts ISO 8601 strings or millisecond timestamps)
     if (startDate && !isValidDate(startDate)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid startDate format. Use ISO 8601 format.'
+        error: 'Invalid startDate format. Use ISO 8601 format or millisecond timestamp.'
       });
     }
 
     if (endDate && !isValidDate(endDate)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid endDate format. Use ISO 8601 format.'
+        error: 'Invalid endDate format. Use ISO 8601 format or millisecond timestamp.'
       });
     }
 

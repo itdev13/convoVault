@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { API_URL } from '../constants/api';
 
 export const supportAPI = {
   /**
@@ -8,7 +9,7 @@ export const supportAPI = {
     const token = localStorage.getItem('sessionToken');
     
     const response = await axios.post(
-      'https://convoapi.vaultsuite.store/api/support/ticket',
+      `${API_URL}/support/ticket`,
       formData,
       {
         headers: {

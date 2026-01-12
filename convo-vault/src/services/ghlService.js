@@ -337,14 +337,31 @@ class GHLService {
     // Build query params with all supported filters
     const params = {
       locationId,
-      limit: filters.limit || 20,
-      ...filters
+      limit: filters.limit || 20
     };
 
-    // Only include non-empty filters
-    Object.keys(params).forEach(key => {
-      if (params[key] === '' || params[key] === null || params[key] === undefined) {
-        delete params[key];
+    // Copy filters, converting dates to timestamps for GHL API
+    Object.keys(filters).forEach(key => {
+      if (key === 'startDate' || key === 'endDate') {
+        // Convert date (timestamp or ISO string) to millisecond timestamp
+        const dateValue = filters[key];
+        if (dateValue) {
+          const dateStr = String(dateValue).trim();
+          
+          // Check if it's already a millisecond timestamp
+          if (!isNaN(Number(dateStr)) && !dateStr.includes('T') && !dateStr.includes('-')) {
+            // Pass timestamp directly to GHL API
+            params[key] = Number(dateStr);
+          } else {
+            // Convert ISO string to timestamp
+            const date = new Date(dateStr);
+            if (!isNaN(date.getTime())) {
+              params[key] = date.getTime(); // Convert to millisecond timestamp
+            }
+          }
+        }
+      } else if (filters[key] !== '' && filters[key] !== null && filters[key] !== undefined) {
+        params[key] = filters[key];
       }
     });
 
@@ -445,6 +462,8 @@ class GHLService {
         limit: options.limit || 100
       };
 
+      console.log('options', options);
+
       // Channel filter (omit for all non-email, or specify: SMS, Email, WhatsApp, Call, etc.)
       if (options.channel && options.channel !== 'undefined' && options.channel.trim()) {
         params.channel = options.channel;
@@ -455,18 +474,12 @@ class GHLService {
         params.cursor = options.cursor;
       }
 
-      // Date range filters
-      if (options.startDate && options.startDate.trim()) {
-        const startDate = new Date(options.startDate);
-        if (!isNaN(startDate.getTime())) {
-          params.startDate = startDate.toISOString();
-        }
+      if (options.startDate) {
+         params.startDate = new Date(Number(options.startDate)); // Convert to millisecond timestamp
       }
-      if (options.endDate && options.endDate.trim()) {
-        const endDate = new Date(options.endDate);
-        if (!isNaN(endDate.getTime())) {
-          params.endDate = endDate.toISOString();
-        }
+      
+      if (options.endDate) {
+          params.endDate = new Date(Number(options.endDate)); // Convert to millisecond timestamp
       }
 
       // Contact filter
@@ -479,6 +492,8 @@ class GHLService {
         params.conversationId = options.conversationId;
       }
 
+      console.log('params', params);
+
       const response = await this.apiRequest(
         'GET',
         '/conversations/messages/export',
@@ -489,7 +504,7 @@ class GHLService {
 
       return response;
     } catch (error) {
-      logger.error('Export failed:', error.message);
+      logger.error('Export failed:', error);
       throw error;
     }
   }

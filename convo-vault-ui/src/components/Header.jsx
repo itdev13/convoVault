@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { authAPI } from '../api/auth';
 import { docsAPI } from '../api/docs';
 import { APP_UPDATES, FEATURE_REQUEST_CTA, BADGE_CONFIGS } from '../constants/updates';
+import { API_DOCS_BASE_URL } from '../constants/api';
 
 export default function Header() {
   const { location, ghlContext } = useAuth();
@@ -39,7 +40,7 @@ export default function Header() {
       
       // Open docs with short-lived docs token (t) and user's API token (ut)
       // The docs token expires in 5 minutes, user token is for API testing
-      const docsUrl = `https://convoapi.vaultsuite.store/api/docs?t=${docsToken}&ut=${encodeURIComponent(userToken)}`;
+      const docsUrl = `${API_DOCS_BASE_URL}?t=${docsToken}&ut=${encodeURIComponent(userToken)}`;
       window.open(docsUrl, '_blank');
       
     } catch (error) {

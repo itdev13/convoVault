@@ -57,11 +57,22 @@ function sanitizeOffset(offset, defaultValue = 0) {
 }
 
 /**
- * Validate ISO date string
+ * Validate ISO date string or millisecond timestamp
  */
-function isValidDate(dateString) {
-  if (!dateString) return false;
-  return validator.isISO8601(dateString);
+function isValidDate(dateInput) {
+  if (!dateInput) return false;
+  
+  const dateStr = String(dateInput).trim();
+  
+  // Check if it's a number (millisecond timestamp) - numeric string without 'T'
+  if (!isNaN(Number(dateStr)) && !dateStr.includes('T') && !dateStr.includes('-')) {
+    const timestamp = Number(dateStr);
+    // Valid timestamp range: between 1970 and 2100 (reasonable bounds)
+    return timestamp > 0 && timestamp < 4102444800000; // Jan 1, 2100
+  }
+  
+  // Check if it's an ISO 8601 string
+  return validator.isISO8601(dateStr);
 }
 
 /**

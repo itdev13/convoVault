@@ -438,10 +438,10 @@ router.get('/callback', async (req, res) => {
           <div class="error-detail">
             ${error.message}
           </div>
-      <a href="/oauth/authorize">Try Again</a>
+      <a href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356">Try Again</a>
           
           <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <a href="https://convo.vaultsuite.store/about.html" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
+            <a href="https://convo.vaultsuite.store/about.html" target="_blank" style="color: #fff; text-decoration: none; font-size: 14px; font-weight: 600;">
               🌐 Visit ConvoVault Website
             </a>
           </div>

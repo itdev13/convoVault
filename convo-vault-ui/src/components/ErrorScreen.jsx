@@ -1,4 +1,5 @@
 import React from 'react';
+import { OAUTH_AUTHORIZE_URL } from '../constants/api';
 
 export default function ErrorScreen({ error }) {
   const isNotConnected = error && error.includes('not connected');
@@ -70,7 +71,7 @@ export default function ErrorScreen({ error }) {
             )}
             {(isNotConnected || isInstallRequired) && (
               <a
-                href="https://convoapi.vaultsuite.store/oauth/authorize"
+                href={OAUTH_AUTHORIZE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-center font-medium"
