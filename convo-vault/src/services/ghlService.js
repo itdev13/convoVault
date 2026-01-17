@@ -87,6 +87,8 @@ class GHLService {
         throw new Error('No company token found');
       }
 
+      console.log('companyToken', JSON.stringify(companyToken, null, 2));
+
       // IMPORTANT: Refresh company token if it's expired/expiring
       if (companyToken.needsRefresh()) {
         logger.info('Company token needs refresh before generating location token');
@@ -198,7 +200,7 @@ class GHLService {
       
       // Find any token with this locationId (might be company token)
       const anyToken = await OAuthToken.findActiveToken(locationId);
-      
+      console.log('anyToken', JSON.stringify(anyToken, null, 2));
       if (!anyToken) {
         const error = new Error('Invalid Location ID. Please reconnect convo-vault application to your account.');
         error.status = 404;  // Not Found - location doesn't exist
