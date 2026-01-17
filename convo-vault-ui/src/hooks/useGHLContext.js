@@ -31,10 +31,11 @@ export const useGHLContext = () => {
             let localTimeoutId;
             
             messageHandler = ({ data, origin }) => {
+              console.log('[messageHandler] Received message:', { data, origin });
               // Verify origin
-              if (!origin.includes('gohighlevel.com') && !origin.includes('leadconnectorhq.com')) {
-                return;
-              }
+              // if (!origin.includes('gohighlevel.com') && !origin.includes('leadconnectorhq.com')) {
+              //   return;
+              // }
 
               // Response with encrypted user data
               if (data.message === 'REQUEST_USER_DATA_RESPONSE' && !resolvedRef.current) {
@@ -134,7 +135,7 @@ export const useGHLContext = () => {
           }
         }
       } catch (err) {
-        console.error('❌ GHL Context Error:', err);
+        console.error('❌ GHL Context Error:', err.message || 'Context initialization failed');
         setError(err.message || 'Context initialization failed');
         setLoading(false);
       }
