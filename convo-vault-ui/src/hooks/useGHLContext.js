@@ -31,7 +31,6 @@ export const useGHLContext = () => {
             let localTimeoutId;
             
             messageHandler = ({ data, origin }) => {
-              console.log('[messageHandler] Received message:', { data, origin });
               // Verify origin
               // if (!origin.includes('gohighlevel.com') && !origin.includes('leadconnectorhq.com')) {
               //   return;
