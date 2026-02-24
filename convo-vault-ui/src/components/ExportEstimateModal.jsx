@@ -17,10 +17,10 @@ export default function ExportEstimateModal({
   const [email, setEmail] = useState('');
   const [exportFormat, setExportFormat] = useState('csv');
 
-  // Format currency (value is in dollars)
+  // Format currency (value is in dollars) - round to 2 decimal places
   const formatCurrency = (value) => {
     const num = Number(value) || 0;
-    return `$${num}`;
+    return `$${num.toFixed(2)}`;
   };
 
   // Format large numbers
@@ -34,12 +34,18 @@ export default function ExportEstimateModal({
     return `$${num.toFixed(4)}`;
   };
 
-  // Credit multipliers per channel
-  const CREDIT_MULTIPLIERS = {
-    conversations: 1,
-    smsWhatsapp: 1,
-    email: 3
+  // Calculate credit multipliers from unit prices (base = lowest price)
+  const getCreditMultipliers = () => {
+    const unitPrices = estimate?.unitPrices || { conversations: 0.025, smsWhatsapp: 0.025, email: 0.075 };
+    const basePrice = Math.min(unitPrices.conversations, unitPrices.smsWhatsapp);
+    return {
+      conversations: Math.round(unitPrices.conversations / basePrice),
+      smsWhatsapp: Math.round(unitPrices.smsWhatsapp / basePrice),
+      email: Math.round(unitPrices.email / basePrice)
+    };
   };
+
+  const CREDIT_MULTIPLIERS = getCreditMultipliers();
 
   // Calculate credits for a given channel
   const getCredits = (channel, count) => {
@@ -285,13 +291,7 @@ export default function ExportEstimateModal({
               key="1"
             >
               <div className="text-xs space-y-1">
-                {[
-                  { range: '1 - 1,000 items', discount: 0 },
-                  { range: '1,000 - 2,000 items', discount: 20 },
-                  { range: '2,000 - 5,000 items', discount: 40 },
-                  { range: '5,000 - 30,000 items', discount: 50 },
-                  { range: '30,000+ items', discount: 70 }
-                ].map((tier) => (
+                {(estimate.discountTiers || []).map((tier) => (
                   <div
                     key={tier.discount}
                     className={`flex justify-between p-1.5 rounded ${
