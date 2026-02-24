@@ -217,7 +217,7 @@ export default function ExportEstimateModal({
           </div>
 
           {/* Pricing Breakdown */}
-          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+          <div className="bg-blue-50 rounded-lg px-4 py-2 border border-blue-200">
             <div className="space-y-2 text-sm">
               <div className="flex justify-between items-center">
                 <span className="text-gray-700">Credits</span>
@@ -250,7 +250,7 @@ export default function ExportEstimateModal({
 
           {/* Savings Banner - Show prominently when discount applied */}
           {estimate.discountPercent > 0 && (
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg p-4 text-white">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg px-4 py-2 text-white">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
@@ -316,7 +316,7 @@ export default function ExportEstimateModal({
           </Collapse>
 
           {/* Email Notification - Required */}
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -349,7 +349,7 @@ export default function ExportEstimateModal({
           </div>
 
           {/* Export Format */}
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
