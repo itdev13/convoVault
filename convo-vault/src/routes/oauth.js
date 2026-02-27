@@ -104,38 +104,38 @@ router.get('/callback', async (req, res) => {
         { upsert: true, new: true }
       );
 
-      // Fetch all sub-accounts for this company
-      logger.info('Fetching all sub-accounts for company...');
-      const locations = await ghlService.getCompanyLocations(tokenData.companyId, tokenData.accessToken);
+      // // Fetch all sub-accounts for this company
+      // logger.info('Fetching all sub-accounts for company...');
+      // const locations = await ghlService.getCompanyLocations(tokenData.companyId, tokenData.accessToken);
 
-      // Create placeholder tokens for each sub-account
-      // These will be converted to proper location tokens on first use
-      logger.info(`Creating placeholder tokens for ${locations.length} sub-accounts...`);
-      for (const location of locations) {
-        await OAuthToken.findOneAndUpdate(
-          { locationId: location.locationId },
-          {
-            locationId: location.locationId,
-            companyId: tokenData.companyId,
-            tokenType: 'company', // Mark as company so it gets converted on first use
-            accessToken: tokenData.accessToken, // Temporary - will be replaced
-            refreshToken: tokenData.refreshToken,
-            expiresAt: new Date(Date.now() + tokenData.expiresIn * 1000),
-            locationName: location.locationName,
-            locationEmail: location.locationEmail,
-            locationPhone: location.locationPhone,
-            locationAddress: location.locationAddress,
-            locationWebsite: location.locationWebsite,
-            locationTimezone: location.locationTimezone,
-            isActive: true
-          },
-          { upsert: true, new: true }
-        );
-      }
+      // // Create placeholder tokens for each sub-account
+      // // These will be converted to proper location tokens on first use
+      // logger.info(`Creating placeholder tokens for ${locations.length} sub-accounts...`);
+      // for (const location of locations) {
+      //   await OAuthToken.findOneAndUpdate(
+      //     { locationId: location.locationId },
+      //     {
+      //       locationId: location.locationId,
+      //       companyId: tokenData.companyId,
+      //       tokenType: 'company', // Mark as company so it gets converted on first use
+      //       accessToken: tokenData.accessToken, // Temporary - will be replaced
+      //       refreshToken: tokenData.refreshToken,
+      //       expiresAt: new Date(Date.now() + tokenData.expiresIn * 1000),
+      //       locationName: location.locationName,
+      //       locationEmail: location.locationEmail,
+      //       locationPhone: location.locationPhone,
+      //       locationAddress: location.locationAddress,
+      //       locationWebsite: location.locationWebsite,
+      //       locationTimezone: location.locationTimezone,
+      //       isActive: true
+      //     },
+      //     { upsert: true, new: true }
+      //   );
+      // }
 
       logger.info('✅ OAuth successful for company:', tokenData.companyId);
-      var displayName = `${locations.length} account(s)`;
-      var successMessage = `Company installed with ${displayName}`;
+      // var displayName = `${locations.length} account(s)`;
+      var successMessage = `Successfully connected to your account`;
     }
 
     res.send(`
@@ -220,7 +220,7 @@ router.get('/callback', async (req, res) => {
           <h1>Connected Successfully!</h1>
           <p>${successMessage}</p>
           <div class="sub-account-id">
-            ${displayName}
+            Successfully connected to your account
           </div>
           <div class="features">
             <div class="access-box">
@@ -248,8 +248,8 @@ router.get('/callback', async (req, res) => {
           </div>
           
           <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <a href="https://convo.vaultsuite.store/about.html" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
-              🌐 Visit ConvoVault Website
+            <a href="https://export.vaultsuite.store" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
+              🌐 Visit Export Messages Website
             </a>
           </div>
         </div>
