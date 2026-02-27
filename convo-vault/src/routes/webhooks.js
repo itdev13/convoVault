@@ -142,7 +142,7 @@ async function handleInstall(data) {
           tokenType: 'location',
           isActive: true
         });
-
+        console.log('existingLocationToken', JSON.stringify(existingLocationToken, null, 2));
         if (!existingLocationToken) {
           logger.info('🔄 Proactively generating location token for new installation');
 
@@ -152,6 +152,8 @@ async function handleInstall(data) {
             tokenType: 'company',
             isActive: true
           });
+
+          console.log('companyToken', JSON.stringify(companyToken, null, 2));
 
           if (companyToken) {
             const ghlService = new GHLService();
@@ -185,9 +187,12 @@ async function handleInstall(data) {
           logger.info('ℹ️ Location token already exists - skipping generation');
         }
       } catch (tokenError) {
-        console.log('tokenError', JSON.stringify(tokenError, null, 2));
         // Don't fail the installation if token generation fails
-        logger.error('⚠️ Failed to generate location token proactively (non-critical):', tokenError.message);
+        logger.error('⚠️ Failed to generate location token proactively (non-critical):', {
+          message: tokenError.message,
+          status: tokenError.response?.status,
+          data: tokenError.response?.data
+        });
       }
     }
     
