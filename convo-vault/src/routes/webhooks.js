@@ -142,7 +142,6 @@ async function handleInstall(data) {
           tokenType: 'location',
           isActive: true
         });
-        console.log('existingLocationToken', JSON.stringify(existingLocationToken, null, 2));
         if (!existingLocationToken) {
           logger.info('🔄 Proactively generating location token for new installation');
 
@@ -153,13 +152,9 @@ async function handleInstall(data) {
             isActive: true
           });
 
-          console.log('companyToken', JSON.stringify(companyToken, null, 2));
-
-          if (companyToken) {
-            const ghlService = new GHLService();
-            
+          if (companyToken) {            
             // Generate location token from company token
-            const locationToken = await ghlService.getLocationTokenFromCompany(
+            const locationToken = await GHLService.getLocationTokenFromCompany(
               companyId,
               locationId
             );
