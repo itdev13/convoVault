@@ -185,6 +185,7 @@ async function handleInstall(data) {
           logger.info('ℹ️ Location token already exists - skipping generation');
         }
       } catch (tokenError) {
+        console.log('tokenError', JSON.stringify(tokenError, null, 2));
         // Don't fail the installation if token generation fails
         logger.error('⚠️ Failed to generate location token proactively (non-critical):', tokenError.message);
       }
