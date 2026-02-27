@@ -8,6 +8,11 @@ const logger = require('../utils/logger');
 // App ID for rebilling config
 const APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
 
+// Internal testing company IDs - skip billing for these
+const INTERNAL_TESTING_COMPANY_IDS = [
+  'PG9VJ27QFRumQrOGB2Ee'
+];
+
 // Meter IDs for GHL Marketplace billing
 const METER_IDS = {
   conversations: '69864aed1265653fdd7c0620',
@@ -203,6 +208,11 @@ class BillingService {
    * @returns {boolean} Whether wallet has funds
    */
   async hasFunds(companyId, accessToken) {
+    if (INTERNAL_TESTING_COMPANY_IDS.includes(companyId)) {
+      logger.info('Internal testing company - skipping funds check', { companyId });
+      return true;
+    }
+
     try {
       const response = await axios.get(
         `${this.baseURL}/marketplace/billing/charges/has-funds`,
@@ -235,6 +245,23 @@ class BillingService {
    * @returns {Object} Charge result with charge IDs
    */
   async chargeWallet(companyId, accessToken, meterCharges, locationId, transactionId) {
+    if (INTERNAL_TESTING_COMPANY_IDS.includes(companyId)) {
+      logger.info('Internal testing company - skipping charge', { companyId, meterCharges });
+      return {
+        success: true,
+        internalTesting: true,
+        paymentIgnored: true,
+        charges: meterCharges.map(c => ({
+          meterId: c.meterId,
+          qty: c.qty,
+          chargeId: `internal_test_${transactionId}`,
+          success: true,
+          paymentIgnored: true
+        })),
+        totalCharges: meterCharges.length
+      };
+    }
+
     try {
       const chargeResults = [];
 

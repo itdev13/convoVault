@@ -312,7 +312,14 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
       // Update transaction with charge IDs
       transaction.ghlChargeId = chargeResult?.charges.map(c => c?.chargeId).join(',');
-      transaction.status = 'charged';
+
+      if (chargeResult.internalTesting) {
+        transaction.status = 'tested';
+        transaction.internalTesting = true;
+        transaction.paymentIgnored = true;
+      } else {
+        transaction.status = 'charged';
+      }
       await transaction.save();
 
     } catch (chargeError) {

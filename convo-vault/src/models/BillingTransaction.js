@@ -63,7 +63,7 @@ const billingTransactionSchema = new mongoose.Schema({
   // Transaction status
   status: {
     type: String,
-    enum: ['pending', 'charged', 'failed', 'refunded'],
+    enum: ['pending', 'charged', 'failed', 'refunded', 'tested'],
     default: 'pending'
   },
 
@@ -77,6 +77,17 @@ const billingTransactionSchema = new mongoose.Schema({
   userId: {
     type: String,
     default: null
+  },
+
+  // Internal testing - payment was skipped
+  internalTesting: {
+    type: Boolean,
+    default: false
+  },
+
+  paymentIgnored: {
+    type: Boolean,
+    default: false
   }
 
 }, {
