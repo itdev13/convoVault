@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="800" viewBox="0 0 800 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient Definitions -->
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="vaultGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1E40AF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E3A8A;stop-opacity:1" />
+    </linearGradient>
+    
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="800" fill="url(#bgGrad)" rx="140"/>
+  
+  <!-- Main Vault Icon -->
+  <g id="vault-main" transform="translate(400, 420)">
+    <!-- Vault Body -->
+    <rect x="-200" y="-160" width="400" height="320" rx="24" fill="url(#vaultGrad)" stroke="#0F172A" stroke-width="6"/>
+    
+    <!-- Vault Door Circle -->
+    <circle cx="0" cy="0" r="130" fill="#1E40AF"/>
+    <circle cx="0" cy="0" r="115" fill="#2563EB" opacity="0.5"/>
+    <circle cx="0" cy="0" r="100" fill="none" stroke="#3B82F6" stroke-width="6" opacity="0.7"/>
+    
+    <!-- Combination Lock Marks (simplified) -->
+    <g stroke="white" stroke-width="5" stroke-linecap="round">
+      <line x1="0" y1="-85" x2="0" y2="-105"/>
+      <line x1="85" y1="0" x2="105" y2="0"/>
+      <line x1="0" y1="85" x2="0" y2="105"/>
+      <line x1="-85" y1="0" x2="-105" y2="0"/>
+    </g>
+    
+    <!-- Center Dial -->
+    <circle cx="0" cy="0" r="30" fill="#1E3A8A"/>
+    <circle cx="0" cy="0" r="22" fill="white"/>
+    <circle cx="0" cy="0" r="12" fill="#2563EB"/>
+    
+    <!-- Dial Indicator -->
+    <rect x="-4" y="-45" width="8" height="25" rx="4" fill="white"/>
+    
+    <!-- Hinges -->
+    <g opacity="0.7">
+      <rect x="200" y="-120" width="30" height="50" rx="6" fill="#0F172A"/>
+      <circle cx="215" cy="-95" r="10" fill="#6B7280"/>
+      <rect x="200" y="70" width="30" height="50" rx="6" fill="#0F172A"/>
+      <circle cx="215" cy="95" r="10" fill="#6B7280"/>
+    </g>
+  </g>
+  
+  <!-- Chat Bubble (top right) -->
+  <g id="chat-bubble" transform="translate(550, 230)" filter="url(#glow)">
+    <!-- Bubble Background -->
+    <circle cx="0" cy="0" r="110" fill="white" opacity="0.9"/>
+    
+    <!-- Bubble Shape -->
+    <path d="M -80 -40 L 60 -40 C 80 -40 95 -25 95 -5 L 95 50 C 95 70 80 85 60 85 L -20 85 L -45 110 L -45 85 L -80 85 C -100 85 -115 70 -115 50 L -115 -5 C -115 -25 -100 -40 -80 -40 Z" 
+          fill="#06B6D4" stroke="#0891B2" stroke-width="4"/>
+    
+    <!-- Message Dots -->
+    <circle cx="-40" cy="22" r="14" fill="white"/>
+    <circle cx="-10" cy="22" r="14" fill="white"/>
+    <circle cx="20" cy="22" r="14" fill="white"/>
+  </g>
+  
+  <!-- ConvoVault Text (bottom) -->
+  <g id="text" transform="translate(400, 680)">
+    <text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="white" text-anchor="middle">
+      Convo<tspan fill="#FDE68A">Vault</tspan>
+    </text>
+    <text x="0" y="35" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="500" fill="white" opacity="0.8" text-anchor="middle" letter-spacing="3">
+      SECURE CONVERSATIONS
+    </text>
+  </g>
+</svg>
+
