@@ -61,12 +61,12 @@ export default function MessagesTab() {
         limit: appliedFilters.limit,
         cursor: cursor || undefined
       });
-      
+
       // Check if response has no messages
       if (!response.data?.messages || response.data.messages.length === 0) {
         throw new Error('NO_RESULTS_FOUND');
       }
-      
+
       return response;
     },
     enabled: !!location?.id && shouldFetch, // Load on tab open or when search is clicked
@@ -77,8 +77,8 @@ export default function MessagesTab() {
     retry: false, // Don't retry on error
     onError: (error) => {
       // Transform 400 errors to friendly message
-      if (error.message?.includes('Failed to export') || 
-          error.message?.includes('400') || 
+      if (error.message?.includes('Failed to export') ||
+          error.message?.includes('400') ||
           error.message?.includes('Bad Request') ||
           error.message?.includes('Internal server error')) {
         // This is likely an invalid filter, not a real error
@@ -277,19 +277,19 @@ export default function MessagesTab() {
       {/* Header with Stats */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Messages</h2>
-          <p className="text-sm text-gray-500 mt-1">View, filter, and export all messages from this sub-account</p>
+          <h2 className="text-2xl font-bold text-white">Messages</h2>
+          <p className="text-sm text-slate-400 mt-1">View, filter, and export all messages from this sub-account</p>
         </div>
         <div className="flex items-center gap-3">
           {data?.data && (
             <>
-              <div className="bg-green-50 px-4 py-2 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{totalMessages.toLocaleString()}</div>
-                <div className="text-xs text-green-600 font-medium">Total Messages</div>
+              <div className="bg-green-900/20 px-4 py-2 rounded-lg">
+                <div className="text-2xl font-bold text-green-400">{totalMessages.toLocaleString()}</div>
+                <div className="text-xs text-green-400 font-medium">Total Messages</div>
               </div>
-              <div className="bg-blue-50 px-4 py-2 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">{loadedMessages.toLocaleString()}</div>
-                <div className="text-xs text-blue-600 font-medium">Loaded</div>
+              <div className="bg-blue-900/20 px-4 py-2 rounded-lg">
+                <div className="text-2xl font-bold text-blue-400">{loadedMessages.toLocaleString()}</div>
+                <div className="text-xs text-blue-400 font-medium">Loaded</div>
               </div>
             </>
           )}
@@ -318,8 +318,8 @@ export default function MessagesTab() {
               }
               placement="left"
             >
-              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center cursor-help">
-                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-6 h-6 bg-blue-900/30 rounded-full flex items-center justify-center cursor-help">
+                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -341,16 +341,16 @@ export default function MessagesTab() {
       )}
 
       {/* Filters Card */}
-      <div className="bg-white border-1 border-solid border-gray-200 rounded-xl p-6 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="bg-slate-700/50 border-1 border-solid border-slate-600 rounded-xl p-6">
+        <h3 className="text-sm font-semibold text-slate-300 mb-4 flex items-center gap-2">
+          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
           </svg>
           Filter Messages
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Channel</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Channel</label>
             <Select
               value={filters.channel}
               onChange={(value) => setFilters({ ...filters, channel: value })}
@@ -371,7 +371,7 @@ export default function MessagesTab() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Start Date</label>
             <DatePicker
               value={filters.startDate ? dayjs(filters.startDate) : null}
               onChange={(date) => setFilters({ ...filters, startDate: date ? date.format('YYYY-MM-DD') : '' })}
@@ -382,7 +382,7 @@ export default function MessagesTab() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">End Date</label>
             <DatePicker
               value={filters.endDate ? dayjs(filters.endDate) : null}
               onChange={(date) => setFilters({ ...filters, endDate: date ? date.format('YYYY-MM-DD') : '' })}
@@ -393,7 +393,7 @@ export default function MessagesTab() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Contact ID</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Contact ID</label>
             <Input
               value={filters.contactId}
               onChange={(e) => setFilters({ ...filters, contactId: e.target.value })}
@@ -403,7 +403,7 @@ export default function MessagesTab() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Conversation ID</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Conversation ID</label>
             <Input
               value={filters.conversationId}
               onChange={(e) => setFilters({ ...filters, conversationId: e.target.value })}
@@ -413,7 +413,7 @@ export default function MessagesTab() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Page Size</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Page Size</label>
             <Select
               value={filters.limit}
               onChange={(value) => setFilters({ ...filters, limit: value })}
@@ -457,17 +457,17 @@ export default function MessagesTab() {
       {isLoading && (
         <div className="text-center py-16">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading messages...</p>
+          <p className="text-slate-400 font-medium">Loading messages...</p>
         </div>
       )}
 
       {/* No Results State */}
       {isNoResults && (
-        <div className="text-center py-20 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl border-2 border-dashed border-yellow-300">
+        <div className="text-center py-20 bg-gradient-to-br from-yellow-900/20 to-orange-900/20 rounded-xl border-2 border-dashed border-yellow-700">
           <div className="text-5xl mb-4">🔍</div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Messages Found</h3>
-          <p className="text-gray-600 mb-4">No messages match your current filters</p>
-          <div className="text-sm text-gray-500 space-y-2">
+          <h3 className="text-lg font-semibold text-white mb-2">No Messages Found</h3>
+          <p className="text-slate-400 mb-4">No messages match your current filters</p>
+          <div className="text-sm text-slate-400 space-y-2">
             <p className="font-medium">Try adjusting:</p>
             <ul className="list-none space-y-1">
               {appliedFilters.conversationId && <li>• Conversation ID (check if it's correct)</li>}
@@ -475,21 +475,21 @@ export default function MessagesTab() {
               {appliedFilters.channel && <li>• Channel filter</li>}
               {(appliedFilters.startDate || appliedFilters.endDate) && <li>• Date range</li>}
             </ul>
-            <p className="mt-3 text-xs text-gray-400">Or clear all filters and try again</p>
+            <p className="mt-3 text-xs text-slate-500">Or clear all filters and try again</p>
           </div>
         </div>
       )}
-      
+
       {/* Real Error State */}
       {error && !isNoResults && (
-        <div className="bg-red-50 border-1 border-solid border-red-300 rounded-xl p-6">
+        <div className="bg-red-900/20 border-1 border-solid border-red-300 rounded-xl p-6">
           <div className="flex items-start gap-3">
-            <svg className="w-6 h-6 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
-              <h4 className="font-semibold text-red-900">Error Loading Messages</h4>
-              <p className="text-sm text-red-700 mt-1">{error.message}</p>
+              <h4 className="font-semibold text-red-400">Error Loading Messages</h4>
+              <p className="text-sm text-red-400 mt-1">{error.message}</p>
             </div>
           </div>
         </div>
@@ -497,8 +497,8 @@ export default function MessagesTab() {
 
       {/* Pagination Controls */}
       {!isLoading && !error && messages.length > 0 && (
-        <div className="flex items-center justify-between bg-white border-1 border-solid border-gray-200 rounded-xl p-4">
-          <span className="text-sm text-gray-600">Showing {loadedMessages.toLocaleString()} of {totalMessages.toLocaleString()} messages</span>
+        <div className="flex items-center justify-between bg-slate-700/50 border-1 border-solid border-slate-600 rounded-xl p-4">
+          <span className="text-sm text-slate-400">Showing {loadedMessages.toLocaleString()} of {totalMessages.toLocaleString()} messages</span>
           <div className="flex gap-2">
             <Button onClick={() => setCursor(null)} disabled={!cursor} size="large">
               First Page
@@ -514,10 +514,10 @@ export default function MessagesTab() {
       {!isLoading && !error && (
         <div className="space-y-3">
           {messages.length === 0 ? (
-            <div className="text-center py-20 bg-gradient-to-br from-gray-50 to-white rounded-xl border-2 border-dashed border-gray-300">
+            <div className="text-center py-20 bg-gradient-to-br from-slate-800/50 to-slate-700/50 rounded-xl border-2 border-dashed border-slate-600">
               <div className="text-5xl mb-4">💬</div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Messages Found</h3>
-              <p className="text-gray-500">Try adjusting your filters</p>
+              <h3 className="text-lg font-semibold text-white mb-2">No Messages Found</h3>
+              <p className="text-slate-400">Try adjusting your filters</p>
             </div>
           ) : (
             messages.map((message) => {
@@ -525,12 +525,12 @@ export default function MessagesTab() {
               return (
                 <div
                   key={message.id}
-                  className="bg-white border-1 border-solid border-gray-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-md transition-all"
+                  className="bg-slate-700/50 border-1 border-solid border-slate-600 rounded-lg p-4 hover:border-blue-500 transition-all"
                 >
                   <div className="flex items-start gap-4">
                     {/* Avatar */}
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                      isOutbound ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-gray-400'
+                      isOutbound ? 'bg-gradient-to-br from-blue-500 to-blue-600' : 'bg-slate-500'
                     }`}>
                       {isOutbound ? 'You' : (message.contactId || 'C')[0].toUpperCase()}
                     </div>
@@ -539,34 +539,34 @@ export default function MessagesTab() {
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900">
+                          <span className="font-semibold text-white">
                             {isOutbound ? 'Outbound' : 'Inbound'}
                           </span>
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded flex items-center gap-1">
+                          <span className="text-xs bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded flex items-center gap-1">
                             <span>{getMessageTypeIcon(message.type)}</span>
                             <span>{getMessageTypeDisplay(message.type)}</span>
                           </span>
                           {message.status && (
                             <span className={`text-xs px-2 py-0.5 rounded ${
                               message.status === 'delivered' || message.status === 'sent'
-                                ? 'bg-green-100 text-green-700'
+                                ? 'bg-green-900/30 text-green-400'
                                 : message.status === 'failed'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-gray-100 text-gray-600'
+                                ? 'bg-red-900/30 text-red-400'
+                                : 'bg-slate-700 text-slate-400'
                             }`}>
                               {message.status}
                             </span>
                           )}
                         </div>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-slate-400">
                           {new Date(message.dateAdded).toLocaleString()}
                         </span>
                       </div>
                         {/* Email Thread Notice */}
-                        {(message.type === 'TYPE_EMAIL' || message.type === 'Email' || message.type === 3) && 
-                        message.meta?.email?.messageIds && 
+                        {(message.type === 'TYPE_EMAIL' || message.type === 'Email' || message.type === 3) &&
+                        message.meta?.email?.messageIds &&
                         message.meta.email.messageIds.length > 1 && (
-                          <div className="mb-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-xs text-blue-700">
+                          <div className="mb-2 px-3 py-1.5 bg-blue-900/20 border border-blue-800 rounded-lg flex items-center gap-2 text-xs text-blue-400">
                             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
@@ -584,11 +584,11 @@ export default function MessagesTab() {
                           </div>
                         )}
 
-                      <p className="text-sm text-gray-700 mb-2">{message.body}</p>
-                      
+                      <p className="text-sm text-slate-300 mb-2">{message.body}</p>
+
                       {/* Attachments */}
                       {message.attachments && message.attachments.length > 0 && (
-                        <div className="mb-2 flex items-center gap-2 text-xs text-gray-600">
+                        <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                           </svg>
@@ -599,14 +599,14 @@ export default function MessagesTab() {
                             title="Attachment URLs are included in the CSV export. Click 'Export CSV' to download all attachment links."
                             placement="top"
                           >
-                            <svg className="w-4 h-4 cursor-help text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 cursor-help text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                           </Tooltip>
                         </div>
                       )}
 
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <div className="flex items-center gap-4 text-xs text-slate-400">
                         <Tooltip title="Click to copy Conversation ID">
                           <button
                             onClick={async (e) => {
@@ -618,7 +618,7 @@ export default function MessagesTab() {
                                 antMessage.error('Failed to copy. Please try selecting and copying manually.');
                               }
                             }}
-                            className="flex items-center gap-1 hover:text-blue-600 transition-colors group/conv"
+                            className="flex items-center gap-1 hover:text-blue-400 transition-colors group/conv"
                           >
                             <span className="font-mono">conversationId: {message.conversationId}</span>
                             <svg className="w-3 h-3 opacity-0 group-hover/conv:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -637,7 +637,7 @@ export default function MessagesTab() {
                                 antMessage.error('Failed to copy. Please try selecting and copying manually.');
                               }
                             }}
-                            className="flex items-center gap-1 hover:text-blue-600 transition-colors group/contact"
+                            className="flex items-center gap-1 hover:text-blue-400 transition-colors group/contact"
                           >
                             <span className="font-mono">contactId: {message.contactId}</span>
                             <svg className="w-3 h-3 opacity-0 group-hover/contact:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -657,16 +657,15 @@ export default function MessagesTab() {
 
       {/* Footer Stats */}
       {messages.length > 0 && (
-        <div className="bg-gray-50 border-1 border-solid border-gray-200 rounded-xl p-4">
-          <div className="text-sm text-gray-600">
+        <div className="bg-slate-700/30 border-1 border-solid border-slate-600 rounded-xl p-4">
+          <div className="text-sm text-slate-400">
             💬 Showing {loadedMessages.toLocaleString()} of {totalMessages.toLocaleString()} messages •
             {messages.filter(m => m.direction === 'inbound').length} received •
             {messages.filter(m => m.direction === 'outbound').length} sent
-            {hasMore && <span className="ml-4 text-blue-600 font-medium">• More pages available</span>}
+            {hasMore && <span className="ml-4 text-blue-400 font-medium">• More pages available</span>}
           </div>
         </div>
       )}
     </div>
   );
 }
-

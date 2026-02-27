@@ -49,10 +49,10 @@ export default function SupportTab() {
   const handleEmailChange = (e) => {
     const email = e.target.value;
     setFormData({ ...formData, email });
-    
+
     // Clear error when user starts typing
     if (emailError) setEmailError('');
-    
+
     // Validate on blur or when user stops typing
     if (email && !validateEmail(email)) {
       setEmailError('Please enter a valid email address');
@@ -127,24 +127,24 @@ export default function SupportTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center">
           <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
           </svg>
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Support</h2>
-          <p className="text-sm text-gray-500">Need help? Send us a message and we'll get back to you</p>
+          <h2 className="text-2xl font-bold text-white">Support</h2>
+          <p className="text-sm text-slate-400">Need help? Send us a message and we'll get back to you</p>
         </div>
       </div>
 
       {/* Support Form */}
-      <div className="bg-white border-1 border-solid border-gray-200 rounded-xl p-6 shadow-sm">
+      <div className="bg-slate-700/50 border-1 border-solid border-slate-600 rounded-xl p-6">
         <div className="space-y-4">
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Your Name <span className="text-gray-400">(Optional)</span>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Your Name <span className="text-slate-500">(Optional)</span>
             </label>
             <Input
               value={formData.name}
@@ -156,8 +156,8 @@ export default function SupportTab() {
 
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Email Address <span className="text-red-400">*</span>
             </label>
             <Input
               type="email"
@@ -174,7 +174,7 @@ export default function SupportTab() {
               status={emailError ? 'error' : ''}
             />
             {emailError && (
-              <div className="text-red-500 text-xs mt-1 flex items-center gap-1">
+              <div className="text-red-400 text-xs mt-1 flex items-center gap-1">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -185,8 +185,8 @@ export default function SupportTab() {
 
           {/* Subject */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Subject <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Subject <span className="text-red-400">*</span>
             </label>
             <Input
               value={formData.subject}
@@ -199,8 +199,8 @@ export default function SupportTab() {
 
           {/* Message */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Message <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Message <span className="text-red-400">*</span>
             </label>
             <TextArea
               value={formData.message}
@@ -214,8 +214,8 @@ export default function SupportTab() {
 
           {/* Image Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Attachments <span className="text-gray-400">(Optional - Max 5 images, 5MB each)</span>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Attachments <span className="text-slate-500">(Optional - Max 5 images, 5MB each)</span>
             </label>
             <Upload
               listType="picture-card"
@@ -229,33 +229,33 @@ export default function SupportTab() {
               {fileList.length < 5 && (
                 <div className="text-center">
                   <div className="text-2xl mb-1">📷</div>
-                  <div className="text-xs text-gray-600">Upload Image</div>
+                  <div className="text-xs text-slate-400">Upload Image</div>
                 </div>
               )}
             </Upload>
-            <div className="text-xs text-gray-500 mt-2">
+            <div className="text-xs text-slate-400 mt-2">
               💡 Tip: Click on uploaded images to preview them
             </div>
           </div>
 
           {/* Image Preview Modal */}
           {previewOpen && (
-            <div 
+            <div
               className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
               onClick={() => setPreviewOpen(false)}
             >
               <div className="relative max-w-4xl max-h-screen p-4">
                 <button
                   onClick={() => setPreviewOpen(false)}
-                  className="absolute top-6 right-6 w-10 h-10 bg-white rounded-full flex items-center justify-center hover:bg-gray-100 shadow-lg z-10"
+                  className="absolute top-6 right-6 w-10 h-10 bg-slate-700/50 rounded-full flex items-center justify-center hover:bg-slate-600 z-10"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
-                <img 
-                  src={previewImage} 
-                  alt="Preview" 
+                <img
+                  src={previewImage}
+                  alt="Preview"
                   className="max-w-full max-h-screen rounded-lg shadow-2xl"
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -286,22 +286,22 @@ export default function SupportTab() {
       {result && (
         <div className={`rounded-xl p-6 ${
           result.success
-            ? 'bg-green-50 border-1 border-solid border-green-200'
-            : 'bg-red-50 border-1 border-solid border-red-200'
+            ? 'bg-green-900/20 border-1 border-solid border-green-800'
+            : 'bg-red-900/20 border-1 border-solid border-red-800'
         }`}>
           <div className={`font-semibold text-lg mb-2 ${
-            result.success ? 'text-green-700' : 'text-red-700'
+            result.success ? 'text-green-400' : 'text-red-400'
           }`}>
             {result.success ? '✅ Ticket Submitted!' : '❌ Submission Failed'}
           </div>
-          <div className={`text-sm ${result.success ? 'text-green-700' : 'text-red-700'}`}>
+          <div className={`text-sm ${result.success ? 'text-green-400' : 'text-red-400'}`}>
             {result.message}
           </div>
         </div>
       )}
 
       {/* Info */}
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-1 border-solid border-blue-200 rounded-xl p-6">
+      <div className="bg-gradient-to-br from-blue-900/20 to-indigo-900/20 border-1 border-solid border-blue-800 rounded-xl p-6">
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0 w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -309,34 +309,34 @@ export default function SupportTab() {
             </svg>
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-blue-900 text-lg mb-2">How We Can Help</h3>
-            <ul className="space-y-2 text-sm text-blue-800">
+            <h3 className="font-bold text-blue-300 text-lg mb-2">How We Can Help</h3>
+            <ul className="space-y-2 text-sm text-blue-300">
               <li className="flex items-start gap-2">
-                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Technical issues with the app</span>
               </li>
               <li className="flex items-start gap-2">
-                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Questions about features or functionality</span>
               </li>
               <li className="flex items-start gap-2">
-                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Feature requests or suggestions</span>
               </li>
               <li className="flex items-start gap-2">
-                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span>Bug reports with screenshots</span>
               </li>
             </ul>
-            <div className="mt-4 text-xs text-blue-700 bg-blue-100 rounded-lg p-3">
+            <div className="mt-4 text-xs text-blue-400 bg-blue-900/30 rounded-lg p-3">
               <strong>📧 Response Time:</strong> We typically respond within 24 hours
             </div>
           </div>
@@ -345,4 +345,3 @@ export default function SupportTab() {
     </div>
   );
 }
-

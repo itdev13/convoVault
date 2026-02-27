@@ -7,17 +7,17 @@ import ErrorScreen from './components/ErrorScreen';
 function AppContent() {
   const { loading, error, isAuthenticated } = useAuth();
   console.log("details: ", loading, error, isAuthenticated)
-  if (loading) {
-    return <LoadingScreen />;
-  }
+  // if (loading) {
+  //   return <LoadingScreen />;
+  // }
 
-  if (error) {
-    return <ErrorScreen error={error} />;
-  }
+  // if (error) {
+  //   return <ErrorScreen error={error} />;
+  // }
 
-  if (!isAuthenticated) {
-    return <ErrorScreen error="Not authenticated. Please install the app first." />;
-  }
+  // if (!isAuthenticated) {
+  //   return <ErrorScreen error="Not authenticated. Please install the app first." />;
+  // }
 
   return <Dashboard />;
 }

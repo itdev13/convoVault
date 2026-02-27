@@ -152,21 +152,21 @@ export default function ExportTab() {
   return (
     <div>
       {/* Export History */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+      <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <h3 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             Export History
             {totalItems > 0 && (
-              <span className="text-xs text-gray-400 font-normal">({totalItems} total)</span>
+              <span className="text-xs text-slate-500 font-normal">({totalItems} total)</span>
             )}
           </h3>
           <button
             onClick={() => loadExportHistory(currentPage)}
             disabled={historyLoading}
-            className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
+            className="text-xs text-blue-400 hover:text-blue-400 flex items-center gap-1 disabled:opacity-50"
           >
             <svg className={`w-4 h-4 ${historyLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -176,16 +176,16 @@ export default function ExportTab() {
         </div>
 
         {historyLoading && exportHistory.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">Loading...</div>
+          <div className="text-center py-8 text-slate-400">Loading...</div>
         ) : exportHistory.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
             </div>
-            <h4 className="text-lg font-semibold text-gray-700 mb-2">No Exports Yet</h4>
-            <p className="text-sm text-gray-500 max-w-xs">
+            <h4 className="text-lg font-semibold text-slate-300 mb-2">No Exports Yet</h4>
+            <p className="text-sm text-slate-400 max-w-xs">
               You haven't exported any data yet. Go to the Messages or Conversations tab to start an export.
             </p>
           </div>
@@ -201,33 +201,33 @@ export default function ExportTab() {
                 return (
                   <div
                     key={job.jobId}
-                    className="p-4 bg-gray-50 rounded-lg border border-gray-100"
+                    className="p-4 bg-slate-700/30 rounded-lg border border-slate-700"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         {/* Header row */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-gray-800 capitalize">
+                          <span className="font-medium text-slate-200 capitalize">
                             {job.exportType} Export
                           </span>
-                          <span className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded uppercase">
+                          <span className="text-xs px-2 py-0.5 bg-slate-600 text-slate-300 rounded uppercase">
                             {job.format || 'csv'}
                           </span>
                         </div>
 
                         {/* Date and items */}
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs text-slate-400 mt-1">
                           {new Date(job.createdAt).toLocaleDateString()} at {new Date(job.createdAt).toLocaleTimeString()} • {job.totalItems?.toLocaleString()} items
                         </div>
 
                         {/* Applied Filters */}
                         {appliedFilters.length > 0 && (
                           <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            <span className="text-xs text-gray-400">Filters:</span>
+                            <span className="text-xs text-slate-500">Filters:</span>
                             {appliedFilters.map((filter, idx) => (
                               <span
                                 key={idx}
-                                className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-100"
+                                className="text-xs px-2 py-0.5 bg-blue-900/20 text-blue-400 rounded border border-blue-800"
                               >
                                 {filter.label}: {filter.value}
                               </span>
@@ -238,7 +238,7 @@ export default function ExportTab() {
                         {/* Progress bar for processing jobs */}
                         {isProcessing && (
                           <div className="mt-2">
-                            <div className="flex items-center justify-between text-xs text-blue-600 mb-1">
+                            <div className="flex items-center justify-between text-xs text-blue-400 mb-1">
                               <div className="flex items-center gap-2">
                                 <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -249,7 +249,7 @@ export default function ExportTab() {
                               <button
                                 onClick={() => refreshJobStatus(job.jobId)}
                                 disabled={isRefreshing}
-                                className="text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                                className="text-blue-400 hover:text-blue-400 disabled:opacity-50"
                               >
                                 {isRefreshing ? (
                                   <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -268,14 +268,14 @@ export default function ExportTab() {
 
                         {/* Error message for failed jobs */}
                         {job.status === 'failed' && job.errorMessage && (
-                          <div className="text-xs text-red-600 mt-1">
+                          <div className="text-xs text-red-400 mt-1">
                             Error: {job.errorMessage}
                           </div>
                         )}
 
                         {/* Expiration warning */}
                         {job.status === 'completed' && urlExpired && (
-                          <div className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                          <div className="text-xs text-amber-400 mt-1 flex items-center gap-1">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
@@ -288,7 +288,7 @@ export default function ExportTab() {
                       <div className="flex items-center gap-2 ml-4">
                         {job.status === 'completed' ? (
                           urlExpired ? (
-                            <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700">
+                            <span className="text-xs px-2 py-1 rounded bg-amber-900/30 text-amber-400">
                               Expired
                             </span>
                           ) : job.downloadUrl ? (
@@ -302,16 +302,16 @@ export default function ExportTab() {
                               Download
                             </button>
                           ) : (
-                            <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700">
+                            <span className="text-xs px-2 py-1 rounded bg-green-900/30 text-green-400">
                               completed
                             </span>
                           )
                         ) : (
                           <span className={`text-xs px-2 py-1 rounded ${
-                            job.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                            job.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                            job.status === 'failed' ? 'bg-red-100 text-red-700' :
-                            'bg-gray-100 text-gray-600'
+                            job.status === 'processing' ? 'bg-blue-900/30 text-blue-400' :
+                            job.status === 'pending' ? 'bg-yellow-900/30 text-yellow-400' :
+                            job.status === 'failed' ? 'bg-red-900/30 text-red-400' :
+                            'bg-slate-700 text-slate-400'
                           }`}>
                             {job.status}
                           </span>

@@ -55,7 +55,7 @@ export default function ExportModal({ visible, onCancel, onExport, loading = fal
 
   const handleExport = () => {
     const dateRange = getDateRange();
-    
+
     if (!dateRange) {
       if (!error) {
         setError('Please select a date range');
@@ -84,14 +84,14 @@ export default function ExportModal({ visible, onCancel, onExport, loading = fal
       onCancel={onCancel}
       title={
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-10 h-10 bg-blue-900/30 rounded-full flex items-center justify-center">
+            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Export Conversations</h3>
-            <p className="text-sm text-gray-500">Select date range for export</p>
+            <h3 className="text-lg font-bold text-white">Export Conversations</h3>
+            <p className="text-sm text-slate-400">Select date range for export</p>
           </div>
         </div>
       }
@@ -120,7 +120,7 @@ export default function ExportModal({ visible, onCancel, onExport, loading = fal
       <div className="space-y-6 py-4">
         {/* Date Range Selection */}
         <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-3">
+          <label className="block text-sm font-semibold text-slate-300 mb-3">
             Select Date Range
           </label>
           <Radio.Group
@@ -138,7 +138,7 @@ export default function ExportModal({ visible, onCancel, onExport, loading = fal
               <Radio value="7days" className="w-full py-2">
                 <div>
                   <div className="font-medium">Last 7 Days</div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-slate-400">
                     {dayjs().subtract(7, 'days').format('MMM DD')} - {dayjs().format('MMM DD, YYYY')}
                   </div>
                 </div>
@@ -146,7 +146,7 @@ export default function ExportModal({ visible, onCancel, onExport, loading = fal
               <Radio value="1month" className="w-full py-2">
                 <div>
                   <div className="font-medium">Last 1 Month</div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-slate-400">
                     {dayjs().subtract(1, 'month').format('MMM DD')} - {dayjs().format('MMM DD, YYYY')}
                   </div>
                 </div>
@@ -154,7 +154,7 @@ export default function ExportModal({ visible, onCancel, onExport, loading = fal
               <Radio value="6months" className="w-full py-2">
                 <div>
                   <div className="font-medium">Last 6 Months</div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-slate-400">
                     {dayjs().subtract(6, 'months').format('MMM DD')} - {dayjs().format('MMM DD, YYYY')}
                   </div>
                 </div>
@@ -192,12 +192,12 @@ export default function ExportModal({ visible, onCancel, onExport, loading = fal
         )}
 
         {/* Info Box */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <div className="flex-1 text-sm text-blue-800">
+            <div className="flex-1 text-sm text-blue-300">
               <div className="font-semibold mb-1">Export Information:</div>
               <ul className="space-y-1 list-disc list-inside">
                 <li>Maximum export period: 6 months</li>
@@ -210,12 +210,12 @@ export default function ExportModal({ visible, onCancel, onExport, loading = fal
         </div>
 
         {/* Support Request CTA */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <div className="flex-1 text-sm text-yellow-800">
+            <div className="flex-1 text-sm text-yellow-300">
               <div className="font-semibold mb-1">Need More Data?</div>
               <p>
                 For exports beyond 6 months or custom requirements, please visit the{' '}
@@ -228,4 +228,3 @@ export default function ExportModal({ visible, onCancel, onExport, loading = fal
     </Modal>
   );
 }
-

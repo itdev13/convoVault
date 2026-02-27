@@ -86,14 +86,14 @@ export default function ExportEstimateModal({
       onCancel={onCancel}
       title={
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-10 h-10 bg-green-900/30 rounded-full flex items-center justify-center">
+            <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Export Estimate</h3>
-            <p className="text-sm text-gray-500">Review your export cost</p>
+            <h3 className="text-lg font-bold text-white">Export Estimate</h3>
+            <p className="text-sm text-slate-400">Review your export cost</p>
           </div>
         </div>
       }
@@ -105,7 +105,7 @@ export default function ExportEstimateModal({
       {estimating && (
         <div className="flex flex-col justify-center items-center py-12">
           <Spin size="large" />
-          <span className="mt-4 text-gray-600">Calculating estimate...</span>
+          <span className="mt-4 text-slate-400">Calculating estimate...</span>
         </div>
       )}
 
@@ -123,13 +123,13 @@ export default function ExportEstimateModal({
       {/* No Data State */}
       {estimate && !estimating && (!estimate.itemCounts?.total || estimate.itemCounts?.total === 0) && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
           </div>
-          <h4 className="text-lg font-semibold text-gray-700 mb-2">No Data Available to Export</h4>
-          <p className="text-sm text-gray-500 max-w-xs">
+          <h4 className="text-lg font-semibold text-slate-300 mb-2">No Data Available to Export</h4>
+          <p className="text-sm text-slate-400 max-w-xs">
             There are no {exportType} matching your current filters. Try adjusting your date range or filters.
           </p>
           <Button onClick={onCancel} className="mt-6">
@@ -143,20 +143,20 @@ export default function ExportEstimateModal({
         <div className="space-y-2">
           {/* Default Date Range Info Banner */}
           {usingDefaultDates && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
-              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3 flex items-start gap-2">
+              <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p className="text-sm text-blue-800">
+              <p className="text-sm text-blue-300">
                 Showing data from the <strong>last 6 months</strong>. To change the time frame, close this modal and adjust the date filters.
               </p>
             </div>
           )}
 
           {/* Export Summary */}
-          <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
-            <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="bg-slate-700/50 rounded-lg p-2 border border-slate-600">
+            <h4 className="font-semibold text-slate-300 mb-3 flex items-center gap-2">
+              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               Export Summary
@@ -164,52 +164,52 @@ export default function ExportEstimateModal({
             <div className="space-y-2 text-sm">
               {/* Conversations */}
               {estimate.breakdown?.conversations?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <div className="flex justify-between items-center py-2 border-b border-slate-600">
                   <div>
-                    <span className="text-gray-700 font-medium">Conversations</span>
-                    <div className="text-xs text-gray-500">{CREDIT_MULTIPLIERS.conversations} credit per conversation</div>
+                    <span className="text-slate-300 font-medium">Conversations</span>
+                    <div className="text-xs text-slate-400">{CREDIT_MULTIPLIERS.conversations} credit per conversation</div>
                   </div>
                   <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.conversations.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(getCredits('conversations', estimate.breakdown.conversations.count))} credits</div>
+                    <span className="font-medium text-slate-200">{formatNumber(estimate.breakdown.conversations.count)}</span>
+                    <div className="text-xs text-indigo-400 font-medium">{formatNumber(getCredits('conversations', estimate.breakdown.conversations.count))} credits</div>
                   </div>
                 </div>
               )}
 
               {/* Text Messages (SMS, WhatsApp, etc.) */}
               {estimate.breakdown?.smsWhatsapp?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <div className="flex justify-between items-center py-2 border-b border-slate-600">
                   <div>
-                    <span className="text-gray-700 font-medium">Text Messages</span>
-                    <div className="text-xs text-gray-500">{CREDIT_MULTIPLIERS.smsWhatsapp} credit per message</div>
+                    <span className="text-slate-300 font-medium">Text Messages</span>
+                    <div className="text-xs text-slate-400">{CREDIT_MULTIPLIERS.smsWhatsapp} credit per message</div>
                   </div>
                   <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.smsWhatsapp.count)} </span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(getCredits('smsWhatsapp', estimate.breakdown.smsWhatsapp.count))} credits</div>
+                    <span className="font-medium text-slate-200">{formatNumber(estimate.breakdown.smsWhatsapp.count)} </span>
+                    <div className="text-xs text-indigo-400 font-medium">{formatNumber(getCredits('smsWhatsapp', estimate.breakdown.smsWhatsapp.count))} credits</div>
                   </div>
                 </div>
               )}
 
               {/* Email Messages */}
               {estimate.breakdown?.email?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                <div className="flex justify-between items-center py-2 border-b border-slate-600">
                   <div>
-                    <span className="text-gray-700 font-medium">Email Messages</span>
-                    <div className="text-xs text-gray-500">{CREDIT_MULTIPLIERS.email} credits per email</div>
+                    <span className="text-slate-300 font-medium">Email Messages</span>
+                    <div className="text-xs text-slate-400">{CREDIT_MULTIPLIERS.email} credits per email</div>
                   </div>
                   <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.email.count)} emails</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(getCredits('email', estimate.breakdown.email.count))} credits</div>
+                    <span className="font-medium text-slate-200">{formatNumber(estimate.breakdown.email.count)} emails</span>
+                    <div className="text-xs text-indigo-400 font-medium">{formatNumber(getCredits('email', estimate.breakdown.email.count))} credits</div>
                   </div>
                 </div>
               )}
 
               {/* Total Items & Credits */}
-              {/*<div className="flex justify-between items-center pt-2 border-t border-gray-200 text-gray-700">
+              {/*<div className="flex justify-between items-center pt-2 border-t border-slate-600 text-slate-300">
                 <span className="font-medium">Total Items</span>
                 <span className="font-semibold">{formatNumber(estimate.itemCounts?.total)}</span>
               </div>
-              <div className="flex justify-between items-center pt-1 text-indigo-700">
+              <div className="flex justify-between items-center pt-1 text-indigo-400">
                 <span className="font-medium">Total Credits</span>
                 <span className="font-bold">{formatNumber(getTotalCredits(estimate))}</span>
               </div>*/}
@@ -217,20 +217,20 @@ export default function ExportEstimateModal({
           </div>
 
           {/* Pricing Breakdown */}
-          <div className="bg-blue-50 rounded-lg px-4 py-2 border border-blue-200">
+          <div className="bg-blue-900/20 rounded-lg px-4 py-2 border border-blue-800">
             <div className="space-y-2 text-sm">
               <div className="flex justify-between items-center">
-                <span className="text-gray-700">Credits</span>
+                <span className="text-slate-300">Credits</span>
                 <span className="font-medium">{formatNumber(getTotalCredits(estimate))}</span>
               </div>
 
               <div className="flex justify-between items-center">
-                <span className="text-gray-700">Price per Credit</span>
+                <span className="text-slate-300">Price per Credit</span>
                 <span className="font-medium">{formatUnitPrice(getPricePerCredit(estimate))}</span>
               </div>
 
               {estimate.discountPercent > 0 && (
-                <div className="flex justify-between items-center text-green-600">
+                <div className="flex justify-between items-center text-green-400">
                   <span className="flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -241,9 +241,9 @@ export default function ExportEstimateModal({
                 </div>
               )}
 
-              <div className="flex justify-between items-center pt-3 border-t border-blue-200">
-                <span className="text-lg font-bold text-gray-800">Total</span>
-                <span className="text-xl font-bold text-green-600">{formatCurrency(estimate.finalAmount)}</span>
+              <div className="flex justify-between items-center pt-3 border-t border-blue-800">
+                <span className="text-lg font-bold text-slate-200">Total</span>
+                <span className="text-xl font-bold text-green-400">{formatCurrency(estimate.finalAmount)}</span>
               </div>
             </div>
           </div>
@@ -272,16 +272,16 @@ export default function ExportEstimateModal({
           )}
 
           {/* Volume Discount Tiers - Show applied tier highlighted */}
-          <Collapse ghost className="bg-gray-50 rounded-lg" defaultActiveKey={estimate.discountPercent > 0 ? [] : []}>
+          <Collapse ghost className="bg-slate-700/50 rounded-lg" defaultActiveKey={estimate.discountPercent > 0 ? [] : []}>
             <Panel
               header={
-                <span className="text-xs text-gray-600 font-medium flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-medium flex items-center gap-2">
                   {estimate.discountPercent > 0 ? (
                     <>
                       <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      <span>Your Tier: <strong className="text-green-600">{estimate.discountPercent}% Discount</strong></span>
+                      <span>Your Tier: <strong className="text-green-400">{estimate.discountPercent}% Discount</strong></span>
                     </>
                   ) : (
                     'View Volume Discount Tiers'
@@ -296,8 +296,8 @@ export default function ExportEstimateModal({
                     key={tier.discount}
                     className={`flex justify-between p-1.5 rounded ${
                       estimate.discountPercent === tier.discount
-                        ? 'bg-green-100 text-green-700 font-medium'
-                        : 'text-gray-500'
+                        ? 'bg-green-900/30 text-green-400 font-medium'
+                        : 'text-slate-400'
                     }`}
                   >
                     <span className="flex items-center gap-1">
@@ -316,13 +316,13 @@ export default function ExportEstimateModal({
           </Collapse>
 
           {/* Email Notification - Required */}
-          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="bg-slate-700/50 rounded-lg px-4 py-2 border border-slate-600">
+            <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
+              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
               Email Address
-              <span className="text-red-500">*</span>
+              <span className="text-red-400">*</span>
             </label>
             <Input
               type="email"
@@ -333,25 +333,26 @@ export default function ExportEstimateModal({
               className="rounded-lg"
               status={email && !isValidEmail(email) ? 'error' : ''}
               style={{
-                backgroundColor: 'white',
-                borderColor: email && !isValidEmail(email) ? '#ef4444' : '#d1d5db',
-                fontSize: '14px'
+                backgroundColor: '#1e293b',
+                borderColor: email && !isValidEmail(email) ? '#ef4444' : '#475569',
+                fontSize: '14px',
+                color: '#e2e8f0'
               }}
             />
             {email && !isValidEmail(email) && (
-              <p className="text-xs text-red-500 mt-1">
+              <p className="text-xs text-red-400 mt-1">
                 Please enter a valid email address
               </p>
             )}
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-slate-400 mt-2">
               We'll send you the download link when your export is ready. Download links expire after 1 week.
             </p>
           </div>
 
           {/* Export Format */}
-          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="bg-slate-700/50 rounded-lg px-4 py-2 border border-slate-600">
+            <label className="block text-sm font-medium text-slate-300 mb-2 flex items-center gap-2">
+              <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
               Export Format
@@ -360,17 +361,17 @@ export default function ExportEstimateModal({
               <Radio value="csv">CSV</Radio>
               <Radio value="json">JSON</Radio>
             </Radio.Group>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-slate-400 mt-2">
               {exportFormat === 'csv' ? 'Spreadsheet-friendly format. Opens in Excel, Google Sheets, etc.' : 'Structured data format. Ideal for developers and integrations.'}
             </p>
           </div>
 
           {/* Payment Info */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
+          <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-3 flex items-start gap-2">
             <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            <p className="text-sm text-yellow-800">
+            <p className="text-sm text-yellow-300">
               Payment will be deducted from your <strong>wallet balance</strong>. No card required.
             </p>
           </div>

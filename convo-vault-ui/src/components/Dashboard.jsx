@@ -11,7 +11,7 @@ import ConversationMessages from './ConversationMessages';
 
 export default function Dashboard() {
   const { location } = useAuth();
-  
+
   // Get saved tab from localStorage or default to 'conversations'
   const savedTab = localStorage.getItem('activeTab') || 'conversations';
   const [activeTab, setActiveTab] = useState(savedTab);
@@ -37,36 +37,36 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div className="min-h-screen bg-slate-900">
       <Header />
-      
+
       <div className="max-w-7xl mx-auto px-6 py-6">
         {/* Updates Banner */}
         {/* <UpdatesBanner /> */}
-        
+
         {/* Tab Navigation */}
-        <div className="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
-          <div className="border-b border-gray-200">
+        <div className="bg-slate-800 rounded-xl border border-slate-700 mb-6 overflow-hidden">
+          <div className="border-b border-slate-700">
             <nav className="flex -mb-px">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => {
                     setActiveTab(tab.id);
-                    setShowConversationView(false); // Exit conversation view when switching tabs
+                    setShowConversationView(false);
                   }}
                   className={`
                     relative flex items-center justify-center gap-3 px-8 py-4 border-b-3 font-semibold text-sm transition-all flex-1
                     ${(activeTab === tab.id || (showConversationView && tab.id === 'conversations'))
-                      ? 'border-blue-600 text-blue-600 bg-blue-50/50'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      ? 'border-blue-500 text-blue-400 bg-blue-900/20'
+                      : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
                     }
                   `}
                 >
                   <span className="text-xl">{tab.icon}</span>
                   <span className="hidden sm:inline">{tab.label}</span>
                   {(activeTab === tab.id || (showConversationView && tab.id === 'conversations')) && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-t-full"></div>
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-sky-500 rounded-t-full"></div>
                   )}
                 </button>
               ))}
@@ -75,26 +75,26 @@ export default function Dashboard() {
         </div>
 
         {/* Tab Content */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-8">
           {/* Breadcrumb for Conversation View */}
           {showConversationView && (
-            <div className="mb-6 flex items-center gap-2 text-sm text-gray-600">
-              <button 
+            <div className="mb-6 flex items-center gap-2 text-sm text-slate-400">
+              <button
                 onClick={() => setShowConversationView(false)}
-                className="hover:text-blue-600 transition-colors font-medium"
+                className="hover:text-blue-400 transition-colors font-medium"
               >
                 Conversations
               </button>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
-              <span className="text-gray-900 font-medium">{selectedConversation?.contactName || 'Messages'}</span>
+              <span className="text-white font-medium">{selectedConversation?.contactName || 'Messages'}</span>
             </div>
           )}
 
           {showConversationView ? (
-            <ConversationMessages 
-              conversation={selectedConversation} 
+            <ConversationMessages
+              conversation={selectedConversation}
               onBack={() => setShowConversationView(false)}
             />
           ) : (
@@ -113,4 +113,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
