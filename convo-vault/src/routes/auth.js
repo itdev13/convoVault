@@ -3,6 +3,8 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const CryptoJS = require('crypto-js');
 const OAuthToken = require('../models/OAuthToken');
+const CompanyLocation = require('../models/CompanyLocation');
+const GHLService = require('../services/ghlService');
 const logger = require('../utils/logger');
 const { logError } = require('../utils/errorLogger');
 
@@ -85,21 +87,68 @@ router.post('/verify', async (req, res) => {
     logger.info('Verifying user context', { locationId, companyId, userId });
 
     // Check if this sub-account has an active OAuth token
-    const token = await OAuthToken.findActiveToken(locationId);
-    
+    let token = await OAuthToken.findOne({
+      locationId,
+      tokenType: 'location',
+      isActive: true
+    });
+
+    // If no location token, try to generate from company token
     if (!token) {
-      logger.warn('Sub-account not connected', { locationId });
-      return res.status(401).json({
-        success: false,
-        error: 'Sub-account not connected. Please install the app first.',
-        code: 'NOT_CONNECTED'
+      logger.info('No location token found, looking up company for location:', locationId);
+
+      const companyLoc = await CompanyLocation.findCompanyByLocation(locationId);
+      if (!companyLoc) {
+        logger.warn('Sub-account not connected', { locationId });
+        return res.status(401).json({
+          success: false,
+          error: 'Sub-account not connected. Please install the app first.',
+          code: 'NOT_CONNECTED'
+        });
+      }
+
+      const companyToken = await OAuthToken.findOne({
+        companyId: companyLoc.companyId,
+        tokenType: 'company',
+        isActive: true
       });
+
+      if (!companyToken) {
+        logger.warn('Company token not found or expired', { companyId: companyLoc.companyId });
+        return res.status(401).json({
+          success: false,
+          error: 'Authentication expired. Please reconnect ExportKit.',
+          code: 'NOT_CONNECTED'
+        });
+      }
+
+      // Generate location token from company token
+      logger.info('Generating location token from company token', { locationId });
+      const locationToken = await GHLService.getLocationTokenFromCompany(
+        companyLoc.companyId,
+        locationId
+      );
+
+      token = await OAuthToken.findOneAndUpdate(
+        { locationId, tokenType: 'location' },
+        {
+          locationId,
+          companyId: companyLoc.companyId,
+          tokenType: 'location',
+          accessToken: locationToken.accessToken,
+          refreshToken: locationToken.refreshToken,
+          expiresAt: new Date(Date.now() + locationToken.expiresIn * 1000),
+          isActive: true
+        },
+        { upsert: true, new: true }
+      );
+
+      logger.info('✅ Location token generated and saved', { locationId });
     }
 
     // Check if token is expired or needs refresh
     if (token.needsRefresh()) {
       logger.info('Token needs refresh', { locationId });
-      // TODO: Implement auto-refresh here if needed
     }
 
     // Create session JWT (expires in 1 hour)
