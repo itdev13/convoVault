@@ -2,6 +2,7 @@ const axios = require('axios');
 const logger = require('../utils/logger');
 const { logError, logWarning } = require('../utils/errorLogger');
 const OAuthToken = require('../models/OAuthToken');
+const CompanyLocation = require('../models/CompanyLocation');
 
 /**
  * Simple GHL API Service
@@ -242,48 +243,56 @@ class GHLService {
       isActive: true 
     });
 
-    // STEP 2: If no location token exists, check for company token
+    // STEP 2: If no location token exists, find company via CompanyLocation mapping
     if (!tokenDoc) {
-      logger.info('No location token found, checking for company token');
-      
-      // Find any token with this locationId (might be company token)
-      const anyToken = await OAuthToken.findActiveToken(locationId);
-      console.log('anyToken', JSON.stringify(anyToken, null, 2));
-      if (!anyToken) {
-        const error = new Error('Invalid Location ID. Please reconnect convo-vault application to your account.');
-        error.status = 404;  // Not Found - location doesn't exist
+      logger.info('No location token found, looking up company for location:', locationId);
+
+      // Look up which company owns this locationId
+      const companyLoc = await CompanyLocation.findCompanyByLocation(locationId);
+      if (!companyLoc) {
+        const error = new Error('Location not found. Please reconnect ExportKit application to your account.');
+        error.status = 404;
         error.isClientError = true;
         throw error;
       }
 
-      // If it's a company token, convert it to location token
-      if (anyToken.tokenType === 'company') {
-        logger.info('Converting company token to location token');
-        
-        const locationToken = await this.getLocationTokenFromCompany(
-          anyToken.companyId,
-          locationId
-        );
+      // Get the company's OAuth token
+      const companyToken = await OAuthToken.findOne({
+        companyId: companyLoc.companyId,
+        tokenType: 'company',
+        isActive: true
+      });
 
-        // Create location-specific token (upsert to avoid duplicates)
-        tokenDoc = await OAuthToken.findOneAndUpdate(
-          { locationId, tokenType: 'location' },
-          {
-            locationId,
-            companyId: anyToken.companyId,
-            tokenType: 'location',
-            accessToken: locationToken.accessToken,
-            refreshToken: locationToken.refreshToken,
-            expiresAt: new Date(Date.now() + locationToken.expiresIn * 1000),
-            isActive: true
-          },
-          { upsert: true, new: true }
-        );
-        
-        logger.info('✅ Location token created and saved to database');
-      } else {
-        tokenDoc = anyToken;
+      if (!companyToken) {
+        const error = new Error('Company token expired. Please reconnect ExportKit application to your account.');
+        error.status = 401;
+        error.isClientError = true;
+        throw error;
       }
+
+      // Generate location token from company token
+      logger.info('Generating location token from company token for:', locationId);
+      const locationToken = await this.getLocationTokenFromCompany(
+        companyLoc.companyId,
+        locationId
+      );
+
+      // Store location-specific token
+      tokenDoc = await OAuthToken.findOneAndUpdate(
+        { locationId, tokenType: 'location' },
+        {
+          locationId,
+          companyId: companyLoc.companyId,
+          tokenType: 'location',
+          accessToken: locationToken.accessToken,
+          refreshToken: locationToken.refreshToken,
+          expiresAt: new Date(Date.now() + locationToken.expiresIn * 1000),
+          isActive: true
+        },
+        { upsert: true, new: true }
+      );
+
+      logger.info('✅ Location token created and saved to database');
     } else {
       logger.info('Using existing location token');
     }

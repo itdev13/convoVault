@@ -115,7 +115,6 @@ router.get('/:conversationId/download', authenticateSession, async (req, res) =>
       });
     }
 
-    logger.info('Downloading ALL messages as CSV for conversation', { conversationId, locationId });
 
     // Fetch ALL messages with pagination (GHL max limit is 100 per request)
     let allMessages = [];

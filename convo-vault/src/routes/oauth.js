@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ghlService = require('../services/ghlService');
 const OAuthToken = require('../models/OAuthToken');
+const CompanyLocation = require('../models/CompanyLocation');
 const logger = require('../utils/logger');
 const { logError } = require('../utils/errorLogger');
 
@@ -104,34 +105,18 @@ router.get('/callback', async (req, res) => {
         { upsert: true, new: true }
       );
 
-      // // Fetch all sub-accounts for this company
-      // logger.info('Fetching all sub-accounts for company...');
-      // const locations = await ghlService.getCompanyLocations(tokenData.companyId, tokenData.accessToken);
+      // Fetch all sub-accounts and store companyId -> locationIds mapping
+      logger.info('Fetching all sub-accounts for company...');
+      const locations = await ghlService.getCompanyLocations(tokenData.companyId, tokenData.accessToken);
+      const locationIds = locations.map(loc => loc.locationId);
 
-      // // Create placeholder tokens for each sub-account
-      // // These will be converted to proper location tokens on first use
-      // logger.info(`Creating placeholder tokens for ${locations.length} sub-accounts...`);
-      // for (const location of locations) {
-      //   await OAuthToken.findOneAndUpdate(
-      //     { locationId: location.locationId },
-      //     {
-      //       locationId: location.locationId,
-      //       companyId: tokenData.companyId,
-      //       tokenType: 'company', // Mark as company so it gets converted on first use
-      //       accessToken: tokenData.accessToken, // Temporary - will be replaced
-      //       refreshToken: tokenData.refreshToken,
-      //       expiresAt: new Date(Date.now() + tokenData.expiresIn * 1000),
-      //       locationName: location.locationName,
-      //       locationEmail: location.locationEmail,
-      //       locationPhone: location.locationPhone,
-      //       locationAddress: location.locationAddress,
-      //       locationWebsite: location.locationWebsite,
-      //       locationTimezone: location.locationTimezone,
-      //       isActive: true
-      //     },
-      //     { upsert: true, new: true }
-      //   );
-      // }
+      await CompanyLocation.findOneAndUpdate(
+        { companyId: tokenData.companyId },
+        { companyId: tokenData.companyId, locationIds },
+        { upsert: true, new: true }
+      );
+
+      logger.info(`✅ Stored ${locationIds.length} location IDs for company ${tokenData.companyId}`);
 
       logger.info('✅ OAuth successful for company:', tokenData.companyId);
       // var displayName = `${locations.length} account(s)`;
