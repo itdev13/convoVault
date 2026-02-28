@@ -87,7 +87,6 @@ class GHLService {
         throw new Error('No company token found');
       }
 
-      console.log('companyToken', JSON.stringify(companyToken, null, 2));
 
       // IMPORTANT: Refresh company token if it's expired/expiring
       if (companyToken.needsRefresh()) {
