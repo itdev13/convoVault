@@ -282,7 +282,7 @@ class BillingService {
             companyId,
             meterId: charge.meterId,
             units: charge.qty,
-            price: (finalAmount/charge.qty).toFixed(4),
+            // price: (finalAmount/charge.qty).toFixed(4),
             appId: process.env.GHL_APP_ID || "694f93f8a6babf0c821b1356",
             eventId: transactionId,
             locationId: locationId,
