@@ -300,6 +300,8 @@ class BillingService {
         chargeResults.push({
           meterId: charge.meterId,
           qty: charge.qty,
+          unitPrice: (finalAmount/charge.qty).toFixed(4),
+          finalAmount: finalAmount,
           chargeId: response.data.chargeId || response.data.id || response.data._id,
           success: true
         });
