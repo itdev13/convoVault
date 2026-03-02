@@ -244,7 +244,7 @@ class BillingService {
    * @param {Array} meterCharges - Array of { meterId, qty, description }
    * @returns {Object} Charge result with charge IDs
    */
-  async chargeWallet(companyId, accessToken, meterCharges, locationId, transactionId) {
+  async chargeWallet(companyId, accessToken, meterCharges, locationId, transactionId, finalAmount) {
     if (INTERNAL_TESTING_COMPANY_IDS.includes(companyId)) {
       logger.info('Internal testing company - skipping charge', { companyId, meterCharges });
       return {
@@ -271,7 +271,9 @@ class BillingService {
         logger.info('Charging wallet:', {
           companyId,
           meterId: charge.meterId,
-          qty: charge.qty
+          qty: charge.qty,
+          finalAmount: finalAmount,
+          unitPrice: (finalAmount/charge.qty).toFixed(4)
         });
 
         const response = await axios.post(
@@ -280,6 +282,7 @@ class BillingService {
             companyId,
             meterId: charge.meterId,
             units: charge.qty,
+            price: (finalAmount/charge.qty).toFixed(4),
             appId: process.env.GHL_APP_ID || "694f93f8a6babf0c821b1356",
             eventId: transactionId,
             locationId: locationId,
