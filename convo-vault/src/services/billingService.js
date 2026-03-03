@@ -11,7 +11,7 @@ const APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
 // Internal testing company IDs - skip billing for these
 const INTERNAL_TESTING_COMPANY_IDS = [
   'PG9VJ27QFRumQrOGB2Ee',
-  '7IlT9P1bafOCnq2JV00t'
+  // '7IlT9P1bafOCnq2JV00t'
 ];
 
 // Meter IDs for GHL Marketplace billing
@@ -209,7 +209,7 @@ class BillingService {
    * @returns {boolean} Whether wallet has funds
    */
   async hasFunds(companyId, accessToken) {
-    if (INTERNAL_TESTING_COMPANY_IDS.includes(companyId)) {
+    if (INTERNAL_TESTING_COMPANY_IDS.includes(companyId) || "7IlT9P1bafOCnq2JV00t" === companyId) {
       logger.info('Internal testing company - skipping funds check', { companyId });
       return true;
     }
@@ -274,7 +274,7 @@ class BillingService {
           meterId: charge.meterId,
           qty: charge.qty,
           finalAmount: finalAmount,
-          unitPrice: (finalAmount/charge.qty).toFixed(4)
+          unitPrice: Number((finalAmount/charge.qty).toFixed(4))
         });
 
         const response = await axios.post(
@@ -283,7 +283,7 @@ class BillingService {
             companyId,
             meterId: charge.meterId,
             units: charge.qty,
-            // price: (finalAmount/charge.qty).toFixed(4),
+            price: Number((finalAmount/charge.qty).toFixed(4)),
             appId: process.env.GHL_APP_ID || "694f93f8a6babf0c821b1356",
             eventId: transactionId,
             locationId: locationId,
