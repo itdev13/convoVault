@@ -28,7 +28,10 @@ class GHLService {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
 
-      console.log(JSON.stringify(response.data, null, 2));
+      logger.info('Token exchange successful', {
+        locationId: response.data.locationId,
+        companyId: response.data.companyId
+      });
 
       return {
         accessToken: response.data.access_token,
@@ -209,7 +212,7 @@ class GHLService {
 
         } catch (refreshError) {
           logger.error('❌ Company token refresh failed:', refreshError.message);
-          const authError = new Error('Your authentication has expired. Please reconnect the convo-vault app to your GHL account.');
+          const authError = new Error('Your authentication has expired. Please reconnect the ExportKit app to your account.');
           authError.status = 401;
           authError.isClientError = true;
           throw authError;
@@ -219,7 +222,7 @@ class GHLService {
       // If we get 401 even after refresh, the company token is invalid
       if (error.response?.status === 401) {
         logger.error('Company token is invalid or expired after retry. User needs to reconnect.');
-        const authError = new Error('Your authentication has expired. Please reconnect the convo-vault app to your GHL account.');
+        const authError = new Error('Your authentication has expired. Please reconnect the ExportKit app to your account.');
         authError.status = 401;
         authError.isClientError = true;
         throw authError;
@@ -353,7 +356,6 @@ class GHLService {
         locationTimezone: location.timezone || null
       };
     } catch (error) {
-      console.log(JSON.stringify(error, null, 2));
       logger.error('Failed to fetch sub-account details:', error.message);
       // Return null values if fetch fails (non-critical)
       return {
@@ -399,8 +401,10 @@ class GHLService {
         locationTimezone: loc.timezone || null
       }));
     } catch (error) {
-      logger.error('Failed to fetch company sub-accounts:', error.message);
-      console.log(JSON.stringify(error.response?.data || error, null, 2));
+      logger.error('Failed to fetch company sub-accounts:', {
+        message: error.message,
+        status: error.response?.status
+      });
       return [];
     }
   }
@@ -496,12 +500,28 @@ class GHLService {
         }
       }
 
+      // Handle 429 Rate Limit with exponential backoff (max 3 retries)
+      if (error.response?.status === 429 && retryCount < 3) {
+        const backoffMs = Math.min(1000 * Math.pow(2, retryCount), 10000); // 1s, 2s, 4s (max 10s)
+        logger.warn(`⏳ Rate limited (429), retrying in ${backoffMs}ms (attempt ${retryCount + 1}/3)`, {
+          endpoint,
+          retryAfter: error.response?.headers?.['retry-after']
+        });
+
+        // Use Retry-After header if provided, otherwise use exponential backoff
+        const retryAfter = error.response?.headers?.['retry-after'];
+        const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : backoffMs;
+
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+        return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1);
+      }
+
       // For other errors or after retry failed, throw original error
       logger.error(`API request failed: ${method} ${endpoint}`, {
         status: error.response?.status,
         message: error.response?.data?.message || error.message
       });
-      
+
       throw error;
     }
   }
@@ -659,8 +679,6 @@ class GHLService {
         limit: options.limit || 100
       };
 
-      console.log('options', options);
-
       // Channel filter (omit for all non-email, or specify: SMS, Email, WhatsApp, Call, etc.)
       if (options.channel && options.channel !== 'undefined' && options.channel.trim()) {
         params.channel = options.channel;
@@ -695,8 +713,6 @@ class GHLService {
         params.conversationId = options.conversationId;
       }
 
-      console.log('params', params);
-
       const response = await this.apiRequest(
         'GET',
         '/conversations/messages/export',
@@ -714,42 +730,68 @@ class GHLService {
 
   /**
    * Export all messages with automatic pagination
+   * Uses max page size (500) to minimize PIT cursor contexts
+   * Includes backoff on rate limit errors
    */
   async exportAllMessages(locationId, filters = {}, onProgress = null) {
     const allMessages = [];
     let cursor = null;
     let totalFetched = 0;
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 3;
 
     try {
       do {
-        const options = { ...filters, limit: 100 };
+        const options = { ...filters, limit: 500 }; // Max page size to reduce PIT cursors
         if (cursor) options.cursor = cursor;
 
-        const response = await this.exportMessages(locationId, options);
-        
-        if (response.messages && response.messages.length > 0) {
-          allMessages.push(...response.messages);
-          totalFetched += response.messages.length;
+        try {
+          const response = await this.exportMessages(locationId, options);
+          consecutiveErrors = 0; // Reset on success
 
-          if (onProgress) {
-            onProgress(totalFetched, response.total || totalFetched);
+          if (response.messages && response.messages.length > 0) {
+            allMessages.push(...response.messages);
+            totalFetched += response.messages.length;
+
+            if (onProgress) {
+              onProgress(totalFetched, response.total || totalFetched);
+            }
           }
-        }
 
-        cursor = response.nextCursor || null;
+          cursor = response.nextCursor || null;
 
-        // Rate limiting
-        if (cursor) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Rate limiting: 500ms between pages to avoid PIT context exhaustion
+          if (cursor) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+
+        } catch (pageError) {
+          consecutiveErrors++;
+
+          // If rate limited (429), wait longer and retry the same cursor
+          if (pageError.response?.status === 429 && consecutiveErrors <= MAX_CONSECUTIVE_ERRORS) {
+            const backoffMs = 2000 * Math.pow(2, consecutiveErrors - 1); // 2s, 4s, 8s
+            logger.warn(`⏳ Export pagination rate limited, waiting ${backoffMs}ms before retry (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS})`);
+            await new Promise(resolve => setTimeout(resolve, backoffMs));
+            continue; // Retry same cursor
+          }
+
+          // Max retries exceeded or non-rate-limit error
+          throw pageError;
         }
 
       } while (cursor);
 
       logger.info(`Export complete: ${totalFetched} messages`);
       return allMessages;
-      
+
     } catch (error) {
       logger.error('Bulk export failed:', error.message);
+      // Return partial results if we have some
+      if (allMessages.length > 0) {
+        logger.warn(`Returning ${allMessages.length} partial results out of expected total`);
+        return allMessages;
+      }
       throw error;
     }
   }
