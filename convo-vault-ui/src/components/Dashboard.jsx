@@ -13,7 +13,7 @@ export default function Dashboard() {
   const { location } = useAuth();
   
   // Get saved tab from localStorage or default to 'conversations'
-  const savedTab = localStorage.getItem('activeTab') || 'conversations';
+  const savedTab = localStorage.getItem('activeTab') || 'messages';
   const [activeTab, setActiveTab] = useState(savedTab);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [showConversationView, setShowConversationView] = useState(false);
@@ -24,8 +24,8 @@ export default function Dashboard() {
   }, [activeTab]);
 
   const tabs = [
-    { id: 'conversations', label: 'Conversations', icon: '💬' },
     { id: 'messages', label: 'Messages', icon: '📊' },
+    { id: 'conversations', label: 'Conversations', icon: '💬' },
     { id: 'exports', label: 'Export History', icon: '📤' },
     // { id: 'import', label: 'Import', icon: '📥' },
     { id: 'support', label: 'Support', icon: '🆘' }
