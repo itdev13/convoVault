@@ -43,8 +43,6 @@ export default function ConversationMessages({ conversation, onBack }) {
     refetchOnMount: 'always' // Always refetch on mount
   });
 
-  console.log('data', data);
-
   const messages = data?.data?.messages || [];
   const hasMore = data?.data?.pagination?.hasMore || false;
   const nextCursor = data?.data?.pagination?.nextCursor;
@@ -291,6 +289,26 @@ export default function ConversationMessages({ conversation, onBack }) {
           <p className="text-red-700">Error: {error.message}</p>
         </div>
       )}
+
+      {/* Export All Messages Banner */}
+      <div className="bg-red-50 border-1 border-solid border-red-300 rounded-xl p-3 overflow-hidden">
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          animation: 'scrollBanner 15s linear infinite',
+          whiteSpace: 'nowrap'
+        }}>
+          <span className="text-red-600 font-semibold text-sm">
+            📦 Export all messages at once — visit the <strong>Messages Tab</strong> to bulk export all messages
+          </span>
+        </div>
+        <style>{`
+          @keyframes scrollBanner {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+          }
+        `}</style>
+      </div>
 
       {/* Pagination Controls */}
       {!isLoading && !error && messages.length > 0 && (
