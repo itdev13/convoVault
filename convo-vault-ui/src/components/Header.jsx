@@ -5,7 +5,7 @@ import { docsAPI } from '../api/docs';
 import { APP_UPDATES, FEATURE_REQUEST_CTA, BADGE_CONFIGS } from '../constants/updates';
 import { API_DOCS_BASE_URL } from '../constants/api';
 
-export default function Header() {
+export default function Header({ onSupportClick }) {
   const { location, ghlContext } = useAuth();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -68,6 +68,15 @@ export default function Header() {
 
           {/* Updates, API Docs & Sub-Account */}
           <div className="flex items-center gap-4">
+            {/* Support Button */}
+            <button
+              onClick={onSupportClick}
+              className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-lg px-3 py-2 border border-white/20 transition-all flex items-center gap-2"
+            >
+              <span className="text-lg">🆘</span>
+              <span className="text-white font-semibold text-sm hidden sm:inline">Support</span>
+            </button>
+
             {/* Updates Button with Popover */}
             <div className="relative">
               <button
