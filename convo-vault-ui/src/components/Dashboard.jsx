@@ -7,6 +7,13 @@ import MessagesTab from './tabs/MessagesTab';
 import ImportTab from './tabs/ImportTab';
 import SupportTab from './tabs/SupportTab';
 import ExportTab from './tabs/ExportTab';
+import NotesTab from './tabs/NotesTab';
+import TasksTab from './tabs/TasksTab';
+import OpportunitiesTab from './tabs/OpportunitiesTab';
+import FormSubmissionsTab from './tabs/FormSubmissionsTab';
+import LinksTab from './tabs/LinksTab';
+import SocialPostsTab from './tabs/SocialPostsTab';
+import CallLogsTab from './tabs/CallLogsTab';
 import ConversationMessages from './ConversationMessages';
 
 export default function Dashboard() {
@@ -26,6 +33,13 @@ export default function Dashboard() {
   const tabs = [
     { id: 'messages', label: 'Messages', icon: '📊' },
     { id: 'conversations', label: 'Conversations', icon: '💬' },
+    { id: 'notes', label: 'Notes', icon: '📝' },
+    { id: 'tasks', label: 'Tasks', icon: '✅' },
+    { id: 'opportunities', label: 'Opportunities', icon: '💰' },
+    { id: 'formSubmissions', label: 'Forms', icon: '📋' },
+    { id: 'links', label: 'Links', icon: '🔗' },
+    { id: 'socialPosts', label: 'Social Posts', icon: '📱' },
+    { id: 'callLogs', label: 'Call Logs', icon: '📞' },
     { id: 'exports', label: 'Export History', icon: '📤' },
     // { id: 'import', label: 'Import', icon: '📥' },
     { id: 'support', label: 'Support', icon: '🆘' }
@@ -103,6 +117,13 @@ export default function Dashboard() {
                 <ConversationsTab onSelectConversation={handleConversationSelect} />
               )}
               {activeTab === 'messages' && <MessagesTab />}
+              {activeTab === 'notes' && <NotesTab />}
+              {activeTab === 'tasks' && <TasksTab />}
+              {activeTab === 'opportunities' && <OpportunitiesTab />}
+              {activeTab === 'formSubmissions' && <FormSubmissionsTab />}
+              {activeTab === 'links' && <LinksTab />}
+              {activeTab === 'socialPosts' && <SocialPostsTab />}
+              {activeTab === 'callLogs' && <CallLogsTab />}
               {activeTab === 'exports' && <ExportTab />}
               {activeTab === 'import' && <ImportTab />}
               {activeTab === 'support' && <SupportTab />}
