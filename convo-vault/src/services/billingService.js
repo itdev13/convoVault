@@ -18,14 +18,27 @@ const INTERNAL_TESTING_COMPANY_IDS = [
 const METER_IDS = {
   conversations: '69864aed1265653fdd7c0620',
   smsWhatsapp: '69864aed1265653fdd7c0620',
-  email: '69864aed1265653fdd7c0620'
+  email: '69864aed1265653fdd7c0620',
+  notesAndTasks: '69864aed1265653fdd7c0620',
+  opportunities: '69864aed1265653fdd7c0620',
+  formSubmissions: '69864aed1265653fdd7c0620',
+  links: '69864aed1265653fdd7c0620',
+  socialPosts: '69864aed1265653fdd7c0620',
+  callLogs: '69864aed1265653fdd7c0620',
+  businesses: '69864aed1265653fdd7c0620'
 };
 
-// Default unit prices in cents (fallback if API fails)
+// Default unit prices in dollars (fallback if API fails)
 const DEFAULT_UNIT_PRICES = {
   conversations: 0.025,    // 2.5 cents per conversation (1 credit)
   smsWhatsapp: 0.025,      // 2.5 cents per text message (1 credit)
-  email: 0.075             // 7.5 cents per email message (3 credits)
+  email: 0.075,            // 7.5 cents per email message (3 credits)
+  notesAndTasks: 0.002,    // 0.2 cents per note/task (no discounts)
+  opportunities: 0.002,    // 0.2 cents per opportunity (with volume discounts)
+  formSubmissions: 0.002,  // 0.2 cents per form submission (with volume discounts)
+  links: 0.002,            // 0.2 cents per link (with volume discounts)
+  socialPosts: 0.002,      // 0.2 cents per social post (with volume discounts)
+  callLogs: 0.002          // 0.2 cents per call log (with volume discounts)
 };
 
 // Cached prices from GHL API
@@ -132,24 +145,44 @@ class BillingService {
     const {
       conversations = 0,
       smsMessages = 0,
-      emailMessages = 0
+      emailMessages = 0,
+      notes = 0,
+      tasks = 0,
+      opportunities = 0,
+      formSubmissions = 0,
+      links = 0,
+      socialPosts = 0,
+      callLogs = 0
     } = counts;
 
     // Use provided prices or defaults
     const unitPrices = prices || DEFAULT_UNIT_PRICES;
 
-    // Calculate base amounts (in cents)
+    // Calculate discountable amounts (conversations + messages + opportunities + formSubmissions + links + socialPosts)
     const conversationsCost = conversations * unitPrices.conversations;
     const textMessagesCost = smsMessages * unitPrices.smsWhatsapp;
     const emailCost = emailMessages * unitPrices.email;
+    const opportunitiesCost = opportunities * (unitPrices.opportunities || DEFAULT_UNIT_PRICES.opportunities);
+    const formSubmissionsCost = formSubmissions * (unitPrices.formSubmissions || DEFAULT_UNIT_PRICES.formSubmissions);
+    const linksCost = links * (unitPrices.links || DEFAULT_UNIT_PRICES.links);
+    const socialPostsCost = socialPosts * (unitPrices.socialPosts || DEFAULT_UNIT_PRICES.socialPosts);
+    const callLogsCost = callLogs * (unitPrices.callLogs || DEFAULT_UNIT_PRICES.callLogs);
+    const discountableBase = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost;
+    const discountableItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs;
 
-    const baseAmount = conversationsCost + textMessagesCost + emailCost;
-    const totalItems = conversations + smsMessages + emailMessages;
-    
-    // Calculate discount
-    const discountPercent = this.getDiscountPercent(totalItems);
-    const discountAmount = baseAmount * (discountPercent / 100);
-    const finalAmount = baseAmount - discountAmount;
+    // Notes/tasks: flat rate, NO discounts
+    const notesTasksPrice = unitPrices.notesAndTasks || DEFAULT_UNIT_PRICES.notesAndTasks;
+    const notesCost = notes * notesTasksPrice;
+    const tasksCost = tasks * notesTasksPrice;
+    const nonDiscountableAmount = notesCost + tasksCost;
+
+    const totalItems = discountableItems + notes + tasks;
+    const baseAmount = discountableBase + nonDiscountableAmount;
+
+    // Discount only applies to conversations/messages
+    const discountPercent = discountableItems > 0 ? this.getDiscountPercent(discountableItems) : 0;
+    const discountAmount = discountableBase * (discountPercent / 100);
+    const finalAmount = (discountableBase - discountAmount) + nonDiscountableAmount;
 
     logger.info('Billing calculation:', {
       totalItems,
@@ -164,6 +197,13 @@ class BillingService {
         conversations,
         smsMessages,
         emailMessages,
+        notes,
+        tasks,
+        opportunities,
+        formSubmissions,
+        links,
+        socialPosts,
+        callLogs,
         total: totalItems
       },
       breakdown: {
@@ -181,6 +221,41 @@ class BillingService {
           count: emailMessages,
           unitPrice: unitPrices.email,
           subtotal: emailCost
+        },
+        notes: {
+          count: notes,
+          unitPrice: notesTasksPrice,
+          subtotal: notesCost
+        },
+        tasks: {
+          count: tasks,
+          unitPrice: notesTasksPrice,
+          subtotal: tasksCost
+        },
+        opportunities: {
+          count: opportunities,
+          unitPrice: unitPrices.opportunities || DEFAULT_UNIT_PRICES.opportunities,
+          subtotal: opportunitiesCost
+        },
+        formSubmissions: {
+          count: formSubmissions,
+          unitPrice: unitPrices.formSubmissions || DEFAULT_UNIT_PRICES.formSubmissions,
+          subtotal: formSubmissionsCost
+        },
+        links: {
+          count: links,
+          unitPrice: unitPrices.links || DEFAULT_UNIT_PRICES.links,
+          subtotal: linksCost
+        },
+        socialPosts: {
+          count: socialPosts,
+          unitPrice: unitPrices.socialPosts || DEFAULT_UNIT_PRICES.socialPosts,
+          subtotal: socialPostsCost
+        },
+        callLogs: {
+          count: callLogs,
+          unitPrice: unitPrices.callLogs || DEFAULT_UNIT_PRICES.callLogs,
+          subtotal: callLogsCost
         }
       },
       baseAmount,
@@ -357,6 +432,62 @@ class BillingService {
         meterId: METER_IDS.email,
         qty: counts.emailMessages,
         description: 'Email message exports'
+      });
+    }
+
+    if (counts.notes > 0) {
+      charges.push({
+        meterId: METER_IDS.notesAndTasks,
+        qty: counts.notes,
+        description: 'Note exports'
+      });
+    }
+
+    if (counts.tasks > 0) {
+      charges.push({
+        meterId: METER_IDS.notesAndTasks,
+        qty: counts.tasks,
+        description: 'Task exports'
+      });
+    }
+
+    if (counts.opportunities > 0) {
+      charges.push({
+        meterId: METER_IDS.opportunities,
+        qty: counts.opportunities,
+        description: 'Opportunity exports'
+      });
+    }
+
+    if (counts.formSubmissions > 0) {
+      charges.push({
+        meterId: METER_IDS.formSubmissions,
+        qty: counts.formSubmissions,
+        description: 'Form submission exports'
+      });
+    }
+
+    if (counts.links > 0) {
+      charges.push({
+        meterId: METER_IDS.links,
+        qty: counts.links,
+        description: 'Link exports'
+      });
+    }
+
+    if (counts.socialPosts > 0) {
+      charges.push({
+        meterId: METER_IDS.socialPosts,
+        qty: counts.socialPosts,
+        description: 'Social post exports'
+      });
+    }
+
+    if (counts.callLogs > 0) {
+      charges.push({
+        meterId: METER_IDS.callLogs,
+        qty: counts.callLogs,
+        description: 'Call log exports'
       });
     }
 

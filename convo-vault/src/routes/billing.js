@@ -67,28 +67,38 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    if (!exportType || !['conversations', 'messages'].includes(exportType)) {
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'];
+    if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
-        error: 'exportType must be "conversations" or "messages"'
+        error: `exportType must be one of: ${validExportTypes.join(', ')}`
       });
     }
 
-    // Validate date range
-    const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
-    if (!dateValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: dateValidation.error
-      });
+    // Validate date range (not applicable for notes/tasks/links)
+    if (!['notes', 'tasks', 'links'].includes(exportType)) {
+      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
+      if (!dateValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: dateValidation.error
+        });
+      }
     }
 
     logger.info('Calculating export estimate', { locationId, exportType, filters });
 
     let counts = {
       conversations: 0,
-    smsMessages: 0,
-      emailMessages: 0
+      smsMessages: 0,
+      emailMessages: 0,
+      notes: 0,
+      tasks: 0,
+      opportunities: 0,
+      formSubmissions: 0,
+      links: 0,
+      socialPosts: 0,
+      callLogs: 0
     };
 
     if (exportType === 'conversations') {
@@ -133,6 +143,79 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         counts.smsMessages = textCount;
         counts.emailMessages = emailCount;
       }
+
+    } else if (exportType === 'notes' || exportType === 'tasks') {
+      // Notes/Tasks: per-contact APIs - sample contacts to estimate count
+      const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
+      const totalContacts = contactResult.total || 0;
+
+      if (totalContacts > 0) {
+        // Sample up to 10 contacts to estimate average items per contact
+        const SAMPLE_SIZE = Math.min(10, totalContacts);
+        const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
+        const sampleContacts = sampleResult.contacts || [];
+
+        let totalItemsInSample = 0;
+        for (const contact of sampleContacts) {
+          try {
+            if (exportType === 'notes') {
+              const result = await ghlService.getContactNotes(locationId, contact.id);
+              totalItemsInSample += result.total;
+            } else {
+              const result = await ghlService.getContactTasks(locationId, contact.id);
+              totalItemsInSample += result.total;
+            }
+          } catch (err) {
+            logger.warn('Failed to fetch for contact during estimation:', { contactId: contact.id });
+          }
+        }
+
+        const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
+        const estimatedTotal = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
+
+        if (exportType === 'notes') {
+          counts.notes = estimatedTotal;
+        } else {
+          counts.tasks = estimatedTotal;
+        }
+      }
+
+    } else if (exportType === 'opportunities') {
+      // Opportunities: location-level search API returns total directly
+      const result = await ghlService.searchOpportunities(locationId, {
+        ...filters,
+        limit: 1
+      });
+      counts.opportunities = result.total || 0;
+
+    } else if (exportType === 'formSubmissions') {
+      // Form Submissions: page-based API returns total in meta
+      const result = await ghlService.getFormSubmissions(locationId, {
+        ...filters,
+        limit: 1
+      });
+      counts.formSubmissions = result.total || 0;
+
+    } else if (exportType === 'links') {
+      // Links: returns all links at once (no pagination)
+      const result = await ghlService.getLinks(locationId);
+      counts.links = result.links?.length || 0;
+
+    } else if (exportType === 'socialPosts') {
+      // Social Posts: list endpoint returns total
+      const result = await ghlService.getSocialPosts(locationId, {
+        ...filters,
+        limit: 1
+      });
+      counts.socialPosts = result.total || 0;
+
+    } else if (exportType === 'callLogs') {
+      // Call Logs: page-based API returns total
+      const result = await ghlService.getCallLogs(locationId, {
+        ...filters,
+        pageSize: 1
+      });
+      counts.callLogs = result.total || 0;
     }
 
     // Get access token to fetch actual prices from GHL
@@ -183,10 +266,11 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    if (!exportType || !['conversations', 'messages'].includes(exportType)) {
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'];
+    if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
-        error: 'exportType must be "conversations" or "messages"'
+        error: `exportType must be one of: ${validExportTypes.join(', ')}`
       });
     }
 
@@ -207,13 +291,15 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date range
-    const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
-    if (!dateValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: dateValidation.error
-      });
+    // Validate date range (not applicable for notes/tasks/links)
+    if (!['notes', 'tasks', 'links'].includes(exportType)) {
+      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
+      if (!dateValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: dateValidation.error
+        });
+      }
     }
 
     logger.info('Starting charge-and-export', { locationId, exportType, companyId });
@@ -222,7 +308,14 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
     let counts = {
       conversations: 0,
       smsMessages: 0,
-      emailMessages: 0
+      emailMessages: 0,
+      notes: 0,
+      tasks: 0,
+      opportunities: 0,
+      formSubmissions: 0,
+      links: 0,
+      socialPosts: 0,
+      callLogs: 0
     };
     let totalItems = 0;
 
@@ -233,6 +326,75 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
       totalItems = result.total || result.conversations?.length || 0;
       counts.conversations = totalItems;
+    } else if (exportType === 'notes' || exportType === 'tasks') {
+      // Notes/Tasks: sample contacts to estimate
+      const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
+      const totalContacts = contactResult.total || 0;
+
+      if (totalContacts > 0) {
+        const SAMPLE_SIZE = Math.min(10, totalContacts);
+        const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
+        const sampleContacts = sampleResult.contacts || [];
+
+        let totalItemsInSample = 0;
+        for (const contact of sampleContacts) {
+          try {
+            if (exportType === 'notes') {
+              const result = await ghlService.getContactNotes(locationId, contact.id);
+              totalItemsInSample += result.total;
+            } else {
+              const result = await ghlService.getContactTasks(locationId, contact.id);
+              totalItemsInSample += result.total;
+            }
+          } catch (err) {
+            logger.warn('Sample contact fetch failed:', { contactId: contact.id });
+          }
+        }
+
+        const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
+        totalItems = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
+
+        if (exportType === 'notes') counts.notes = totalItems;
+        else counts.tasks = totalItems;
+      }
+    } else if (exportType === 'opportunities') {
+      // Opportunities: location-level search API returns total directly
+      const result = await ghlService.searchOpportunities(locationId, {
+        ...filters,
+        limit: 1
+      });
+      totalItems = result.total || 0;
+      counts.opportunities = totalItems;
+
+    } else if (exportType === 'formSubmissions') {
+      const result = await ghlService.getFormSubmissions(locationId, {
+        ...filters,
+        limit: 1
+      });
+      totalItems = result.total || 0;
+      counts.formSubmissions = totalItems;
+
+    } else if (exportType === 'links') {
+      const result = await ghlService.getLinks(locationId);
+      totalItems = result.links?.length || 0;
+      counts.links = totalItems;
+
+    } else if (exportType === 'socialPosts') {
+      const result = await ghlService.getSocialPosts(locationId, {
+        ...filters,
+        limit: 1
+      });
+      totalItems = result.total || 0;
+      counts.socialPosts = totalItems;
+
+    } else if (exportType === 'callLogs') {
+      const result = await ghlService.getCallLogs(locationId, {
+        ...filters,
+        pageSize: 1
+      });
+      totalItems = result.total || 0;
+      counts.callLogs = totalItems;
+
     } else {
       const result = await ghlService.exportMessages(locationId, {
         ...filters,
@@ -360,7 +522,16 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       lastMessageDirection: filters?.lastMessageDirection || null,
       status: filters?.status || null,
       lastMessageAction: filters?.lastMessageAction || null,
-      sortBy: filters?.sortBy || null
+      sortBy: filters?.sortBy || null,
+      // Opportunity-specific filters
+      pipelineId: filters?.pipelineId || null,
+      pipelineStageId: filters?.pipelineStageId || null,
+      // Form submission-specific filters
+      formId: filters?.formId || null,
+      // Call log-specific filters
+      agentId: filters?.agentId || null,
+      callType: filters?.callType || null,
+      actionType: filters?.actionType || null
     };
 
     const exportJob = await ExportJob.create({
@@ -591,6 +762,75 @@ router.get('/pricing', async (req, res) => {
       maxDateRange: '1 month'
     }
   });
+});
+
+/**
+ * @route GET /api/billing/pipelines
+ * @desc Get pipelines for a location (proxy to GHL API)
+ */
+router.get('/pipelines', authenticateSession, async (req, res) => {
+  try {
+    const { locationId } = req.query;
+
+    if (!locationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'locationId is required'
+      });
+    }
+
+    const result = await ghlService.getPipelines(locationId);
+
+    res.json({
+      success: true,
+      data: {
+        pipelines: result.pipelines || []
+      }
+    });
+
+  } catch (error) {
+    logError('Get pipelines error', error, { locationId: req.query?.locationId });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get pipelines'
+    });
+  }
+});
+
+/**
+ * @route GET /api/billing/forms
+ * @desc Get forms for a location (proxy to GHL API)
+ */
+router.get('/forms', authenticateSession, async (req, res) => {
+  try {
+    const { locationId } = req.query;
+
+    if (!locationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'locationId is required'
+      });
+    }
+
+    const result = await ghlService.getForms(locationId);
+
+    res.json({
+      success: true,
+      data: {
+        forms: result.forms || [],
+        total: result.total || 0
+      }
+    });
+
+  } catch (error) {
+    logError('Get forms error', error, { locationId: req.query?.locationId });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get forms'
+    });
+  }
 });
 
 module.exports = router;

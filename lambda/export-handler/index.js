@@ -89,8 +89,6 @@ async function fetchConversationsPage(locationId, accessToken, filters, skip) {
     params.endDate = date.getTime();
   }
 
-  console.log("params:", params)
-
   const response = await axios.get(`${GHL_API_URL}/conversations/search`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -144,6 +142,243 @@ async function fetchMessagesPage(locationId, accessToken, filters, cursor) {
   return {
     data: response.data.messages || [],
     nextCursor: response.data.nextCursor || null
+  };
+}
+
+/**
+ * Fetch a page of contacts for a location
+ */
+async function fetchContactsPage(locationId, accessToken, startAfterId) {
+  const params = { locationId, limit: 100 };
+  if (startAfterId) params.startAfterId = startAfterId;
+
+  const response = await axios.get(`${GHL_API_URL}/contacts/`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    },
+    params
+  });
+
+  return {
+    contacts: response.data.contacts || [],
+    meta: response.data.meta || {},
+    total: response.data.meta?.total || 0
+  };
+}
+
+/**
+ * Fetch all notes for a specific contact
+ */
+async function fetchNotesForContact(contactId, accessToken) {
+  const response = await axios.get(`${GHL_API_URL}/contacts/${contactId}/notes`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    }
+  });
+  return response.data.notes || [];
+}
+
+/**
+ * Fetch all tasks for a specific contact
+ */
+async function fetchTasksForContact(contactId, accessToken) {
+  const response = await axios.get(`${GHL_API_URL}/contacts/${contactId}/tasks`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    }
+  });
+  return response.data.tasks || [];
+}
+
+/**
+ * Fetch a page of opportunities for a location
+ */
+async function fetchOpportunitiesPage(locationId, accessToken, page, filters = {}) {
+  const params = {
+    location_id: locationId,
+    limit: API_PAGE_SIZE,
+    page
+  };
+
+  if (filters.pipelineId) params.pipeline_id = filters.pipelineId;
+  if (filters.pipelineStageId) params.pipeline_stage_id = filters.pipelineStageId;
+  if (filters.status) params.status = filters.status;
+  if (filters.query) params.q = filters.query;
+  if (filters.contactId) params.contact_id = filters.contactId;
+
+  // Convert date filters
+  if (filters.startDate) {
+    const date = new Date(filters.startDate);
+    date.setHours(0, 0, 0, 0);
+    params.date = date.getTime();
+  }
+  if (filters.endDate) {
+    const date = new Date(filters.endDate);
+    date.setHours(23, 59, 59, 999);
+    params.endDate = date.getTime();
+  }
+
+  const response = await axios.get(`${GHL_API_URL}/opportunities/search`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    },
+    params
+  });
+
+  const opportunities = response.data.opportunities || [];
+  const total = response.data.meta?.total || response.data.total || 0;
+
+  return {
+    data: opportunities,
+    total,
+    hasMore: opportunities.length === API_PAGE_SIZE
+  };
+}
+
+/**
+ * Fetch a page of form submissions for a location
+ */
+async function fetchFormSubmissionsPage(locationId, accessToken, page, filters = {}) {
+  const params = {
+    locationId,
+    limit: API_PAGE_SIZE,
+    page
+  };
+
+  if (filters.formId) params.formId = filters.formId;
+  if (filters.query) params.q = filters.query;
+
+  // Convert date filters to YYYY-MM-DD format
+  if (filters.startDate) {
+    const date = new Date(filters.startDate);
+    params.startAt = date.toISOString().split('T')[0];
+  }
+  if (filters.endDate) {
+    const date = new Date(filters.endDate);
+    params.endAt = date.toISOString().split('T')[0];
+  }
+
+  const response = await axios.get(`${GHL_API_URL}/forms/submissions`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    },
+    params
+  });
+
+  const submissions = response.data.submissions || [];
+  const total = response.data.meta?.total || 0;
+
+  return {
+    data: submissions,
+    total,
+    hasMore: submissions.length === API_PAGE_SIZE
+  };
+}
+
+/**
+ * Fetch all trigger links for a location (no pagination)
+ */
+async function fetchAllLinks(locationId, accessToken) {
+  const response = await axios.get(`${GHL_API_URL}/links/`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    },
+    params: { locationId }
+  });
+
+  return {
+    data: response.data.links || []
+  };
+}
+
+/**
+ * Fetch a page of social media posts for a location
+ */
+async function fetchSocialPostsPage(locationId, accessToken, skip = 0, filters = {}) {
+  const body = {
+    limit: API_PAGE_SIZE,
+    skip
+  };
+
+  if (filters.type) body.type = filters.type;
+  if (filters.status) body.status = filters.status;
+  if (filters.accountIds) body.accountIds = filters.accountIds;
+
+  const response = await axios.post(`${GHL_API_URL}/social-media-posting/${locationId}/posts/list`, body, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    }
+  });
+
+  const posts = response.data.posts || response.data.data || [];
+
+  return {
+    data: posts,
+    total: response.data.total || posts.length,
+    hasMore: posts.length === API_PAGE_SIZE
+  };
+}
+
+/**
+ * Fetch a page of voice AI call logs for a location
+ * Note: Uses Version header 2021-04-15
+ */
+async function fetchCallLogsPage(locationId, accessToken, page = 1, filters = {}) {
+  const params = {
+    locationId,
+    page,
+    pageSize: API_PAGE_SIZE
+  };
+
+  if (filters.agentId) params.agentId = filters.agentId;
+  if (filters.contactId) params.contactId = filters.contactId;
+  if (filters.callType) params.callType = filters.callType;
+  if (filters.actionType) params.actionType = filters.actionType;
+  if (filters.sortBy) params.sortBy = filters.sortBy;
+  if (filters.sort) params.sort = filters.sort;
+
+  // Convert date filters
+  if (filters.startDate) {
+    const date = new Date(filters.startDate);
+    date.setHours(0, 0, 0, 0);
+    params.startDate = date.toISOString();
+  }
+  if (filters.endDate) {
+    const date = new Date(filters.endDate);
+    date.setHours(23, 59, 59, 999);
+    params.endDate = date.toISOString();
+  }
+
+  const response = await axios.get(`${GHL_API_URL}/voice-ai/dashboard/call-logs`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-04-15'
+    },
+    params
+  });
+
+  const callLogs = response.data.callLogs || [];
+  const total = response.data.total || 0;
+
+  return {
+    data: callLogs,
+    total,
+    hasMore: callLogs.length === API_PAGE_SIZE
   };
 }
 
@@ -290,6 +525,197 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
 }
 
 /**
+ * Convert notes to CSV format
+ */
+function notesToCSV(notes, includeHeader = true) {
+  const header = includeHeader
+    ? 'NoteID,ContactID,ContactName,Body,DateAdded,CreatedBy\n'
+    : '';
+
+  const rows = notes.map(note => {
+    return [
+      escapeCsv(note.id),
+      escapeCsv(note.contactId),
+      escapeCsv(note.contactName),
+      escapeCsv(note.body),
+      escapeCsv(formatDate(note.dateAdded)),
+      escapeCsv(note.userId || note.createdBy || '')
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert tasks to CSV format
+ */
+function tasksToCSV(tasks, includeHeader = true) {
+  const header = includeHeader
+    ? 'TaskID,ContactID,ContactName,Title,Body,DueDate,Status,Completed,AssignedTo,DateAdded\n'
+    : '';
+
+  const rows = tasks.map(task => {
+    return [
+      escapeCsv(task.id),
+      escapeCsv(task.contactId),
+      escapeCsv(task.contactName),
+      escapeCsv(task.title),
+      escapeCsv(task.body),
+      escapeCsv(formatDate(task.dueDate)),
+      escapeCsv(task.status || ''),
+      escapeCsv(task.completed ? 'Yes' : 'No'),
+      escapeCsv(task.assignedTo || ''),
+      escapeCsv(formatDate(task.dateAdded))
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert opportunities to CSV format
+ */
+function opportunitiesToCSV(opportunities, includeHeader = true) {
+  const header = includeHeader
+    ? 'OpportunityID,Name,MonetaryValue,PipelineId,PipelineStageId,Status,Source,ContactId,ContactName,ContactEmail,ContactPhone,AssignedTo,LostReasonId,CreatedAt,UpdatedAt,LastStatusChangeAt,LastStageChangeAt\n'
+    : '';
+
+  const rows = opportunities.map(opp => {
+    const contact = opp.contact || {};
+    return [
+      escapeCsv(opp.id),
+      escapeCsv(opp.name),
+      escapeCsv(opp.monetaryValue || 0),
+      escapeCsv(opp.pipelineId),
+      escapeCsv(opp.pipelineStageId),
+      escapeCsv(opp.status),
+      escapeCsv(opp.source || ''),
+      escapeCsv(opp.contactId),
+      escapeCsv(contact.name || contact.contactName || ''),
+      escapeCsv(contact.email || ''),
+      escapeCsv(contact.phone || ''),
+      escapeCsv(opp.assignedTo || ''),
+      escapeCsv(opp.lostReasonId || ''),
+      escapeCsv(formatDate(opp.createdAt)),
+      escapeCsv(formatDate(opp.updatedAt)),
+      escapeCsv(formatDate(opp.lastStatusChangeAt)),
+      escapeCsv(formatDate(opp.lastStageChangeAt))
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert form submissions to CSV format
+ */
+function formSubmissionsToCSV(submissions, includeHeader = true) {
+  const header = includeHeader
+    ? 'SubmissionID,FormID,ContactID,Name,Email,CreatedAt,OtherFields\n'
+    : '';
+
+  const rows = submissions.map(sub => {
+    // Flatten 'others' object into a readable string
+    let otherFields = '';
+    if (sub.others && typeof sub.others === 'object') {
+      otherFields = Object.entries(sub.others)
+        .filter(([key]) => !key.startsWith('event'))
+        .map(([key, val]) => `${key}: ${val}`)
+        .join('; ');
+    }
+
+    return [
+      escapeCsv(sub.id),
+      escapeCsv(sub.formId),
+      escapeCsv(sub.contactId),
+      escapeCsv(sub.name || ''),
+      escapeCsv(sub.email || ''),
+      escapeCsv(formatDate(sub.createdAt)),
+      escapeCsv(otherFields)
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert links to CSV format
+ */
+function linksToCSV(links, includeHeader = true) {
+  const header = includeHeader
+    ? 'LinkID,Name,RedirectTo,FieldKey,LocationID\n'
+    : '';
+
+  const rows = links.map(link => {
+    return [
+      escapeCsv(link.id),
+      escapeCsv(link.name),
+      escapeCsv(link.redirectTo || ''),
+      escapeCsv(link.fieldKey || ''),
+      escapeCsv(link.locationId || '')
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert social posts to CSV format
+ */
+function socialPostsToCSV(posts, includeHeader = true) {
+  const header = includeHeader
+    ? 'PostID,Summary,Type,Status,Platforms,ScheduledAt,PublishedAt,CreatedAt,UpdatedAt\n'
+    : '';
+
+  const rows = posts.map(post => {
+    const platforms = Array.isArray(post.accountIds) ? post.accountIds.join('; ') : (post.platforms || '');
+    return [
+      escapeCsv(post.id || post._id),
+      escapeCsv(post.summary || post.content || ''),
+      escapeCsv(post.type || ''),
+      escapeCsv(post.status || ''),
+      escapeCsv(platforms),
+      escapeCsv(formatDate(post.scheduledAt || post.scheduleDate)),
+      escapeCsv(formatDate(post.publishedAt || post.publishDate)),
+      escapeCsv(formatDate(post.createdAt)),
+      escapeCsv(formatDate(post.updatedAt))
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert call logs to CSV format
+ */
+function callLogsToCSV(callLogs, includeHeader = true) {
+  const header = includeHeader
+    ? 'CallID,ContactID,AgentID,FromNumber,CallType,Duration,Summary,CreatedAt,TrialCall,CallActions,Transcript\n'
+    : '';
+
+  const rows = callLogs.map(log => {
+    const actions = Array.isArray(log.executedCallActions)
+      ? log.executedCallActions.map(a => a.actionType || a).join('; ')
+      : '';
+    return [
+      escapeCsv(log.id || log._id),
+      escapeCsv(log.contactId || ''),
+      escapeCsv(log.agentId || ''),
+      escapeCsv(log.fromNumber || ''),
+      escapeCsv(log.callType || ''),
+      escapeCsv(log.duration || ''),
+      escapeCsv(log.summary || ''),
+      escapeCsv(formatDate(log.createdAt)),
+      escapeCsv(log.trialCall ? 'Yes' : 'No'),
+      escapeCsv(actions),
+      escapeCsv(log.transcript || '')
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
  * Convert to JSON format
  */
 function toJSON(data, exportType, isFirst, isLast) {
@@ -344,7 +770,16 @@ async function sendEmail(email, downloadUrl, jobDetails) {
         email: EMAIL_FROM_ADDRESS
       },
       to: [{ email: email }],
-      subject: `Your ${jobDetails.exportType === 'conversations' ? 'Conversations' : 'Messages'} Export is Ready`,
+      subject: `Your ${
+        jobDetails.exportType === 'conversations' ? 'Conversations' :
+        jobDetails.exportType === 'notes' ? 'Notes' :
+        jobDetails.exportType === 'tasks' ? 'Tasks' :
+        jobDetails.exportType === 'opportunities' ? 'Opportunities' :
+        jobDetails.exportType === 'formSubmissions' ? 'Form Submissions' :
+        jobDetails.exportType === 'links' ? 'Links' :
+        jobDetails.exportType === 'socialPosts' ? 'Social Posts' :
+        jobDetails.exportType === 'callLogs' ? 'Call Logs' : 'Messages'
+      } Export is Ready`,
       htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #10B981;">Your Export is Ready!</h2>
@@ -483,7 +918,7 @@ exports.handler = async (event, context) => {
     isActive: true,
   });
 
-  console.log("oauth: ", oauthToken);
+  log('OAuth token found for location:', job.locationId);
 
   if (!oauthToken || !oauthToken.refreshToken) {
     logError('No valid OAuth token found for location:', job.locationId);
@@ -509,7 +944,7 @@ exports.handler = async (event, context) => {
     // CRITICAL: Re-read latest token from DB to avoid race condition
     // Another Lambda or API request might have already refreshed it
     const latestToken = await db.collection('oauthtokens').findOne({ _id: oauthToken._id });
-    console.log("oauth refresh: ", oauthToken);
+    log('Checking latest token from DB for refresh');
 
     if (!latestToken) {
       throw new Error('OAuth token not found in database');
@@ -612,71 +1047,364 @@ exports.handler = async (event, context) => {
 
     log('Starting batch', { cursor, skip, alreadyProcessed: job.processedItems || 0 });
 
-    while (recordsFetched < BATCH_SIZE && hasMoreData) {
-      // Check if approaching timeout
-      const remaining = context.getRemainingTimeInMillis();
-      if (remaining < TIMEOUT_BUFFER_MS) {
-        log('Approaching timeout, saving progress', { remainingMs: remaining });
-        break;
-      }
+    if (job.exportType === 'notes' || job.exportType === 'tasks') {
+      // === NOTES/TASKS: Per-contact iteration ===
+      // cursor = last processed contact ID (used as startAfterId)
+      let contactStartAfter = cursor;
 
-      // Check if we've already fetched all items (avoid extra API call when count matches exactly)
-      if (job.totalItems > 0) {
-        const totalProcessed = (job.processedItems || 0) + recordsFetched;
-        if (totalProcessed >= job.totalItems) {
-          log('Reached totalItems count, stopping fetch', { totalProcessed, totalItems: job.totalItems });
+      while (recordsFetched < BATCH_SIZE && hasMoreData) {
+        const remaining = context.getRemainingTimeInMillis();
+        if (remaining < TIMEOUT_BUFFER_MS) {
+          log('Approaching timeout, saving progress', { remainingMs: remaining });
+          break;
+        }
+
+        // Fetch a page of contacts
+        let contactsResult;
+        try {
+          contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401 on contacts fetch, refreshing token...');
+            await refreshAndUpdateToken();
+            contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
+          } else {
+            throw fetchError;
+          }
+        }
+
+        const contacts = contactsResult.contacts;
+        if (contacts.length === 0) {
           hasMoreData = false;
           break;
         }
+
+        log('Fetched contacts page', { count: contacts.length, startAfter: contactStartAfter });
+
+        // Process each contact on this page
+        let stoppedEarly = false;
+        for (const contact of contacts) {
+          const remaining = context.getRemainingTimeInMillis();
+          if (remaining < TIMEOUT_BUFFER_MS) {
+            log('Approaching timeout mid-contact iteration');
+            stoppedEarly = true;
+            break;
+          }
+          if (recordsFetched >= BATCH_SIZE) {
+            stoppedEarly = true;
+            break;
+          }
+
+          // Fetch notes or tasks for this contact, with 401/429 retry
+          let items;
+          try {
+            if (job.exportType === 'notes') {
+              items = await fetchNotesForContact(contact.id, accessToken);
+            } else {
+              items = await fetchTasksForContact(contact.id, accessToken);
+            }
+          } catch (fetchError) {
+            if (fetchError.response?.status === 401) {
+              log('Got 401, refreshing token...');
+              await refreshAndUpdateToken();
+              items = job.exportType === 'notes'
+                ? await fetchNotesForContact(contact.id, accessToken)
+                : await fetchTasksForContact(contact.id, accessToken);
+            } else if (fetchError.response?.status === 429) {
+              log('Rate limited, waiting 2s before retry...');
+              await sleep(2000);
+              items = job.exportType === 'notes'
+                ? await fetchNotesForContact(contact.id, accessToken)
+                : await fetchTasksForContact(contact.id, accessToken);
+            } else {
+              throw fetchError;
+            }
+          }
+
+          // Enrich items with contact info
+          const contactName = contact.contactName || contact.name ||
+            `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Unknown';
+          items.forEach(item => {
+            item.contactId = contact.id;
+            item.contactName = contactName;
+          });
+
+          records.push(...items);
+          recordsFetched += items.length;
+          contactStartAfter = contact.id;
+
+          // Rate limiting between contacts (GHL: 100 req/10 sec)
+          await sleep(150);
+        }
+
+        // If we stopped early (timeout/batch full), keep hasMoreData=true
+        if (stoppedEarly) {
+          break;
+        }
+
+        // Check if this was the last page of contacts
+        if (contacts.length < 100) {
+          hasMoreData = false;
+        }
       }
 
-      // Fetch page based on export type, with 401 retry
-      let pageResult;
-      try {
-        if (job.exportType === 'conversations') {
-          pageResult = await fetchConversationsPage(job.locationId, accessToken, job.filters || {}, skip);
-        } else {
-          pageResult = await fetchMessagesPage(job.locationId, accessToken, job.filters || {}, cursor);
+      // Set cursor for next Lambda invocation (or null if done)
+      cursor = hasMoreData ? contactStartAfter : null;
+
+    } else if (job.exportType === 'opportunities') {
+      // === OPPORTUNITIES: Page-based pagination ===
+      let page = cursor ? parseInt(cursor) : 1;
+
+      while (recordsFetched < BATCH_SIZE && hasMoreData) {
+        const remaining = context.getRemainingTimeInMillis();
+        if (remaining < TIMEOUT_BUFFER_MS) {
+          log('Approaching timeout, saving progress', { remainingMs: remaining });
+          break;
         }
+
+        let pageResult;
+        try {
+          pageResult = await fetchOpportunitiesPage(job.locationId, accessToken, page, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401, refreshing token and retrying...');
+            await refreshAndUpdateToken();
+            pageResult = await fetchOpportunitiesPage(job.locationId, accessToken, page, job.filters || {});
+          } else {
+            throw fetchError;
+          }
+        }
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        page++;
+
+        log('Fetched opportunities page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, page, hasMore: pageResult.hasMore });
+
+        if (pageResult.data.length < API_PAGE_SIZE) {
+          hasMoreData = false;
+        }
+
+        if (hasMoreData && recordsFetched < BATCH_SIZE) {
+          await sleep(100);
+        }
+      }
+
+      // Store current page as cursor for next Lambda invocation
+      cursor = hasMoreData ? String(page) : null;
+
+    } else if (job.exportType === 'formSubmissions') {
+      // === FORM SUBMISSIONS: Page-based pagination ===
+      let page = cursor ? parseInt(cursor) : 1;
+
+      while (recordsFetched < BATCH_SIZE && hasMoreData) {
+        const remaining = context.getRemainingTimeInMillis();
+        if (remaining < TIMEOUT_BUFFER_MS) {
+          log('Approaching timeout, saving progress', { remainingMs: remaining });
+          break;
+        }
+
+        let pageResult;
+        try {
+          pageResult = await fetchFormSubmissionsPage(job.locationId, accessToken, page, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401, refreshing token and retrying...');
+            await refreshAndUpdateToken();
+            pageResult = await fetchFormSubmissionsPage(job.locationId, accessToken, page, job.filters || {});
+          } else {
+            throw fetchError;
+          }
+        }
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        page++;
+
+        log('Fetched form submissions page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, page });
+
+        if (pageResult.data.length < API_PAGE_SIZE) {
+          hasMoreData = false;
+        }
+
+        if (hasMoreData && recordsFetched < BATCH_SIZE) {
+          await sleep(100);
+        }
+      }
+
+      cursor = hasMoreData ? String(page) : null;
+
+    } else if (job.exportType === 'links') {
+      // === LINKS: Single fetch, no pagination ===
+      let linksResult;
+      try {
+        linksResult = await fetchAllLinks(job.locationId, accessToken);
       } catch (fetchError) {
-        // If 401, refresh token and retry once
         if (fetchError.response?.status === 401) {
           log('Got 401, refreshing token and retrying...');
           await refreshAndUpdateToken();
-
-          if (job.exportType === 'conversations') {
-            pageResult = await fetchConversationsPage(job.locationId, accessToken, job.filters || {}, skip);
-          } else {
-            pageResult = await fetchMessagesPage(job.locationId, accessToken, job.filters || {}, cursor);
-          }
+          linksResult = await fetchAllLinks(job.locationId, accessToken);
         } else {
           throw fetchError;
         }
       }
 
-      if (job.exportType === 'conversations') {
-        hasMoreData = pageResult.hasMore;
-        skip += pageResult.data.length;
-      } else {
-        cursor = pageResult.nextCursor;
-        hasMoreData = !!cursor;
+      records = linksResult.data;
+      recordsFetched = records.length;
+      hasMoreData = false;
+      cursor = null;
+
+      log('Fetched all links', { total: records.length });
+
+    } else if (job.exportType === 'socialPosts') {
+      // === SOCIAL POSTS: Skip-based pagination ===
+      let currentSkip = cursor ? parseInt(cursor) : 0;
+
+      while (recordsFetched < BATCH_SIZE && hasMoreData) {
+        const remaining = context.getRemainingTimeInMillis();
+        if (remaining < TIMEOUT_BUFFER_MS) {
+          log('Approaching timeout, saving progress', { remainingMs: remaining });
+          break;
+        }
+
+        let pageResult;
+        try {
+          pageResult = await fetchSocialPostsPage(job.locationId, accessToken, currentSkip, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401, refreshing token and retrying...');
+            await refreshAndUpdateToken();
+            pageResult = await fetchSocialPostsPage(job.locationId, accessToken, currentSkip, job.filters || {});
+          } else {
+            throw fetchError;
+          }
+        }
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        currentSkip += pageResult.data.length;
+
+        log('Fetched social posts page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, skip: currentSkip });
+
+        if (pageResult.data.length < API_PAGE_SIZE) {
+          hasMoreData = false;
+        }
+
+        if (hasMoreData && recordsFetched < BATCH_SIZE) {
+          await sleep(100);
+        }
       }
 
-      records.push(...pageResult.data);
-      recordsFetched += pageResult.data.length;
+      cursor = hasMoreData ? String(currentSkip) : null;
 
-      log('Fetched page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, cursor, hasMoreData });
+    } else if (job.exportType === 'callLogs') {
+      // === CALL LOGS: Page-based pagination ===
+      let page = cursor ? parseInt(cursor) : 1;
 
-      // No more data available - use correct page size for each type
-      const pageSize = job.exportType === 'conversations' ? API_PAGE_SIZE : API_MESSAGES_PAGE_SIZE;
-      if (pageResult.data.length < pageSize) {
-        hasMoreData = false;
-        cursor = null;
+      while (recordsFetched < BATCH_SIZE && hasMoreData) {
+        const remaining = context.getRemainingTimeInMillis();
+        if (remaining < TIMEOUT_BUFFER_MS) {
+          log('Approaching timeout, saving progress', { remainingMs: remaining });
+          break;
+        }
+
+        let pageResult;
+        try {
+          pageResult = await fetchCallLogsPage(job.locationId, accessToken, page, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401, refreshing token and retrying...');
+            await refreshAndUpdateToken();
+            pageResult = await fetchCallLogsPage(job.locationId, accessToken, page, job.filters || {});
+          } else {
+            throw fetchError;
+          }
+        }
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        page++;
+
+        log('Fetched call logs page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, page });
+
+        if (pageResult.data.length < API_PAGE_SIZE) {
+          hasMoreData = false;
+        }
+
+        if (hasMoreData && recordsFetched < BATCH_SIZE) {
+          await sleep(100);
+        }
       }
 
-      // Rate limiting (GHL: 100 req/10 sec)
-      if (hasMoreData && recordsFetched < BATCH_SIZE) {
-        await sleep(100);
+      cursor = hasMoreData ? String(page) : null;
+
+    } else {
+      // === CONVERSATIONS/MESSAGES: Standard pagination ===
+      while (recordsFetched < BATCH_SIZE && hasMoreData) {
+        // Check if approaching timeout
+        const remaining = context.getRemainingTimeInMillis();
+        if (remaining < TIMEOUT_BUFFER_MS) {
+          log('Approaching timeout, saving progress', { remainingMs: remaining });
+          break;
+        }
+
+        // Check if we've already fetched all items (avoid extra API call when count matches exactly)
+        if (job.totalItems > 0) {
+          const totalProcessed = (job.processedItems || 0) + recordsFetched;
+          if (totalProcessed >= job.totalItems) {
+            log('Reached totalItems count, stopping fetch', { totalProcessed, totalItems: job.totalItems });
+            hasMoreData = false;
+            break;
+          }
+        }
+
+        // Fetch page based on export type, with 401 retry
+        let pageResult;
+        try {
+          if (job.exportType === 'conversations') {
+            pageResult = await fetchConversationsPage(job.locationId, accessToken, job.filters || {}, skip);
+          } else {
+            pageResult = await fetchMessagesPage(job.locationId, accessToken, job.filters || {}, cursor);
+          }
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401, refreshing token and retrying...');
+            await refreshAndUpdateToken();
+
+            if (job.exportType === 'conversations') {
+              pageResult = await fetchConversationsPage(job.locationId, accessToken, job.filters || {}, skip);
+            } else {
+              pageResult = await fetchMessagesPage(job.locationId, accessToken, job.filters || {}, cursor);
+            }
+          } else {
+            throw fetchError;
+          }
+        }
+
+        if (job.exportType === 'conversations') {
+          hasMoreData = pageResult.hasMore;
+          skip += pageResult.data.length;
+        } else {
+          cursor = pageResult.nextCursor;
+          hasMoreData = !!cursor;
+        }
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+
+        log('Fetched page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, cursor, hasMoreData });
+
+        // No more data available - use correct page size for each type
+        const pageSize = job.exportType === 'conversations' ? API_PAGE_SIZE : API_MESSAGES_PAGE_SIZE;
+        if (pageResult.data.length < pageSize) {
+          hasMoreData = false;
+          cursor = null;
+        }
+
+        // Rate limiting (GHL: 100 req/10 sec)
+        if (hasMoreData && recordsFetched < BATCH_SIZE) {
+          await sleep(100);
+        }
       }
     }
 
@@ -695,10 +1423,24 @@ exports.handler = async (event, context) => {
       let content;
       if (job.format === 'json') {
         content = toJSON(records, job.exportType, isFirstPart, isLastPart);
+      } else if (job.exportType === 'conversations') {
+        content = conversationsToCSV(records, isFirstPart);
+      } else if (job.exportType === 'notes') {
+        content = notesToCSV(records, isFirstPart);
+      } else if (job.exportType === 'tasks') {
+        content = tasksToCSV(records, isFirstPart);
+      } else if (job.exportType === 'opportunities') {
+        content = opportunitiesToCSV(records, isFirstPart);
+      } else if (job.exportType === 'formSubmissions') {
+        content = formSubmissionsToCSV(records, isFirstPart);
+      } else if (job.exportType === 'links') {
+        content = linksToCSV(records, isFirstPart);
+      } else if (job.exportType === 'socialPosts') {
+        content = socialPostsToCSV(records, isFirstPart);
+      } else if (job.exportType === 'callLogs') {
+        content = callLogsToCSV(records, isFirstPart);
       } else {
-        content = job.exportType === 'conversations'
-          ? conversationsToCSV(records, isFirstPart)
-          : messagesToCSV(records, isFirstPart, job.filters?.channel || '');
+        content = messagesToCSV(records, isFirstPart, job.filters?.channel || '');
       }
 
       const contentSize = Buffer.byteLength(content);

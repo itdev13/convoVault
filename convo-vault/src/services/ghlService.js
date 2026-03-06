@@ -885,6 +885,318 @@ class GHLService {
       throw new Error(`Failed to create conversation: ${error.response?.data?.message || error.message}`);
     }
   }
+  /**
+   * Search contacts for a location with pagination
+   * GET /contacts/ with startAfterId for cursor-based pagination
+   */
+  async searchContacts(locationId, options = {}) {
+    try {
+      const params = {
+        locationId,
+        limit: options.limit || 100
+      };
+
+      if (options.startAfterId) {
+        params.startAfterId = options.startAfterId;
+      }
+      if (options.query) {
+        params.query = options.query;
+      }
+
+      const response = await this.apiRequest(
+        'GET',
+        '/contacts/',
+        locationId,
+        null,
+        params
+      );
+
+      return {
+        contacts: response.contacts || [],
+        meta: response.meta || {},
+        total: response.meta?.total || response.contacts?.length || 0
+      };
+    } catch (error) {
+      logger.error('Search contacts failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all notes for a contact
+   * GET /contacts/:contactId/notes
+   */
+  async getContactNotes(locationId, contactId) {
+    try {
+      const response = await this.apiRequest(
+        'GET',
+        `/contacts/${contactId}/notes`,
+        locationId
+      );
+
+      return {
+        notes: response.notes || [],
+        total: response.notes?.length || 0
+      };
+    } catch (error) {
+      logger.error('Get contact notes failed:', { contactId, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all tasks for a contact
+   * GET /contacts/:contactId/tasks
+   */
+  async getContactTasks(locationId, contactId) {
+    try {
+      const response = await this.apiRequest(
+        'GET',
+        `/contacts/${contactId}/tasks`,
+        locationId
+      );
+
+      return {
+        tasks: response.tasks || [],
+        total: response.tasks?.length || 0
+      };
+    } catch (error) {
+      logger.error('Get contact tasks failed:', { contactId, error: error.message });
+      throw error;
+    }
+  }
+  /**
+   * Search opportunities for a location
+   * GET /opportunities/search
+   */
+  async searchOpportunities(locationId, options = {}) {
+    try {
+      const params = {
+        location_id: locationId,
+        limit: options.limit || 100,
+        page: options.page || 1
+      };
+
+      if (options.pipelineId) params.pipeline_id = options.pipelineId;
+      if (options.pipelineStageId) params.pipeline_stage_id = options.pipelineStageId;
+      if (options.status) params.status = options.status;
+      if (options.query) params.q = options.query;
+      if (options.startDate) params.date = options.startDate;
+      if (options.endDate) params.endDate = options.endDate;
+      if (options.order) params.order = options.order;
+      if (options.contactId) params.contact_id = options.contactId;
+
+      const response = await this.apiRequest(
+        'GET',
+        '/opportunities/search',
+        locationId,
+        null,
+        params
+      );
+
+      return {
+        opportunities: response.opportunities || [],
+        meta: response.meta || {},
+        total: response.meta?.total || response.total || 0
+      };
+    } catch (error) {
+      logger.error('Search opportunities failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all pipelines for a location
+   * GET /opportunities/pipelines
+   */
+  async getPipelines(locationId) {
+    try {
+      const response = await this.apiRequest(
+        'GET',
+        '/opportunities/pipelines',
+        locationId,
+        null,
+        { locationId }
+      );
+
+      return {
+        pipelines: response.pipelines || []
+      };
+    } catch (error) {
+      logger.error('Get pipelines failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get form submissions for a location
+   * GET /forms/submissions
+   */
+  async getFormSubmissions(locationId, options = {}) {
+    try {
+      const params = {
+        locationId,
+        limit: options.limit || 100,
+        page: options.page || 1
+      };
+
+      if (options.formId) params.formId = options.formId;
+      if (options.q) params.q = options.q;
+      if (options.startAt) params.startAt = options.startAt;
+      if (options.endAt) params.endAt = options.endAt;
+
+      const response = await this.apiRequest(
+        'GET',
+        '/forms/submissions',
+        locationId,
+        null,
+        params
+      );
+
+      return {
+        submissions: response.submissions || [],
+        meta: response.meta || {},
+        total: response.meta?.total || 0
+      };
+    } catch (error) {
+      logger.error('Get form submissions failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all forms for a location
+   * GET /forms/
+   */
+  async getForms(locationId) {
+    try {
+      const params = {
+        locationId,
+        limit: 50
+      };
+
+      const response = await this.apiRequest(
+        'GET',
+        '/forms/',
+        locationId,
+        null,
+        params
+      );
+
+      return {
+        forms: response.forms || [],
+        total: response.total || 0
+      };
+    } catch (error) {
+      logger.error('Get forms failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all trigger links for a location
+   * GET /links/
+   */
+  async getLinks(locationId) {
+    try {
+      const params = {
+        locationId
+      };
+
+      const response = await this.apiRequest(
+        'GET',
+        '/links/',
+        locationId,
+        null,
+        params
+      );
+
+      return {
+        links: response.links || []
+      };
+    } catch (error) {
+      logger.error('Get links failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get social media posts for a location
+   * POST /social-media-posting/{locationId}/posts/list
+   */
+  async getSocialPosts(locationId, options = {}) {
+    try {
+      const body = {};
+      if (options.type) body.type = options.type;
+      if (options.status) body.status = options.status;
+      if (options.accountIds) body.accountIds = options.accountIds;
+      if (options.limit) body.limit = options.limit;
+      if (options.startAfter) body.startAfter = options.startAfter;
+
+      const response = await this.apiRequest(
+        'POST',
+        `/social-media-posting/${locationId}/posts/list`,
+        locationId,
+        body,
+        null
+      );
+
+      const posts = response.posts || response.data || [];
+      return {
+        posts,
+        total: response.total || posts.length || 0
+      };
+    } catch (error) {
+      logger.error('Get social posts failed:', error.message);
+      throw error;
+    }
+  }
+  /**
+   * Get voice AI call logs for a location
+   * GET /voice-ai/dashboard/call-logs
+   * Note: Uses Version header 2021-04-15
+   */
+  async getCallLogs(locationId, options = {}) {
+    try {
+      const params = {
+        locationId,
+        page: options.page || 1,
+        pageSize: options.pageSize || 100
+      };
+
+      if (options.agentId) params.agentId = options.agentId;
+      if (options.contactId) params.contactId = options.contactId;
+      if (options.callType) params.callType = options.callType;
+      if (options.startDate) params.startDate = options.startDate;
+      if (options.endDate) params.endDate = options.endDate;
+      if (options.actionType) params.actionType = options.actionType;
+      if (options.sortBy) params.sortBy = options.sortBy;
+      if (options.sort) params.sort = options.sort;
+
+      // Voice AI uses a different API version header
+      const accessToken = await this.getValidToken(locationId);
+      const response = await axios({
+        method: 'GET',
+        url: `${this.baseURL}/voice-ai/dashboard/call-logs`,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Version': '2021-04-15'
+        },
+        params
+      });
+
+      return {
+        callLogs: response.data?.callLogs || [],
+        total: response.data?.total || 0,
+        page: response.data?.page || 1,
+        pageSize: response.data?.pageSize || 100
+      };
+    } catch (error) {
+      logger.error('Get call logs failed:', error.message);
+      throw error;
+    }
+  }
 }
 
 module.exports = new GHLService();

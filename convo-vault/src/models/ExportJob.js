@@ -24,10 +24,10 @@ const exportJobSchema = new mongoose.Schema({
     required: true
   },
 
-  // Export type: conversations or messages
+  // Export type: conversations, messages, notes, or tasks
   exportType: {
     type: String,
-    enum: ['conversations', 'messages'],
+    enum: ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'],
     required: true
   },
 
@@ -53,7 +53,16 @@ const exportJobSchema = new mongoose.Schema({
     lastMessageDirection: { type: String, default: null },
     status: { type: String, default: null },
     lastMessageAction: { type: String, default: null },
-    sortBy: { type: String, default: null }
+    sortBy: { type: String, default: null },
+    // Opportunity-specific filters
+    pipelineId: { type: String, default: null },
+    pipelineStageId: { type: String, default: null },
+    // Form submission-specific filters
+    formId: { type: String, default: null },
+    // Call log-specific filters
+    agentId: { type: String, default: null },
+    callType: { type: String, default: null },
+    actionType: { type: String, default: null }
   },
 
   // Progress tracking
@@ -89,6 +98,12 @@ const exportJobSchema = new mongoose.Schema({
   cursor: {
     type: String,
     default: null
+  },
+
+  // Contact iteration cursor (for notes/tasks exports - tracks last processed contact index)
+  contactCursor: {
+    type: Number,
+    default: 0
   },
 
   // S3 Multipart Upload tracking
