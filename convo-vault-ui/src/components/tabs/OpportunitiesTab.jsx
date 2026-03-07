@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
 import { Button, Select, DatePicker, Input, message as antMessage } from 'antd';
@@ -6,19 +6,17 @@ import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 import dayjs from 'dayjs';
 
+const STATUS_COLORS = {
+  open:      { bg: 'bg-blue-100',  text: 'text-blue-700'  },
+  won:       { bg: 'bg-green-100', text: 'text-green-700' },
+  lost:      { bg: 'bg-red-100',   text: 'text-red-700'   },
+  abandoned: { bg: 'bg-gray-100',  text: 'text-gray-600'  },
+};
+
 export default function OpportunitiesTab() {
   const { location } = useAuth();
-  const [filters, setFilters] = useState({
-    pipelineId: '',
-    pipelineStageId: '',
-    status: '',
-    query: '',
-    startDate: '',
-    endDate: ''
-  });
-  const [pipelines, setPipelines] = useState([]);
-  const [stages, setStages] = useState([]);
-  const [loadingPipelines, setLoadingPipelines] = useState(false);
+
+  // Export state
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [estimate, setEstimate] = useState(null);
@@ -26,88 +24,163 @@ export default function OpportunitiesTab() {
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
 
-  // Fetch pipelines on mount
+  // Pipelines
+  const [pipelines, setPipelines] = useState([]);
+  const [stages, setStages] = useState([]);
+  const [loadingPipelines, setLoadingPipelines] = useState(false);
+
+  // Users (for Assigned To filter)
+  const [allUsers, setAllUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  // Filters
+  const [pipelineId, setPipelineId] = useState('');
+  const [pipelineStageId, setPipelineStageId] = useState('');
+  const [status, setStatus] = useState('');
+  const [query, setQuery] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [monetaryValueMin, setMonetaryValueMin] = useState('');
+  const [monetaryValueMax, setMonetaryValueMax] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [sortBy, setSortBy] = useState('');
+
+  // Preview results
+  const [opportunities, setOpportunities] = useState([]);
+  const [opportunitiesTotal, setOpportunitiesTotal] = useState(0);
+  const [opportunitiesLoading, setOpportunitiesLoading] = useState(false);
+  const [opportunitiesError, setOpportunitiesError] = useState(null);
+  const [searched, setSearched] = useState(false);
+  const [currentSearchAfter, setCurrentSearchAfter] = useState(null);
+  const [searchAfterHistory, setSearchAfterHistory] = useState([]);
+  const [nextSearchAfter, setNextSearchAfter] = useState(null);
+  const OPP_LIMIT = 20;
+
+  const getUserName = (u) => `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || u?.name || u?.email || 'Unknown';
+
+  // Lookup maps for pipeline/stage names
+  const pipelineMap = Object.fromEntries(pipelines.map(p => [p.id, p.name]));
+  const stageMap = Object.fromEntries(pipelines.flatMap(p => (p.stages || []).map(s => [s.id, s.name])));
+
+  // Load pipelines + users on mount, initial search
   useEffect(() => {
     if (!location?.id) return;
-    const fetchPipelines = async () => {
-      setLoadingPipelines(true);
-      try {
-        const response = await billingAPI.getPipelines(location.id);
-        if (response.success) {
-          setPipelines(response.data.pipelines || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch pipelines:', err);
-      } finally {
-        setLoadingPipelines(false);
-      }
-    };
-    fetchPipelines();
+
+    setLoadingPipelines(true);
+    billingAPI.getPipelines(location.id)
+      .then(res => { if (res.success) setPipelines(res.data.pipelines || []); })
+      .catch(console.error)
+      .finally(() => setLoadingPipelines(false));
+
+    setUsersLoading(true);
+    billingAPI.searchUsers(location.id, '')
+      .then(res => { if (res.success) setAllUsers(res.data.users || []); })
+      .catch(console.error)
+      .finally(() => setUsersLoading(false));
+
+    handleSearch(null, []);
   }, [location?.id]);
 
   // Update stages when pipeline changes
   useEffect(() => {
-    if (filters.pipelineId) {
-      const pipeline = pipelines.find(p => p.id === filters.pipelineId);
+    if (pipelineId) {
+      const pipeline = pipelines.find(p => p.id === pipelineId);
       setStages(pipeline?.stages || []);
     } else {
       setStages([]);
     }
-    setFilters(prev => ({ ...prev, pipelineStageId: '' }));
-  }, [filters.pipelineId, pipelines]);
+    setPipelineStageId('');
+  }, [pipelineId, pipelines]);
 
-  // Poll active job status
+  // Poll active job
   useEffect(() => {
     if (!activeJob || !['pending', 'processing'].includes(activeJob.status)) return;
-
-    const pollInterval = setInterval(async () => {
+    const interval = setInterval(async () => {
       try {
-        const response = await billingAPI.getExportStatus(activeJob.jobId, location?.id);
-        if (response.success) {
-          setActiveJob(response.data);
-          if (response.data.status === 'completed') {
-            antMessage.success('Export completed! Click Download to get your file.');
-          }
+        const res = await billingAPI.getExportStatus(activeJob.jobId, location?.id);
+        if (res.success) {
+          setActiveJob(res.data);
+          if (res.data.status === 'completed') antMessage.success('Export completed! Click Download to get your file.');
         }
-      } catch (err) {
-        console.error('Failed to poll job status:', err);
-      }
+      } catch { /* silent */ }
     }, 5000);
-
-    return () => clearInterval(pollInterval);
+    return () => clearInterval(interval);
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
-  // Build export filters
-  const buildExportFilters = () => {
-    const exportFilters = {};
-    if (filters.pipelineId) exportFilters.pipelineId = filters.pipelineId;
-    if (filters.pipelineStageId) exportFilters.pipelineStageId = filters.pipelineStageId;
-    if (filters.status) exportFilters.status = filters.status;
-    if (filters.query) exportFilters.query = filters.query;
-    if (filters.startDate) {
-      exportFilters.startDate = dayjs(filters.startDate).startOf('day').valueOf();
+  const getFilters = () => {
+    const f = {};
+    if (pipelineId) f.pipelineId = pipelineId;
+    if (pipelineStageId) f.pipelineStageId = pipelineStageId;
+    if (status) f.status = status;
+    if (query) f.query = query;
+    if (assignedTo) f.assignedTo = assignedTo;
+    if (contactName) f.contactName = contactName;
+    if (monetaryValueMin !== '') f.monetaryValueMin = parseFloat(monetaryValueMin);
+    if (monetaryValueMax !== '') f.monetaryValueMax = parseFloat(monetaryValueMax);
+    if (startDate) f.startDate = dayjs(startDate).startOf('day').valueOf();
+    if (endDate) f.endDate = dayjs(endDate).endOf('day').valueOf();
+    if (sortBy) {
+      const lastUnderscore = sortBy.lastIndexOf('_');
+      f.sortField = sortBy.substring(0, lastUnderscore);
+      f.sortDirection = sortBy.substring(lastUnderscore + 1);
     }
-    if (filters.endDate) {
-      exportFilters.endDate = dayjs(filters.endDate).endOf('day').valueOf();
-    }
-    return exportFilters;
+    return f;
   };
 
-  // Handle get estimate
+  const handleSearch = async (searchAfter = null, history = null) => {
+    setOpportunitiesLoading(true);
+    setOpportunitiesError(null);
+    setSearched(true);
+    try {
+      const res = await billingAPI.searchOpportunities(location.id, getFilters(), searchAfter, OPP_LIMIT);
+      if (res.success) {
+        setOpportunities(res.data.opportunities || []);
+        setOpportunitiesTotal(res.data.total || 0);
+        setCurrentSearchAfter(searchAfter);
+        setNextSearchAfter(res.data.nextSearchAfter || null);
+        if (history !== null) setSearchAfterHistory(history);
+      } else {
+        setOpportunitiesError(res.error || 'Failed to search opportunities');
+        setOpportunities([]);
+        setOpportunitiesTotal(0);
+      }
+    } catch (err) {
+      setOpportunitiesError(err.message || 'Failed to search opportunities');
+      setOpportunities([]);
+      setOpportunitiesTotal(0);
+    } finally {
+      setOpportunitiesLoading(false);
+    }
+  };
+
+  const handleNewSearch = () => {
+    setSearchAfterHistory([]);
+    setCurrentSearchAfter(null);
+    setNextSearchAfter(null);
+    handleSearch(null, []);
+  };
+
+  const handleNext = () => {
+    const newHistory = [...searchAfterHistory, currentSearchAfter];
+    handleSearch(nextSearchAfter, newHistory);
+  };
+
+  const handlePrev = () => {
+    const newHistory = [...searchAfterHistory];
+    const prevCursor = newHistory.pop();
+    handleSearch(prevCursor, newHistory);
+  };
+
   const handleGetEstimate = async () => {
     setExportModalVisible(true);
     setEstimating(true);
     setEstimate(null);
     setEstimateError(null);
-
     try {
-      const exportFilters = buildExportFilters();
-      const response = await billingAPI.getEstimate(location.id, 'opportunities', exportFilters);
-      if (response.success) {
-        setEstimate(response.data.estimate);
-      } else {
-        setEstimateError(response.error || 'Failed to calculate estimate');
-      }
+      const res = await billingAPI.getEstimate(location.id, 'opportunities', getFilters());
+      if (res.success) setEstimate(res.data.estimate);
+      else setEstimateError(res.error || 'Failed to calculate estimate');
     } catch (err) {
       setEstimateError(err.message || 'Failed to calculate estimate');
     } finally {
@@ -115,33 +188,18 @@ export default function OpportunitiesTab() {
     }
   };
 
-  // Handle pay and export
   const handlePayAndExport = async (notificationEmail, format = 'csv') => {
     setProcessing(true);
     setEstimateError(null);
-
     try {
-      const exportFilters = buildExportFilters();
-      const response = await billingAPI.chargeAndExport(
-        location.id,
-        'opportunities',
-        format,
-        exportFilters,
-        notificationEmail
-      );
-
-      if (response.success) {
-        setActiveJob({
-          jobId: response.data.jobId,
-          status: response.data.status,
-          totalItems: response.data.totalItems,
-          progress: { total: response.data.totalItems, processed: 0, percent: 0 }
-        });
+      const res = await billingAPI.chargeAndExport(location.id, 'opportunities', format, getFilters(), notificationEmail);
+      if (res.success) {
+        setActiveJob({ jobId: res.data.jobId, status: res.data.status, totalItems: res.data.totalItems, progress: { total: res.data.totalItems, processed: 0, percent: 0 } });
         setExportModalVisible(false);
         setEstimate(null);
-        antMessage.success('Export started! We\'ll process it in the background.');
+        antMessage.success("Export started! We'll notify you by email when it's ready.");
       } else {
-        setEstimateError(response.error || 'Export failed');
+        setEstimateError(res.error || 'Export failed');
       }
     } catch (err) {
       setEstimateError(err.message || 'Export failed');
@@ -151,16 +209,24 @@ export default function OpportunitiesTab() {
   };
 
   const handleModalClose = () => {
-    if (!processing) {
-      setExportModalVisible(false);
-      setEstimate(null);
-      setEstimateError(null);
-    }
+    if (!processing) { setExportModalVisible(false); setEstimate(null); setEstimateError(null); }
   };
+
+  const formatCurrency = (val) =>
+    val != null ? `$${Number(val).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}` : null;
+
+  const formatDate = (val) => {
+    if (!val) return null;
+    try { return new Date(val).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
+    catch { return null; }
+  };
+
+  const isExporting = activeJob && ['pending', 'processing'].includes(activeJob.status);
+  const hasPrev = searchAfterHistory.length > 0;
+  const hasNext = !!nextSearchAfter && opportunities.length >= OPP_LIMIT;
 
   return (
     <div className="space-y-6">
-      {/* Export Estimate Modal */}
       <ExportEstimateModal
         visible={exportModalVisible}
         onCancel={handleModalClose}
@@ -176,123 +242,29 @@ export default function OpportunitiesTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Opportunities</h2>
-          <p className="text-sm text-gray-500 mt-1">Export opportunities from this sub-account</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {searched && opportunitiesTotal > 0
+              ? `${opportunitiesTotal.toLocaleString()} opportunit${opportunitiesTotal !== 1 ? 'ies' : 'y'} found`
+              : 'Search and export opportunities from this sub-account'}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleGetEstimate}
-            disabled={activeJob && ['pending', 'processing'].includes(activeJob.status)}
-            size="large"
-            type="primary"
-            className="bg-green-600 hover:bg-green-700 border-green-600"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            }
-          >
-            Export Opportunities
-          </Button>
-        </div>
+        <Button
+          onClick={handleGetEstimate}
+          disabled={isExporting}
+          size="large"
+          type="primary"
+          className="bg-green-600 hover:bg-green-700 border-green-600"
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          }
+        >
+          Export Opportunities
+        </Button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Pipeline */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Pipeline</label>
-            <Select
-              value={filters.pipelineId || undefined}
-              onChange={(value) => setFilters(prev => ({ ...prev, pipelineId: value || '' }))}
-              placeholder="All Pipelines"
-              allowClear
-              loading={loadingPipelines}
-              className="w-full"
-              size="middle"
-            >
-              {pipelines.map(p => (
-                <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
-              ))}
-            </Select>
-          </div>
-
-          {/* Stage */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Stage</label>
-            <Select
-              value={filters.pipelineStageId || undefined}
-              onChange={(value) => setFilters(prev => ({ ...prev, pipelineStageId: value || '' }))}
-              placeholder="All Stages"
-              allowClear
-              disabled={!filters.pipelineId}
-              className="w-full"
-              size="middle"
-            >
-              {stages.map(s => (
-                <Select.Option key={s.id} value={s.id}>{s.name}</Select.Option>
-              ))}
-            </Select>
-          </div>
-
-          {/* Status */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-            <Select
-              value={filters.status || undefined}
-              onChange={(value) => setFilters(prev => ({ ...prev, status: value || '' }))}
-              placeholder="All Statuses"
-              allowClear
-              className="w-full"
-              size="middle"
-            >
-              <Select.Option value="open">Open</Select.Option>
-              <Select.Option value="won">Won</Select.Option>
-              <Select.Option value="lost">Lost</Select.Option>
-              <Select.Option value="abandoned">Abandoned</Select.Option>
-            </Select>
-          </div>
-
-          {/* Start Date */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-            <DatePicker
-              value={filters.startDate ? dayjs(filters.startDate) : null}
-              onChange={(date) => setFilters(prev => ({ ...prev, startDate: date ? date.format('YYYY-MM-DD') : '' }))}
-              className="w-full"
-              size="middle"
-              placeholder="From date"
-            />
-          </div>
-
-          {/* End Date */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-            <DatePicker
-              value={filters.endDate ? dayjs(filters.endDate) : null}
-              onChange={(date) => setFilters(prev => ({ ...prev, endDate: date ? date.format('YYYY-MM-DD') : '' }))}
-              className="w-full"
-              size="middle"
-              placeholder="To date"
-            />
-          </div>
-
-          {/* Search Query */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Search</label>
-            <Input
-              value={filters.query}
-              onChange={(e) => setFilters(prev => ({ ...prev, query: e.target.value }))}
-              placeholder="Search opportunities..."
-              size="middle"
-              allowClear
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Active Export Job Progress */}
+      {/* Active Export Progress */}
       {activeJob && (
         <ExportProgress
           job={activeJob}
@@ -304,45 +276,332 @@ export default function OpportunitiesTab() {
         />
       )}
 
-      {/* Info Card */}
-      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-2xl">💰</span>
-          </div>
+      {/* Filters */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          Filter Opportunities
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Pipeline */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">How Opportunities Export Works</h3>
-            <ul className="space-y-2 text-sm text-gray-700">
-              <li className="flex items-start gap-2">
-                <span className="text-purple-500 mt-0.5">1.</span>
-                <span>We search all opportunities in your sub-account matching your filters</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-purple-500 mt-0.5">2.</span>
-                <span>Each opportunity is exported with pipeline, stage, monetary value, contact details, and status</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-purple-500 mt-0.5">3.</span>
-                <span>Data is exported into a CSV or JSON file</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-purple-500 mt-0.5">4.</span>
-                <span>You receive an email with a download link when ready</span>
-              </li>
-            </ul>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Pipeline</label>
+            <Select
+              value={pipelineId || undefined}
+              onChange={(val) => setPipelineId(val || '')}
+              placeholder="All Pipelines"
+              loading={loadingPipelines}
+              allowClear
+              style={{ width: '100%' }}
+              size="large"
+            >
+              {pipelines.map(p => (
+                <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
+              ))}
+            </Select>
+          </div>
+
+          {/* Stage */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Stage</label>
+            <Select
+              value={pipelineStageId || undefined}
+              onChange={(val) => setPipelineStageId(val || '')}
+              placeholder="All Stages"
+              allowClear
+              disabled={!pipelineId}
+              style={{ width: '100%' }}
+              size="large"
+            >
+              {stages.map(s => (
+                <Select.Option key={s.id} value={s.id}>{s.name}</Select.Option>
+              ))}
+            </Select>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+            <Select
+              value={status || undefined}
+              onChange={(val) => setStatus(val || '')}
+              placeholder="All Statuses"
+              allowClear
+              style={{ width: '100%' }}
+              size="large"
+            >
+              <Select.Option value="open">Open</Select.Option>
+              <Select.Option value="won">Won</Select.Option>
+              <Select.Option value="lost">Lost</Select.Option>
+              <Select.Option value="abandoned">Abandoned</Select.Option>
+            </Select>
+          </div>
+
+          {/* Search Query */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Search</label>
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search opportunities..."
+              size="large"
+              onPressEnter={handleNewSearch}
+            />
+          </div>
+
+          {/* Assigned To */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Assigned To</label>
+            <Select
+              showSearch
+              value={assignedTo || undefined}
+              onChange={(val) => setAssignedTo(val || '')}
+              placeholder="All Users"
+              allowClear
+              loading={usersLoading}
+              filterOption={(input, option) =>
+                (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              style={{ width: '100%' }}
+              size="large"
+            >
+              {allUsers.map(u => (
+                <Select.Option key={u.id} value={u.id}>{getUserName(u)}</Select.Option>
+              ))}
+            </Select>
+          </div>
+
+          {/* Contact Name */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Contact Name</label>
+            <Input
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="Filter by contact..."
+              size="large"
+              onPressEnter={handleNewSearch}
+            />
+          </div>
+
+          {/* Monetary Value Min */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Value Min ($)</label>
+            <Input
+              value={monetaryValueMin}
+              onChange={(e) => setMonetaryValueMin(e.target.value)}
+              placeholder="Min value"
+              size="large"
+              type="number"
+              min="0"
+              onPressEnter={handleNewSearch}
+            />
+          </div>
+
+          {/* Monetary Value Max */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Value Max ($)</label>
+            <Input
+              value={monetaryValueMax}
+              onChange={(e) => setMonetaryValueMax(e.target.value)}
+              placeholder="Max value"
+              size="large"
+              type="number"
+              min="0"
+              onPressEnter={handleNewSearch}
+            />
+          </div>
+
+          {/* Date Added From */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Date Added From</label>
+            <DatePicker
+              value={startDate ? dayjs(startDate) : null}
+              onChange={(date) => setStartDate(date ? date.format('YYYY-MM-DD') : '')}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="From"
+            />
+          </div>
+
+          {/* Date Added To */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Date Added To</label>
+            <DatePicker
+              value={endDate ? dayjs(endDate) : null}
+              onChange={(date) => setEndDate(date ? date.format('YYYY-MM-DD') : '')}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="To"
+            />
+          </div>
+
+          {/* Sort By */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
+            <Select
+              value={sortBy || undefined}
+              onChange={(val) => setSortBy(val || '')}
+              placeholder="Default"
+              allowClear
+              style={{ width: '100%' }}
+              size="large"
+            >
+              <Select.Option value="date_added_desc">Date Added (Newest)</Select.Option>
+              <Select.Option value="date_added_asc">Date Added (Oldest)</Select.Option>
+              <Select.Option value="date_updated_desc">Date Updated (Newest)</Select.Option>
+              <Select.Option value="date_updated_asc">Date Updated (Oldest)</Select.Option>
+              <Select.Option value="monetary_value_desc">Value (Highest)</Select.Option>
+              <Select.Option value="monetary_value_asc">Value (Lowest)</Select.Option>
+              <Select.Option value="name_asc">Name (A–Z)</Select.Option>
+              <Select.Option value="name_desc">Name (Z–A)</Select.Option>
+              <Select.Option value="last_status_change_date_desc">Status Changed (Newest)</Select.Option>
+              <Select.Option value="last_stage_change_date_desc">Stage Changed (Newest)</Select.Option>
+            </Select>
+          </div>
+
+          {/* Search Button */}
+          <div className="flex items-end">
+            <Button
+              onClick={handleNewSearch}
+              loading={opportunitiesLoading}
+              size="large"
+              type="primary"
+              className="px-8"
+              icon={!opportunitiesLoading && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              )}
+            >
+              Search
+            </Button>
           </div>
         </div>
-
       </div>
 
-      {/* CSV Columns Info */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
+      {/* Loading */}
+      {opportunitiesLoading && (
+        <div className="text-center py-14">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">Searching opportunities...</p>
+        </div>
+      )}
+
+      {/* Error */}
+      {opportunitiesError && !opportunitiesLoading && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p className="font-medium text-red-800 text-sm">Error loading opportunities</p>
+            <p className="text-red-600 text-xs mt-1">{opportunitiesError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* No results */}
+      {searched && !opportunitiesLoading && !opportunitiesError && opportunities.length === 0 && (
+        <div className="text-center py-16 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl border-2 border-dashed border-yellow-300">
+          <div className="text-4xl mb-3">🔍</div>
+          <h3 className="text-base font-semibold text-gray-900 mb-1">No Opportunities Found</h3>
+          <p className="text-gray-500 text-sm">Try adjusting your filters and search again</p>
+        </div>
+      )}
+
+      {/* Results */}
+      {!opportunitiesLoading && !opportunitiesError && opportunities.length > 0 && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500">
+              Showing {opportunities.length} of {opportunitiesTotal.toLocaleString()} opportunities
+            </span>
+            <div className="flex gap-2">
+              <Button size="small" disabled={!hasPrev} onClick={handlePrev}>Previous</Button>
+              <Button size="small" disabled={!hasNext} type="primary" onClick={handleNext}>Next</Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {opportunities.map((opp) => {
+              const statusColor = STATUS_COLORS[opp.status] || STATUS_COLORS.open;
+              const pipelineName = pipelineMap[opp.pipelineId] || null;
+              const stageName = stageMap[opp.pipelineStageId] || null;
+              const assignedUser = allUsers.find(u => u.id === opp.assignedTo);
+              const contact = opp.contact || {};
+              const contactDisplay = contact.name || contact.email || contact.phone || null;
+              const contactSub = contact.name && (contact.email || contact.phone) ? (contact.email || contact.phone) : null;
+
+              return (
+                <div key={opp.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-sm transition-all">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                        <p className="font-semibold text-sm text-gray-900 truncate">{opp.name || '(No name)'}</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusColor.bg} ${statusColor.text}`}>
+                          {opp.status || 'open'}
+                        </span>
+                        {opp.monetaryValue != null && (
+                          <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                            {formatCurrency(opp.monetaryValue)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                        {contactDisplay && (
+                          <span className="flex items-center gap-1">
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <span>{contactDisplay}</span>
+                            {contactSub && <span className="text-gray-400">{contactSub}</span>}
+                          </span>
+                        )}
+                        {pipelineName && (
+                          <span className="flex items-center gap-1">
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" />
+                            </svg>
+                            <span>{pipelineName}{stageName ? ` · ${stageName}` : ''}</span>
+                          </span>
+                        )}
+                        {(assignedUser || opp.assignedTo) && (
+                          <span className="flex items-center gap-1">
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span>{assignedUser ? getUserName(assignedUser) : opp.assignedTo}</span>
+                          </span>
+                        )}
+                        {opp.createdAt && <span>Added {formatDate(opp.createdAt)}</span>}
+                        {opp.source && <span className="text-gray-400">via {opp.source}</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {(hasPrev || hasNext) && (
+            <div className="flex justify-center gap-2 pt-2">
+              <Button disabled={!hasPrev} onClick={handlePrev}>Previous</Button>
+              <Button disabled={!hasNext} type="primary" onClick={handleNext}>Next</Button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Export Columns */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
-          {['OpportunityID', 'Name', 'MonetaryValue', 'PipelineId', 'PipelineStageId', 'Status', 'Source', 'ContactId', 'ContactName', 'ContactEmail', 'ContactPhone', 'AssignedTo', 'LostReasonId', 'CreatedAt', 'UpdatedAt', 'LastStatusChangeAt', 'LastStageChangeAt'].map((col) => (
-            <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
-              {col}
-            </span>
+          {['OpportunityID', 'Name', 'MonetaryValue', 'PipelineId', 'PipelineName', 'PipelineStageId', 'StageName', 'Status', 'Source', 'ContactId', 'ContactName', 'ContactEmail', 'ContactPhone', 'CompanyName', 'AssignedTo', 'LostReasonId', 'Followers', 'LastActionDate', 'CreatedAt', 'UpdatedAt', 'LastStatusChangeAt', 'LastStageChangeAt'].map((col) => (
+            <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">{col}</span>
           ))}
         </div>
       </div>

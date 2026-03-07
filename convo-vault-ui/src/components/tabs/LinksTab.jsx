@@ -133,22 +133,6 @@ export default function LinksTab() {
           >
             Export Links
           </Button>
-          <Tooltip
-            title={
-              <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                <strong>Pay-per-use export</strong>
-                <br />
-                $0.002 per link. Volume discounts apply.
-              </div>
-            }
-            placement="left"
-          >
-            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center cursor-help">
-              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </Tooltip>
         </div>
       </div>
 
@@ -163,56 +147,6 @@ export default function LinksTab() {
           }}
         />
       )}
-
-      {/* Info Card */}
-      <div className="bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-200 rounded-xl p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-2xl">🔗</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">How Links Export Works</h3>
-            <ul className="space-y-2 text-sm text-gray-700">
-              <li className="flex items-start gap-2">
-                <span className="text-blue-500 mt-0.5">1.</span>
-                <span>We fetch all trigger links in your sub-account</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-500 mt-0.5">2.</span>
-                <span>Each link is exported with its name, redirect URL, and field key</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-500 mt-0.5">3.</span>
-                <span>Data is exported into a CSV or JSON file</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-500 mt-0.5">4.</span>
-                <span>You receive an email with a download link when ready</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="mt-4 bg-white/60 rounded-lg p-4 border border-blue-100">
-          <h4 className="text-sm font-semibold text-gray-800 mb-2">Pricing</h4>
-          <div className="flex items-center gap-6 text-sm text-gray-700">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span><strong>$0.002</strong> per link (0.2 cents)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-              <span>Volume discounts apply</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <p className="text-xs text-blue-800">
-            <strong>Volume Discounts:</strong> 1,000-2,000: 20% off | 2,000-5,000: 40% off | 5,000-30,000: 50% off | 30,000+: 70% off
-          </p>
-        </div>
-      </div>
 
       {/* CSV Columns Info */}
       <div className="bg-white border border-gray-200 rounded-xl p-6">

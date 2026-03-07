@@ -91,6 +91,19 @@ export const billingAPI = {
   },
 
   /**
+   * Search opportunities for a location (preview) — cursor-based pagination via searchAfter
+   */
+  searchOpportunities: async (locationId, filters = {}, searchAfter = null, limit = 20) => {
+    const response = await apiClient.post('/billing/opportunities/search', {
+      locationId,
+      filters,
+      searchAfter,
+      limit
+    });
+    return response;
+  },
+
+  /**
    * Search tasks for a location (preview) — cursor-based pagination via searchAfter
    */
   searchTasks: async (locationId, filters = {}, searchAfter = null, limit = 25) => {

@@ -1031,37 +1031,62 @@ class GHLService {
 
   /**
    * Search opportunities for a location
-   * GET /opportunities/search
+   * POST /opportunities/search — supports filters array, sort, searchAfter cursor pagination
    */
   async searchOpportunities(locationId, options = {}) {
     try {
-      const params = {
-        location_id: locationId,
-        limit: options.limit || 100,
-        page: options.page || 1
+      const body = {
+        locationId,
+        limit: options.limit || 20
       };
 
-      if (options.pipelineId) params.pipeline_id = options.pipelineId;
-      if (options.pipelineStageId) params.pipeline_stage_id = options.pipelineStageId;
-      if (options.status) params.status = options.status;
-      if (options.query) params.q = options.query;
-      if (options.startDate) params.date = options.startDate;
-      if (options.endDate) params.endDate = options.endDate;
-      if (options.order) params.order = options.order;
-      if (options.contactId) params.contact_id = options.contactId;
+      // Pagination: cursor-based (searchAfter) or page-based
+      if (options.searchAfter && options.searchAfter.length > 0) {
+        body.searchAfter = options.searchAfter;
+      } else if (options.page) {
+        body.page = options.page;
+      }
 
-      const response = await this.apiRequest(
-        'GET',
-        '/opportunities/search',
-        locationId,
-        null,
-        params
-      );
+      if (options.query) body.query = options.query;
+
+      // Build filters array from named options
+      const filters = [];
+      if (options.pipelineId) filters.push({ field: 'pipeline_id', operator: 'eq', value: options.pipelineId });
+      if (options.pipelineStageId) filters.push({ field: 'pipeline_stage_id', operator: 'eq', value: options.pipelineStageId });
+      if (options.status) filters.push({ field: 'status', operator: 'eq', value: options.status });
+      if (options.assignedTo) filters.push({ field: 'assigned_to', operator: 'eq', value: options.assignedTo });
+      if (options.contactId) filters.push({ field: 'contact_id', operator: 'eq', value: options.contactId });
+      if (options.contactName) filters.push({ field: 'contact_name', operator: 'contains', value: options.contactName });
+
+      // Monetary value range
+      if (options.monetaryValueMin !== undefined || options.monetaryValueMax !== undefined) {
+        const range = {};
+        if (options.monetaryValueMin !== undefined && options.monetaryValueMin !== '') range.gte = Number(options.monetaryValueMin);
+        if (options.monetaryValueMax !== undefined && options.monetaryValueMax !== '') range.lte = Number(options.monetaryValueMax);
+        if (Object.keys(range).length > 0) filters.push({ field: 'monetary_value', operator: 'range', value: range });
+      }
+
+      // Date added range — accepts ms timestamp or ISO string
+      if (options.startDate || options.endDate) {
+        const range = {};
+        if (options.startDate) range.gte = new Date(options.startDate).getTime();
+        if (options.endDate) range.lte = new Date(options.endDate).getTime();
+        filters.push({ field: 'date_added', operator: 'range', value: range });
+      }
+
+      if (filters.length > 0) body.filters = filters;
+
+      // Sort
+      if (options.sortField) {
+        body.sort = [{ field: options.sortField, direction: options.sortDirection || 'desc' }];
+      }
+
+      const response = await this.apiRequest('POST', '/opportunities/search', locationId, body);
 
       return {
         opportunities: response.opportunities || [],
-        meta: response.meta || {},
-        total: response.meta?.total || response.total || 0
+        total: response.total || 0,
+        searchAfter: response.searchAfter || null
       };
     } catch (error) {
       logger.error('Search opportunities failed:', error.message);

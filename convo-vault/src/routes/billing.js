@@ -593,6 +593,12 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       // Opportunity-specific filters
       pipelineId: filters?.pipelineId || null,
       pipelineStageId: filters?.pipelineStageId || null,
+      assignedTo: filters?.assignedTo || null,
+      monetaryValueMin: filters?.monetaryValueMin ?? null,
+      monetaryValueMax: filters?.monetaryValueMax ?? null,
+      sortField: filters?.sortField || null,
+      sortDirection: filters?.sortDirection || null,
+      contactName: filters?.contactName || null,
       // Form submission-specific filters
       formId: filters?.formId || null,
       // Call log-specific filters
@@ -957,6 +963,38 @@ router.get('/contacts/:contactId/tasks', authenticateSession, async (req, res) =
   } catch (error) {
     logError('Get contact tasks error', error, { contactId: req.params?.contactId });
     res.status(500).json({ success: false, error: 'Failed to fetch tasks' });
+  }
+});
+
+/**
+ * @route POST /api/billing/opportunities/search
+ * @desc Search opportunities for a location (for preview in UI)
+ */
+router.post('/opportunities/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, searchAfter = null, limit = 20 } = req.body;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    const result = await ghlService.searchOpportunities(locationId, {
+      ...filters,
+      searchAfter: searchAfter || [],
+      limit
+    });
+
+    res.json({
+      success: true,
+      data: {
+        opportunities: result.opportunities || [],
+        total: result.total || 0,
+        nextSearchAfter: result.searchAfter || null
+      }
+    });
+  } catch (error) {
+    logError('Search opportunities error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search opportunities' });
   }
 });
 
