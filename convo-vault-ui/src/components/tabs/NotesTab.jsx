@@ -32,12 +32,24 @@ export default function NotesTab() {
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [notesForContact, setNotesForContact] = useState(null); // which contact's notes are showing
 
+  const getContactName = (c) => c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
+
   // Load 100 contacts on mount
   useEffect(() => {
     if (!location?.id) return;
     setContactsLoading(true);
     contactsAPI.search(location.id, '', 100)
-      .then(res => { if (res.success) setAllContacts(res.data.contacts || []); })
+      .then(res => {
+        if (res.success) {
+          const list = res.data.contacts || [];
+          setAllContacts(list);
+          // Auto-select first contact as a chip
+          if (list.length > 0) {
+            const first = list[0];
+            setSelectedContacts([{ id: first.id, name: getContactName(first), email: first.email || '' }]);
+          }
+        }
+      })
       .catch(console.error)
       .finally(() => setContactsLoading(false));
   }, [location?.id]);
@@ -177,8 +189,6 @@ export default function NotesTab() {
   const handleModalClose = () => {
     if (!processing) { setExportModalVisible(false); setEstimate(null); setEstimateError(null); }
   };
-
-  const getContactName = (c) => c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
 
   const formatDate = (val) => {
     if (!val) return '—';
@@ -400,34 +410,7 @@ export default function NotesTab() {
             </div>
           )}
         </div>
-      ) : (
-        /* Initial state */
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex-shrink-0 text-2xl">📝</div>
-            <div className="flex-1 text-sm text-gray-600">
-              Search and select contacts above to preview their notes.
-              Click <strong>View notes</strong> on a selected contact chip to preview.
-              Or click <strong>Export All Notes</strong> to export all contacts at once.
-            </div>
-          </div>
-          <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-4 text-sm text-gray-600">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span><strong>$0.002</strong> per note</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-              <span>No volume discounts</span>
-            </div>
-            <div className="ml-auto flex flex-wrap gap-1">
-              {['NoteID', 'ContactID', 'ContactName', 'Body', 'DateAdded', 'CreatedBy'].map(col => (
-                <span key={col} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-mono rounded">{col}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }
