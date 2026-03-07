@@ -17,24 +17,24 @@ export default function NotesTab() {
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
 
-  // Contacts dropdown pool
+  // Contacts pool for dropdown
   const [allContacts, setAllContacts] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
-  const [dropdownValue, setDropdownValue] = useState(null); // controlled select value
+  const [dropdownValue, setDropdownValue] = useState(null);
   const searchTimeout = useRef(null);
 
-  // Selected contacts list (chips)
-  const [selectedContacts, setSelectedContacts] = useState([]); // [{ id, name, email }]
+  // Selected contacts chips
+  const [selectedContacts, setSelectedContacts] = useState([]);
 
-  // Notes results
+  // Notes results — flat list with contactName attached
   const [notes, setNotes] = useState([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [notesLoaded, setNotesLoaded] = useState(false);
-  const [notesForContact, setNotesForContact] = useState(null); // which contact's notes are showing
 
-  const getContactName = (c) => c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
+  const getContactName = (c) =>
+    c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
 
-  // Load 100 contacts on mount
+  // Load 100 contacts on mount, auto-select first
   useEffect(() => {
     if (!location?.id) return;
     setContactsLoading(true);
@@ -43,7 +43,6 @@ export default function NotesTab() {
         if (res.success) {
           const list = res.data.contacts || [];
           setAllContacts(list);
-          // Auto-select first contact as a chip
           if (list.length > 0) {
             const first = list[0];
             setSelectedContacts([{ id: first.id, name: getContactName(first), email: first.email || '' }]);
@@ -74,7 +73,6 @@ export default function NotesTab() {
     }, 400);
   };
 
-  // When user picks a contact from the dropdown — add to chips list
   const handleContactSelect = (contactId) => {
     const contact = allContacts.find(c => c.id === contactId);
     if (!contact) return;
@@ -84,39 +82,39 @@ export default function NotesTab() {
         name: getContactName(contact),
         email: contact.email || ''
       }]);
-      setNotes([]);
       setNotesLoaded(false);
     }
-    // Clear the select so the user can pick another
     setDropdownValue(null);
   };
 
   const removeContact = (contactId) => {
     setSelectedContacts(prev => prev.filter(c => c.id !== contactId));
-    setNotes([]);
     setNotesLoaded(false);
-    setNotesForContact(null);
   };
 
   const clearAll = () => {
     setSelectedContacts([]);
     setNotes([]);
     setNotesLoaded(false);
-    setNotesForContact(null);
   };
 
-  // Load notes for a single chip contact (preview)
-  const handleLoadNotes = async (contactId) => {
-    const contact = selectedContacts.find(c => c.id === contactId);
+  // Search = fetch notes for ALL selected contacts in parallel
+  const handleSearch = async () => {
+    if (selectedContacts.length === 0) return;
     setNotesLoading(true);
     setNotesLoaded(false);
-    setNotesForContact(contact);
+    setNotes([]);
+
     try {
-      const res = await contactsAPI.fetchNotes(location.id, contactId);
-      if (res.success) {
-        setNotes(res.data.notes || []);
-        setNotesLoaded(true);
-      }
+      const results = await Promise.all(
+        selectedContacts.map(contact =>
+          contactsAPI.fetchNotes(location.id, contact.id)
+            .then(res => (res.success ? res.data.notes || [] : []).map(n => ({ ...n, _contactName: contact.name, _contactEmail: contact.email, _contactId: contact.id })))
+            .catch(() => [])
+        )
+      );
+      setNotes(results.flat());
+      setNotesLoaded(true);
     } catch (err) {
       antMessage.error('Failed to load notes');
     } finally {
@@ -198,8 +196,6 @@ export default function NotesTab() {
 
   const isExporting = activeJob && ['pending', 'processing'].includes(activeJob.status);
   const hasSelected = selectedContacts.length > 0;
-
-  // Contacts available in dropdown = not yet added to chips
   const availableContacts = allContacts.filter(c => !selectedContacts.find(s => s.id === c.id));
 
   return (
@@ -229,7 +225,7 @@ export default function NotesTab() {
           {notesLoaded && notes.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-center mr-1">
               <div className="text-xl font-bold text-blue-700">{notes.length}</div>
-              <div className="text-xs text-blue-500">Notes</div>
+              <div className="text-xs text-blue-500">Notes Found</div>
             </div>
           )}
           <Button
@@ -244,9 +240,7 @@ export default function NotesTab() {
             }
           >
             {hasSelected
-              ? selectedContacts.length === 1
-                ? 'Export Notes'
-                : `Export ${selectedContacts.length} Contacts`
+              ? selectedContacts.length === 1 ? 'Export Notes' : `Export ${selectedContacts.length} Contacts`
               : 'Export All Notes'}
           </Button>
           <Tooltip
@@ -283,77 +277,75 @@ export default function NotesTab() {
           <span className="text-sm font-semibold text-gray-700">Search & Filters</span>
         </div>
 
-        {/* Contact dropdown */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Contact <span className="text-gray-400">(optional — leave blank to export all)</span>
-          </label>
-          <Select
-            showSearch
-            placeholder="Search and select contacts..."
-            filterOption={false}
-            onSearch={handleContactSearch}
-            onSelect={handleContactSelect}
-            value={dropdownValue}
-            loading={contactsLoading}
-            style={{ width: '100%' }}
-            size="large"
-            notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
-          >
-            {availableContacts.map(c => (
-              <Select.Option key={c.id} value={c.id}>
-                <span className="font-medium">{getContactName(c)}</span>
-                {c.email && <span className="text-gray-400 text-xs ml-2">{c.email}</span>}
-              </Select.Option>
-            ))}
-          </Select>
+        <div className="flex gap-3 items-end">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Contact <span className="text-gray-400">(optional — leave blank to export all)</span>
+            </label>
+            <Select
+              showSearch
+              placeholder="Search and add contacts..."
+              filterOption={false}
+              onSearch={handleContactSearch}
+              onSelect={handleContactSelect}
+              value={dropdownValue}
+              loading={contactsLoading}
+              style={{ width: '100%' }}
+              size="large"
+              notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
+            >
+              {availableContacts.map(c => (
+                <Select.Option key={c.id} value={c.id}>
+                  <span className="font-medium">{getContactName(c)}</span>
+                  {c.email && <span className="text-gray-400 text-xs ml-2">{c.email}</span>}
+                </Select.Option>
+              ))}
+            </Select>
 
-          {/* Selected contacts chips */}
-          {selectedContacts.length > 0 && (
-            <div className="mt-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium text-gray-500">Selected contacts:</span>
-                <button
-                  onClick={clearAll}
-                  className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                >
-                  Clear all
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
+            {/* Selected chips */}
+            {selectedContacts.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2 items-center">
                 {selectedContacts.map(contact => (
-                  <div
-                    key={contact.id}
-                    className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full pl-3 pr-1.5 py-1 group"
-                  >
+                  <div key={contact.id} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full pl-2 pr-1.5 py-1">
                     <div className="w-4 h-4 bg-blue-400 rounded-full flex items-center justify-center flex-shrink-0">
                       <span className="text-white font-bold" style={{ fontSize: '9px' }}>
                         {contact.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <span className="text-xs font-medium text-blue-800">{contact.name}</span>
-                    {contact.email && (
-                      <span className="text-xs text-blue-400 hidden sm:inline">{contact.email}</span>
-                    )}
+                    {contact.email && <span className="text-xs text-blue-400 hidden sm:inline">{contact.email}</span>}
                     <button
                       onClick={() => removeContact(contact.id)}
-                      className="w-4 h-4 rounded-full hover:bg-blue-200 flex items-center justify-center transition-colors ml-0.5"
+                      className="w-4 h-4 rounded-full hover:bg-blue-200 flex items-center justify-center transition-colors"
                     >
                       <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
-                    <button
-                      onClick={() => handleLoadNotes(contact.id)}
-                      className="text-xs text-blue-500 hover:text-blue-700 border border-blue-200 hover:border-blue-400 rounded-full px-2 py-0.5 ml-1 transition-colors"
-                    >
-                      View notes
-                    </button>
                   </div>
                 ))}
+                <button onClick={clearAll} className="text-xs text-red-400 hover:text-red-600 transition-colors ml-1">
+                  Clear all
+                </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          <Button
+            onClick={handleSearch}
+            disabled={selectedContacts.length === 0 || notesLoading}
+            size="large"
+            loading={notesLoading}
+            icon={
+              !notesLoading && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              )
+            }
+          >
+            Search
+          </Button>
         </div>
 
         {!hasSelected && (
@@ -367,50 +359,44 @@ export default function NotesTab() {
       {notesLoading ? (
         <div className="bg-white border border-gray-200 rounded-xl p-12 flex items-center justify-center gap-3">
           <Spin />
-          <span className="text-gray-400 text-sm">Loading notes...</span>
+          <span className="text-gray-400 text-sm">
+            Loading notes for {selectedContacts.length} contact{selectedContacts.length > 1 ? 's' : ''}...
+          </span>
         </div>
-      ) : notesLoaded ? (
-        <div>
-          {/* Notes header */}
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-blue-700 font-bold text-xs">
-                {notesForContact?.name?.charAt(0).toUpperCase()}
-              </span>
-            </div>
-            <span className="text-sm font-semibold text-gray-700">{notesForContact?.name}</span>
-            {notesForContact?.email && <span className="text-xs text-gray-400">{notesForContact.email}</span>}
-            <span className="ml-auto text-xs text-gray-400">{notes.length} note{notes.length !== 1 ? 's' : ''}</span>
+      ) : notesLoaded && (
+        notes.length === 0 ? (
+          <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">
+            <p className="text-sm">No notes found for the selected contact{selectedContacts.length > 1 ? 's' : ''}</p>
           </div>
-
-          {notes.length === 0 ? (
-            <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">
-              <p className="text-sm">No notes for this contact</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {notes.map((note, i) => (
-                <div key={note.id || i} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-200 transition-colors">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </div>
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap flex-1">{note.body || '(empty note)'}</p>
+        ) : (
+          <div className="space-y-3">
+            {notes.map((note, i) => (
+              <div key={note.id || i} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-200 transition-colors">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="w-8 h-8 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
                     </div>
-                    <div className="text-xs text-gray-400 flex-shrink-0 text-right">
-                      <div>{formatDate(note.dateAdded)}</div>
-                      {note.createdBy && <div className="mt-1 text-gray-300">by {note.createdBy}</div>}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-blue-600">{note._contactName}</span>
+                        {note._contactEmail && <span className="text-xs text-gray-400">{note._contactEmail}</span>}
+                      </div>
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{note.body || '(empty note)'}</p>
                     </div>
                   </div>
+                  <div className="text-xs text-gray-400 flex-shrink-0 text-right">
+                    <div>{formatDate(note.dateAdded)}</div>
+                    {note.createdBy && <div className="mt-1 text-gray-300">by {note.createdBy}</div>}
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : null}
+              </div>
+            ))}
+          </div>
+        )
+      )}
     </div>
   );
 }
