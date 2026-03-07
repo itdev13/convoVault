@@ -508,7 +508,10 @@ export default function OpportunitiesTab() {
         <div className="text-center py-16 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl border-2 border-dashed border-yellow-300">
           <div className="text-4xl mb-3">🔍</div>
           <h3 className="text-base font-semibold text-gray-900 mb-1">No Opportunities Found</h3>
-          <p className="text-gray-500 text-sm">Try adjusting your filters and search again</p>
+          <p className="text-gray-500 text-sm mb-4">Try adjusting your filters and search again</p>
+          {hasPrev && (
+            <Button size="small" onClick={handlePrev}>Previous Page</Button>
+          )}
         </div>
       )}
 

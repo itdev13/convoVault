@@ -1183,25 +1183,23 @@ class GHLService {
   }
 
   /**
-   * Get all trigger links for a location
-   * GET /links/
+   * Search trigger links for a location
+   * GET /links/search — supports query, limit, skip
    */
-  async getLinks(locationId) {
+  async getLinks(locationId, options = {}) {
     try {
       const params = {
-        locationId
-      };
-
-      const response = await this.apiRequest(
-        'GET',
-        '/links/',
         locationId,
-        null,
-        params
-      );
+        limit: options.limit || 25,
+        skip: options.skip || 0
+      };
+      if (options.query) params.query = options.query;
+
+      const response = await this.apiRequest('GET', '/links/search', locationId, null, params);
 
       return {
-        links: response.links || []
+        links: response.links || [],
+        total: response.total || response.links?.length || 0
       };
     } catch (error) {
       logger.error('Get links failed:', error.message);

@@ -208,9 +208,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       counts.formSubmissions = result.total || 0;
 
     } else if (exportType === 'links') {
-      // Links: returns all links at once (no pagination)
-      const result = await ghlService.getLinks(locationId);
-      counts.links = result.links?.length || 0;
+      const result = await ghlService.getLinks(locationId, { query: filters?.query, limit: 1000 });
+      counts.links = result.total || result.links?.length || 0;
 
     } else if (exportType === 'socialPosts') {
       // Social Posts: list endpoint returns total
@@ -441,8 +440,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       counts.formSubmissions = totalItems;
 
     } else if (exportType === 'links') {
-      const result = await ghlService.getLinks(locationId);
-      totalItems = result.links?.length || 0;
+      const result = await ghlService.getLinks(locationId, { query: filters?.query, limit: 1000 });
+      totalItems = result.total || result.links?.length || 0;
       counts.links = totalItems;
 
     } else if (exportType === 'socialPosts') {
@@ -963,6 +962,33 @@ router.get('/contacts/:contactId/tasks', authenticateSession, async (req, res) =
   } catch (error) {
     logError('Get contact tasks error', error, { contactId: req.params?.contactId });
     res.status(500).json({ success: false, error: 'Failed to fetch tasks' });
+  }
+});
+
+/**
+ * @route POST /api/billing/links/search
+ * @desc Search trigger links for a location (for preview in UI)
+ */
+router.post('/links/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, query = '', page = 1, limit = 25 } = req.body;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const skip = (page - 1) * limit;
+    const result = await ghlService.getLinks(locationId, { query, limit, skip });
+    res.json({
+      success: true,
+      data: {
+        links: result.links || [],
+        total: result.total || 0,
+        page,
+        limit
+      }
+    });
+  } catch (error) {
+    logError('Search links error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search links' });
   }
 });
 
