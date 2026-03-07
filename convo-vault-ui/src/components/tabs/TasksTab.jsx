@@ -7,6 +7,106 @@ import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 import dayjs from 'dayjs';
 
+function MultiSelectDropdown({ label, items, selectedItems, onSelect, onRemove, onClearAll, loading, searchValue, onSearch, dropdownOpen, onDropdownVisibleChange, keepOpenRef, placeholder, chipColor = 'blue', getItemName, getItemSub }) {
+  const dropdownItems = (() => {
+    if (!searchValue) return items;
+    const q = searchValue.toLowerCase();
+    const matching = items.filter(i => getItemName(i).toLowerCase().includes(q) || (getItemSub?.(i) || '').toLowerCase().includes(q));
+    const selectedNotMatching = items.filter(i => selectedItems.find(s => s.id === i.id) && !matching.find(m => m.id === i.id));
+    return [...matching, ...selectedNotMatching];
+  })();
+
+  const colors = {
+    blue: { chip: 'bg-blue-50 border-blue-200', dot: 'bg-blue-400', text: 'text-blue-800', x: 'text-blue-500 hover:bg-blue-200', clear: 'text-red-400 hover:text-red-600' },
+    green: { chip: 'bg-green-50 border-green-200', dot: 'bg-green-400', text: 'text-green-800', x: 'text-green-500 hover:bg-green-200', clear: 'text-red-400 hover:text-red-600' },
+  };
+  const c = colors[chipColor] || colors.blue;
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <div className="relative">
+        <Select
+          showSearch
+          open={dropdownOpen}
+          onDropdownVisibleChange={(open) => {
+            if (!open && keepOpenRef.current) return;
+            onDropdownVisibleChange(open);
+          }}
+          searchValue={searchValue}
+          placeholder={placeholder}
+          filterOption={false}
+          onSearch={onSearch}
+          onSelect={onSelect}
+          value={null}
+          loading={loading}
+          style={{ width: '100%' }}
+          size="large"
+          notFoundContent={loading ? 'Searching...' : 'No results found'}
+          dropdownRender={(menu) => (
+            <div>
+              {menu}
+              <div className="px-3 py-2 border-t border-gray-100 bg-white flex items-center justify-between">
+                <span className="text-xs text-gray-400">
+                  {selectedItems.length > 0 ? `${selectedItems.length} selected` : 'Click to select'}
+                </span>
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); onDropdownVisibleChange(false); }}
+                  className="text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+        >
+          {dropdownItems.map(item => {
+            const isSelected = !!selectedItems.find(s => s.id === item.id);
+            return (
+              <Select.Option key={item.id} value={item.id}>
+                <div className="flex items-center gap-2">
+                  <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-blue-500' : 'border border-gray-300'}`}>
+                    {isSelected && (
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  <span className={`font-medium ${isSelected ? 'text-blue-700' : ''}`}>{getItemName(item)}</span>
+                  {getItemSub?.(item) && <span className="text-gray-400 text-xs truncate max-w-[120px]">{getItemSub(item)}</span>}
+                </div>
+              </Select.Option>
+            );
+          })}
+        </Select>
+      </div>
+      {selectedItems.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5 items-center">
+          {selectedItems.map(item => (
+            <div key={item.id} className={`flex items-center gap-1 border rounded-full pl-2 pr-1 py-0.5 ${c.chip}`}>
+              <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 ${c.dot}`}>
+                <span className="text-white font-bold" style={{ fontSize: '8px' }}>
+                  {item.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <span className={`text-xs font-medium ${c.text}`}>{item.name}</span>
+              <button
+                onClick={() => onRemove(item.id)}
+                className={`w-3.5 h-3.5 rounded-full flex items-center justify-center transition-colors ${c.x}`}
+              >
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+          <button onClick={onClearAll} className={`text-xs transition-colors ${c.clear}`}>Clear all</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TasksTab() {
   const { location } = useAuth();
 
@@ -18,98 +118,132 @@ export default function TasksTab() {
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
 
-  // Contacts pool for dropdown
+  // Contacts dropdown
   const [allContacts, setAllContacts] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
-  const [dropdownValue, setDropdownValue] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const keepOpenRef = useRef(false);
-  const searchTimeout = useRef(null);
-
-  // Selected contacts chips
+  const [contactSearch, setContactSearch] = useState('');
+  const [contactDropdownOpen, setContactDropdownOpen] = useState(false);
+  const contactKeepOpen = useRef(false);
+  const contactSearchTimeout = useRef(null);
   const [selectedContacts, setSelectedContacts] = useState([]);
+
+  // Users dropdown
+  const [allUsers, setAllUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const userKeepOpen = useRef(false);
+  const userSearchTimeout = useRef(null);
+  const [selectedUsers, setSelectedUsers] = useState([]);
 
   // Task filters
   const [taskName, setTaskName] = useState('');
   const [completed, setCompleted] = useState('');
+  const [overdue, setOverdue] = useState('');
+  const [unAssigned, setUnAssigned] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [sortBy, setSortBy] = useState('');
 
-  // Task search results
+  // Task search results (searchAfter cursor pagination)
   const [tasks, setTasks] = useState([]);
   const [tasksTotal, setTasksTotal] = useState(0);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState(null);
   const [searched, setSearched] = useState(false);
-  const [taskSkip, setTaskSkip] = useState(0);
+  const [currentSearchAfter, setCurrentSearchAfter] = useState(null);  // cursor for current page
+  const [searchAfterHistory, setSearchAfterHistory] = useState([]);    // stack for back nav
+  const [nextSearchAfter, setNextSearchAfter] = useState(null);        // cursor returned by last fetch
   const TASK_LIMIT = 25;
 
-  const getContactName = (c) =>
-    c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
+  const getUserName = (u) => `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || u?.name || u?.email || 'Unknown';
+  const getContactName = (c) => c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
 
-  // Load 100 contacts on mount + initial task search
+  // Load contacts + users on mount, and initial task search
   useEffect(() => {
     if (!location?.id) return;
+
+    // contacts
     setContactsLoading(true);
     contactsAPI.search(location.id, '', 100)
-      .then(res => {
-        if (res.success) setAllContacts(res.data.contacts || []);
-      })
+      .then(res => { if (res.success) setAllContacts(res.data.contacts || []); })
       .catch(console.error)
       .finally(() => setContactsLoading(false));
 
-    handleSearch(0);
+    // users
+    setUsersLoading(true);
+    billingAPI.searchUsers(location.id, '')
+      .then(res => { if (res.success) setAllUsers(res.data.users || []); })
+      .catch(console.error)
+      .finally(() => setUsersLoading(false));
+
+    handleSearch(null, []);
   }, [location?.id]);
 
+  // Contacts search (debounced)
   const handleContactSearch = (query) => {
-    setSearchQuery(query);
-    clearTimeout(searchTimeout.current);
+    setContactSearch(query);
+    clearTimeout(contactSearchTimeout.current);
     if (!query.trim()) return;
-    searchTimeout.current = setTimeout(async () => {
+    contactSearchTimeout.current = setTimeout(async () => {
       setContactsLoading(true);
       try {
         const res = await contactsAPI.search(location.id, query, 20);
         if (res.success) {
-          const apiResults = res.data.contacts || [];
+          const results = res.data.contacts || [];
           setAllContacts(prev => {
             const merged = [...prev];
-            apiResults.forEach(c => { if (!merged.find(m => m.id === c.id)) merged.push(c); });
+            results.forEach(c => { if (!merged.find(m => m.id === c.id)) merged.push(c); });
             return merged;
           });
         }
-      } catch (err) { /* silent */ }
-      finally { setContactsLoading(false); }
+      } catch { /* silent */ } finally { setContactsLoading(false); }
     }, 400);
   };
 
-  const handleContactSelect = (contactId) => {
-    keepOpenRef.current = true;
-    setTimeout(() => { keepOpenRef.current = false; }, 50);
-    const contact = allContacts.find(c => c.id === contactId);
-    if (!contact) return;
-    if (selectedContacts.find(c => c.id === contactId)) {
-      removeContact(contactId);
+  const handleContactSelect = (id) => {
+    contactKeepOpen.current = true;
+    setTimeout(() => { contactKeepOpen.current = false; }, 50);
+    const c = allContacts.find(x => x.id === id);
+    if (!c) return;
+    if (selectedContacts.find(x => x.id === id)) {
+      setSelectedContacts(prev => prev.filter(x => x.id !== id));
     } else {
-      setSelectedContacts(prev => [...prev, {
-        id: contact.id,
-        name: getContactName(contact),
-        email: contact.email || ''
-      }]);
+      setSelectedContacts(prev => [...prev, { id: c.id, name: getContactName(c), email: c.email || '' }]);
     }
-    setDropdownValue(null);
   };
 
-  const clearSearch = () => {
-    setSearchQuery('');
-    clearTimeout(searchTimeout.current);
+  // Users search (debounced)
+  const handleUserSearch = (query) => {
+    setUserSearch(query);
+    clearTimeout(userSearchTimeout.current);
+    userSearchTimeout.current = setTimeout(async () => {
+      setUsersLoading(true);
+      try {
+        const res = await billingAPI.searchUsers(location.id, query);
+        if (res.success) {
+          const results = res.data.users || [];
+          setAllUsers(prev => {
+            const merged = [...prev];
+            results.forEach(u => { if (!merged.find(m => m.id === u.id)) merged.push(u); });
+            return merged;
+          });
+        }
+      } catch { /* silent */ } finally { setUsersLoading(false); }
+    }, 400);
   };
 
-  const removeContact = (contactId) => {
-    setSelectedContacts(prev => prev.filter(c => c.id !== contactId));
+  const handleUserSelect = (id) => {
+    userKeepOpen.current = true;
+    setTimeout(() => { userKeepOpen.current = false; }, 50);
+    const u = allUsers.find(x => x.id === id);
+    if (!u) return;
+    if (selectedUsers.find(x => x.id === id)) {
+      setSelectedUsers(prev => prev.filter(x => x.id !== id));
+    } else {
+      setSelectedUsers(prev => [...prev, { id: u.id, name: getUserName(u), email: u.email || '' }]);
+    }
   };
-
-  const clearAll = () => setSelectedContacts([]);
 
   // Poll active job
   useEffect(() => {
@@ -121,7 +255,7 @@ export default function TasksTab() {
           setActiveJob(res.data);
           if (res.data.status === 'completed') antMessage.success('Export completed! Click Download to get your file.');
         }
-      } catch (err) { /* silent */ }
+      } catch { /* silent */ }
     }, 5000);
     return () => clearInterval(interval);
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
@@ -130,28 +264,39 @@ export default function TasksTab() {
     const contactNames = Object.fromEntries(selectedContacts.map(c => [c.id, c.name]));
     const f = {
       contactIds: selectedContacts.map(c => c.id),
-      contactNames
+      contactNames,
+      assignedTo: selectedUsers.map(u => u.id)
     };
     if (taskName) f.query = taskName;
     if (completed !== '') f.completed = completed === 'true';
+    if (overdue !== '') f.overdue = overdue === 'true';
+    if (unAssigned !== '') f.unAssigned = unAssigned === 'true';
     if (startDate || endDate) {
       f.dueDate = {};
       if (startDate) f.dueDate.gt = dayjs(startDate).startOf('day').toISOString();
       if (endDate) f.dueDate.lte = dayjs(endDate).endOf('day').toISOString();
     }
+    if (sortBy) {
+      const [key, dir] = sortBy.split('_');
+      f.sortKey = key;
+      f.sortDirection = parseInt(dir, 10);
+    }
     return f;
   };
 
-  const handleSearch = async (skip = 0) => {
+  // searchAfter = cursor for this page, history = stack of previous cursors
+  const handleSearch = async (searchAfter = null, history = null) => {
     setTasksLoading(true);
     setTasksError(null);
     setSearched(true);
     try {
-      const res = await billingAPI.searchTasks(location.id, getFilters(), skip, TASK_LIMIT);
+      const res = await billingAPI.searchTasks(location.id, getFilters(), searchAfter, TASK_LIMIT);
       if (res.success) {
         setTasks(res.data.tasks || []);
         setTasksTotal(res.data.total || 0);
-        setTaskSkip(skip);
+        setCurrentSearchAfter(searchAfter);
+        setNextSearchAfter(res.data.nextSearchAfter || null);
+        if (history !== null) setSearchAfterHistory(history);
       } else {
         setTasksError(res.error || 'Failed to search tasks');
         setTasks([]);
@@ -166,6 +311,24 @@ export default function TasksTab() {
     }
   };
 
+  const handleNewSearch = () => {
+    setSearchAfterHistory([]);
+    setCurrentSearchAfter(null);
+    setNextSearchAfter(null);
+    handleSearch(null, []);
+  };
+
+  const handleNext = () => {
+    const newHistory = [...searchAfterHistory, currentSearchAfter];
+    handleSearch(nextSearchAfter, newHistory);
+  };
+
+  const handlePrev = () => {
+    const newHistory = [...searchAfterHistory];
+    const prevCursor = newHistory.pop();
+    handleSearch(prevCursor, newHistory);
+  };
+
   const handleGetEstimate = async () => {
     setExportModalVisible(true);
     setEstimating(true);
@@ -173,11 +336,8 @@ export default function TasksTab() {
     setEstimateError(null);
     try {
       const res = await billingAPI.getEstimate(location.id, 'tasks', getFilters());
-      if (res.success) {
-        setEstimate(res.data.estimate);
-      } else {
-        setEstimateError(res.error || 'Failed to calculate estimate');
-      }
+      if (res.success) setEstimate(res.data.estimate);
+      else setEstimateError(res.error || 'Failed to calculate estimate');
     } catch (err) {
       setEstimateError(err.message || 'Failed to calculate estimate');
     } finally {
@@ -191,12 +351,7 @@ export default function TasksTab() {
     try {
       const res = await billingAPI.chargeAndExport(location.id, 'tasks', format, getFilters(), notificationEmail);
       if (res.success) {
-        setActiveJob({
-          jobId: res.data.jobId,
-          status: res.data.status,
-          totalItems: res.data.totalItems,
-          progress: { total: res.data.totalItems, processed: 0, percent: 0 }
-        });
+        setActiveJob({ jobId: res.data.jobId, status: res.data.status, totalItems: res.data.totalItems, progress: { total: res.data.totalItems, processed: 0, percent: 0 } });
         setExportModalVisible(false);
         setEstimate(null);
         antMessage.success("Export started! We'll notify you by email when it's ready.");
@@ -215,21 +370,8 @@ export default function TasksTab() {
   };
 
   const isExporting = activeJob && ['pending', 'processing'].includes(activeJob.status);
-
-  const dropdownContacts = (() => {
-    if (!searchQuery) return allContacts;
-    const q = searchQuery.toLowerCase();
-    const matching = allContacts.filter(c => {
-      const name = getContactName(c).toLowerCase();
-      const email = (c.email || '').toLowerCase();
-      return name.includes(q) || email.includes(q);
-    });
-    const selectedNotMatching = allContacts.filter(c =>
-      selectedContacts.find(s => s.id === c.id) && !matching.find(m => m.id === c.id)
-    );
-    return [...matching, ...selectedNotMatching];
-  })();
-
+  const hasPrev = searchAfterHistory.length > 0;
+  const hasNext = !!nextSearchAfter && tasks.length >= TASK_LIMIT;
   const contactNamesMap = Object.fromEntries(selectedContacts.map(c => [c.id, c.name]));
 
   const formatDueDate = (dueDate) => {
@@ -240,9 +382,6 @@ export default function TasksTab() {
       return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     } catch { return null; }
   };
-
-  const hasPrev = taskSkip > 0;
-  const hasNext = taskSkip + TASK_LIMIT < tasksTotal;
 
   return (
     <div className="space-y-6">
@@ -305,100 +444,48 @@ export default function TasksTab() {
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Contacts — narrower, 2 of 4 cols */}
+          {/* Contacts */}
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Contacts</label>
-            <div className="relative">
-              <Select
-                showSearch
-                open={dropdownOpen}
-                onDropdownVisibleChange={(open) => {
-                  if (!open && keepOpenRef.current) return;
-                  setDropdownOpen(open);
-                }}
-                searchValue={searchQuery}
-                placeholder="Search contacts..."
-                filterOption={false}
-                onSearch={handleContactSearch}
-                onSelect={handleContactSelect}
-                value={dropdownValue}
-                loading={contactsLoading}
-                style={{ width: '100%' }}
-                size="large"
-                notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
-                dropdownRender={(menu) => (
-                  <div>
-                    {menu}
-                    <div className="px-3 py-2 border-t border-gray-100 bg-white flex items-center justify-between">
-                      <span className="text-xs text-gray-400">
-                        {selectedContacts.length > 0 ? `${selectedContacts.length} selected` : 'Click to select'}
-                      </span>
-                      <button
-                        onMouseDown={(e) => { e.preventDefault(); setDropdownOpen(false); }}
-                        className="text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded transition-colors"
-                      >
-                        Done
-                      </button>
-                    </div>
-                  </div>
-                )}
-              >
-                {dropdownContacts.map(c => {
-                  const isChipped = !!selectedContacts.find(s => s.id === c.id);
-                  return (
-                    <Select.Option key={c.id} value={c.id}>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${isChipped ? 'bg-blue-500' : 'border border-gray-300'}`}>
-                          {isChipped && (
-                            <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </div>
-                        <span className={`font-medium ${isChipped ? 'text-blue-700' : ''}`}>{getContactName(c)}</span>
-                        {c.email && <span className="text-gray-400 text-xs truncate max-w-[120px]">{c.email}</span>}
-                      </div>
-                    </Select.Option>
-                  );
-                })}
-              </Select>
-              {searchQuery && (
-                <button
-                  onMouseDown={(e) => { e.preventDefault(); clearSearch(); }}
-                  className="absolute top-1/2 -translate-y-1/2 z-10 text-gray-400 hover:text-gray-600 flex items-center justify-center w-5 h-5 rounded-full hover:bg-gray-200 transition-colors"
-                  style={{ right: '32px' }}
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            {selectedContacts.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5 items-center">
-                {selectedContacts.map(contact => (
-                  <div key={contact.id} className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-full pl-2 pr-1 py-0.5">
-                    <div className="w-3.5 h-3.5 bg-green-400 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-bold" style={{ fontSize: '8px' }}>
-                        {contact.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <span className="text-xs font-medium text-green-800">{contact.name}</span>
-                    <button
-                      onClick={() => removeContact(contact.id)}
-                      className="w-3.5 h-3.5 rounded-full hover:bg-green-200 flex items-center justify-center transition-colors"
-                    >
-                      <svg className="w-2.5 h-2.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-                <button onClick={clearAll} className="text-xs text-red-400 hover:text-red-600 transition-colors">
-                  Clear all
-                </button>
-              </div>
-            )}
+            <MultiSelectDropdown
+              label="Contacts"
+              items={allContacts}
+              selectedItems={selectedContacts}
+              onSelect={handleContactSelect}
+              onRemove={(id) => setSelectedContacts(prev => prev.filter(c => c.id !== id))}
+              onClearAll={() => setSelectedContacts([])}
+              loading={contactsLoading}
+              searchValue={contactSearch}
+              onSearch={handleContactSearch}
+              dropdownOpen={contactDropdownOpen}
+              onDropdownVisibleChange={setContactDropdownOpen}
+              keepOpenRef={contactKeepOpen}
+              placeholder="Search contacts..."
+              chipColor="green"
+              getItemName={getContactName}
+              getItemSub={(c) => c.email}
+            />
+          </div>
+
+          {/* Assigned To (Users) */}
+          <div className="md:col-span-2">
+            <MultiSelectDropdown
+              label="Assigned To"
+              items={allUsers}
+              selectedItems={selectedUsers}
+              onSelect={handleUserSelect}
+              onRemove={(id) => setSelectedUsers(prev => prev.filter(u => u.id !== id))}
+              onClearAll={() => setSelectedUsers([])}
+              loading={usersLoading}
+              searchValue={userSearch}
+              onSearch={handleUserSearch}
+              dropdownOpen={userDropdownOpen}
+              onDropdownVisibleChange={setUserDropdownOpen}
+              keepOpenRef={userKeepOpen}
+              placeholder="Search users..."
+              chipColor="blue"
+              getItemName={getUserName}
+              getItemSub={(u) => u.email}
+            />
           </div>
 
           {/* Task Name */}
@@ -409,54 +496,65 @@ export default function TasksTab() {
               onChange={(e) => setTaskName(e.target.value)}
               placeholder="Search by name..."
               size="large"
-              onPressEnter={() => handleSearch(0)}
+              allowClear
+              onPressEnter={handleNewSearch}
             />
           </div>
 
           {/* Status */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-            <Select
-              value={completed || undefined}
-              onChange={(val) => setCompleted(val || '')}
-              placeholder="All Tasks"
-              allowClear
-              style={{ width: '100%' }}
-              size="large"
-            >
+            <Select value={completed || undefined} onChange={(val) => setCompleted(val || '')} placeholder="All Tasks" allowClear style={{ width: '100%' }} size="large">
               <Select.Option value="true">Completed</Select.Option>
               <Select.Option value="false">Incomplete</Select.Option>
+            </Select>
+          </div>
+
+          {/* Overdue */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Overdue</label>
+            <Select value={overdue || undefined} onChange={(val) => setOverdue(val || '')} placeholder="All" allowClear style={{ width: '100%' }} size="large">
+              <Select.Option value="true">Overdue Only</Select.Option>
+              <Select.Option value="false">Not Overdue</Select.Option>
+            </Select>
+          </div>
+
+          {/* Unassigned */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Unassigned</label>
+            <Select value={unAssigned || undefined} onChange={(val) => setUnAssigned(val || '')} placeholder="All" allowClear style={{ width: '100%' }} size="large">
+              <Select.Option value="true">Unassigned Only</Select.Option>
+              <Select.Option value="false">Assigned Only</Select.Option>
+            </Select>
+          </div>
+
+          {/* Sort By */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
+            <Select value={sortBy || undefined} onChange={(val) => setSortBy(val || '')} placeholder="Default" allowClear style={{ width: '100%' }} size="large">
+              <Select.Option value="dueDate_1">Due Date (Asc)</Select.Option>
+              <Select.Option value="dueDate_-1">Due Date (Desc)</Select.Option>
+              <Select.Option value="dateAdded_1">Date Added (Asc)</Select.Option>
+              <Select.Option value="dateAdded_-1">Date Added (Desc)</Select.Option>
             </Select>
           </div>
 
           {/* Due Date From */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Due Date From</label>
-            <DatePicker
-              value={startDate ? dayjs(startDate) : null}
-              onChange={(date) => setStartDate(date ? date.format('YYYY-MM-DD') : '')}
-              style={{ width: '100%' }}
-              size="large"
-              placeholder="From"
-            />
+            <DatePicker value={startDate ? dayjs(startDate) : null} onChange={(date) => setStartDate(date ? date.format('YYYY-MM-DD') : '')} style={{ width: '100%' }} size="large" placeholder="From" />
           </div>
 
           {/* Due Date To */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Due Date To</label>
-            <DatePicker
-              value={endDate ? dayjs(endDate) : null}
-              onChange={(date) => setEndDate(date ? date.format('YYYY-MM-DD') : '')}
-              style={{ width: '100%' }}
-              size="large"
-              placeholder="To"
-            />
+            <DatePicker value={endDate ? dayjs(endDate) : null} onChange={(date) => setEndDate(date ? date.format('YYYY-MM-DD') : '')} style={{ width: '100%' }} size="large" placeholder="To" />
           </div>
 
-          {/* Search button — spans remaining 2 cols, right-aligned */}
-          <div className="md:col-span-2 flex items-center">
+          {/* Search button */}
+          <div className="md:col-span-2 flex items-end justify-end">
             <Button
-              onClick={() => handleSearch(0)}
+              onClick={handleNewSearch}
               loading={tasksLoading}
               size="large"
               type="primary"
@@ -503,20 +601,16 @@ export default function TasksTab() {
         </div>
       )}
 
-      {/* Pagination + Task List */}
+      {/* Task List + Pagination */}
       {!tasksLoading && !tasksError && tasks.length > 0 && (
         <>
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-500">
-              Showing {taskSkip + 1}–{Math.min(taskSkip + tasks.length, tasksTotal)} of {tasksTotal.toLocaleString()} tasks
+              Showing {tasks.length} of {tasksTotal.toLocaleString()} tasks
             </span>
             <div className="flex gap-2">
-              <Button size="small" disabled={!hasPrev} onClick={() => handleSearch(taskSkip - TASK_LIMIT)}>
-                Previous
-              </Button>
-              <Button size="small" disabled={!hasNext} type="primary" onClick={() => handleSearch(taskSkip + TASK_LIMIT)}>
-                Next
-              </Button>
+              <Button size="small" disabled={!hasPrev} onClick={handlePrev}>Previous</Button>
+              <Button size="small" disabled={!hasNext} type="primary" onClick={handleNext}>Next</Button>
             </div>
           </div>
 
@@ -524,9 +618,8 @@ export default function TasksTab() {
             {tasks.map((task) => {
               const dueDateStr = formatDueDate(task.dueDate);
               const isOverdue = task.dueDate && !task.completed && new Date(task.dueDate) < new Date();
-              const contactName = task.contactId
-                ? (contactNamesMap[task.contactId] || task.contactId)
-                : null;
+              const contactName = task.contactId ? (contactNamesMap[task.contactId] || task.contactId) : null;
+              const assignedUser = selectedUsers.find(u => u.id === task.assignedTo);
 
               return (
                 <div
@@ -534,17 +627,13 @@ export default function TasksTab() {
                   className="bg-white border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-sm transition-all"
                 >
                   <div className="flex items-start gap-3">
-                    {/* Status indicator */}
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                      task.completed ? 'bg-green-100 border border-green-400' : 'border-2 border-gray-300'
-                    }`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${task.completed ? 'bg-green-100 border border-green-400' : 'border-2 border-gray-300'}`}>
                       {task.completed && (
                         <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       )}
                     </div>
-
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <p className={`font-medium text-sm ${task.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
@@ -552,35 +641,23 @@ export default function TasksTab() {
                         </p>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {dueDateStr && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                              isOverdue
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
                               {isOverdue ? 'Overdue · ' : ''}{dueDateStr}
                             </span>
                           )}
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                            task.completed
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-yellow-100 text-yellow-700'
-                          }`}>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${task.completed ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                             {task.completed ? 'Done' : 'Pending'}
                           </span>
                         </div>
                       </div>
-
-                      {task.body && (
-                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.body}</p>
-                      )}
-
+                      {task.body && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.body}</p>}
                       <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
                         {contactName && (
                           <span className="flex items-center gap-1">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                             </svg>
-                            <span className="font-mono">{contactName}</span>
+                            <span>{contactName}</span>
                           </span>
                         )}
                         {task.assignedTo && (
@@ -588,12 +665,10 @@ export default function TasksTab() {
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
-                            <span className="font-mono">{task.assignedTo}</span>
+                            <span>{assignedUser ? assignedUser.name : task.assignedTo}</span>
                           </span>
                         )}
-                        {task.dateAdded && (
-                          <span>Added {new Date(task.dateAdded).toLocaleDateString()}</span>
-                        )}
+                        {task.dateAdded && <span>Added {new Date(task.dateAdded).toLocaleDateString()}</span>}
                       </div>
                     </div>
                   </div>
@@ -602,28 +677,21 @@ export default function TasksTab() {
             })}
           </div>
 
-          {/* Bottom pagination */}
           {(hasPrev || hasNext) && (
             <div className="flex justify-center gap-2 pt-2">
-              <Button disabled={!hasPrev} onClick={() => handleSearch(taskSkip - TASK_LIMIT)}>
-                Previous
-              </Button>
-              <Button disabled={!hasNext} type="primary" onClick={() => handleSearch(taskSkip + TASK_LIMIT)}>
-                Next
-              </Button>
+              <Button disabled={!hasPrev} onClick={handlePrev}>Previous</Button>
+              <Button disabled={!hasNext} type="primary" onClick={handleNext}>Next</Button>
             </div>
           )}
         </>
       )}
 
-      {/* Export Columns Info */}
+      {/* Export Columns */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
           {['TaskID', 'ContactID', 'ContactName', 'Title', 'Body', 'DueDate', 'Completed', 'AssignedTo', 'DateAdded'].map((col) => (
-            <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
-              {col}
-            </span>
+            <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">{col}</span>
           ))}
         </div>
       </div>

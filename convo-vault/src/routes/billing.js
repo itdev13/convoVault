@@ -6,6 +6,7 @@ const ghlService = require('../services/ghlService');
 const BillingTransaction = require('../models/BillingTransaction');
 const ExportJob = require('../models/ExportJob');
 const OAuthToken = require('../models/OAuthToken');
+const CompanyLocation = require('../models/CompanyLocation');
 const logger = require('../utils/logger');
 const { logError, getUserFriendlyMessage } = require('../utils/errorLogger');
 const { authenticateSession } = require('../middleware/auth');
@@ -175,13 +176,15 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
     } else if (exportType === 'tasks') {
       // Tasks: location-level search API — always upfront billing
-      const taskDueDate = filters?.dueDate || undefined;
       const result = await ghlService.getLocationTasks(locationId, {
         contactIds: filters?.contactIds || [],
         assignedTo: filters?.assignedTo,
         completed: filters?.completed,
+        overdue: filters?.overdue,
         query: filters?.query,
-        dueDate: taskDueDate,
+        dueDate: filters?.dueDate,
+        sortKey: filters?.sortKey,
+        sortDirection: filters?.sortDirection,
         limit: 1
       });
       counts.tasks = result.total || 0;
@@ -404,13 +407,15 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     } else if (exportType === 'tasks') {
       // Tasks: location-level search API — always upfront billing
-      const taskDueDate = filters?.dueDate || undefined;
       const result = await ghlService.getLocationTasks(locationId, {
         contactIds: filters?.contactIds || [],
         assignedTo: filters?.assignedTo,
         completed: filters?.completed,
+        overdue: filters?.overdue,
         query: filters?.query,
-        dueDate: taskDueDate,
+        dueDate: filters?.dueDate,
+        sortKey: filters?.sortKey,
+        sortDirection: filters?.sortDirection,
         limit: 1
       });
       totalItems = result.total || 0;
@@ -959,7 +964,7 @@ router.get('/contacts/:contactId/tasks', authenticateSession, async (req, res) =
  */
 router.post('/tasks/search', authenticateSession, async (req, res) => {
   try {
-    const { locationId, filters = {}, skip = 0, limit = 25 } = req.body;
+    const { locationId, filters = {}, searchAfter = null, limit = 25 } = req.body;
 
     if (!locationId) {
       return res.status(400).json({ success: false, error: 'locationId is required' });
@@ -968,23 +973,55 @@ router.post('/tasks/search', authenticateSession, async (req, res) => {
     const result = await ghlService.getLocationTasks(locationId, {
       contactIds: filters.contactIds || [],
       assignedTo: filters.assignedTo,
+      unAssigned: filters.unAssigned,
       completed: filters.completed,
+      overdue: filters.overdue,
       query: filters.query,
       dueDate: filters.dueDate,
-      skip,
+      sortKey: filters.sortKey,
+      sortDirection: filters.sortDirection,
+      searchAfter: searchAfter || [],
+      skip: 0,
       limit
     });
+
+    // Return last task's searchAfter for cursor pagination
+    const tasks = result.tasks || [];
+    const nextSearchAfter = tasks.length > 0 ? (tasks[tasks.length - 1].searchAfter || null) : null;
 
     res.json({
       success: true,
       data: {
-        tasks: result.tasks || [],
-        total: result.total || 0
+        tasks,
+        total: result.total || 0,
+        nextSearchAfter
       }
     });
   } catch (error) {
     logError('Search tasks error', error, { locationId: req.body?.locationId });
     res.status(500).json({ success: false, error: 'Failed to search tasks' });
+  }
+});
+
+/**
+ * @route GET /api/billing/users
+ * @desc Search users for a location's company (for filter dropdowns)
+ */
+router.get('/users', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, query = '' } = req.query;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const companyLocation = await CompanyLocation.findCompanyByLocation(locationId);
+    if (!companyLocation) {
+      return res.status(404).json({ success: false, error: 'Company not found for this location' });
+    }
+    const users = await ghlService.searchUsers(locationId, { companyId: companyLocation.companyId, query });
+    res.json({ success: true, data: { users } });
+  } catch (error) {
+    logError('Search users error', error, { locationId: req.query?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search users' });
   }
 });
 

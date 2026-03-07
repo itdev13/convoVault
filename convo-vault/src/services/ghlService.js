@@ -966,6 +966,26 @@ class GHLService {
     }
   }
   /**
+   * Search users for a company
+   * GET /users/search
+   */
+  async searchUsers(locationId, options = {}) {
+    try {
+      const response = await this.apiRequest(
+        'GET',
+        '/users/search',
+        locationId,
+        null,
+        { companyId: options.companyId, query: options.query || '' }
+      );
+      return response.users || [];
+    } catch (error) {
+      logger.error('Search users failed:', { locationId, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
    * Search tasks for a location
    * GET /locations/:locationId/tasks
    */
@@ -981,11 +1001,17 @@ class GHLService {
       if (options.contactIds && options.contactIds.length > 0) {
         body.contactId = options.contactIds;
       }
-      if (options.assignedTo) body.assignedTo = options.assignedTo;
+      if (options.assignedTo && options.assignedTo.length > 0) body.assignedTo = options.assignedTo;
+      if (options.unAssigned !== undefined) body.unAssigned = options.unAssigned;
       if (options.completed !== undefined && options.completed !== '') body.completed = options.completed;
+      if (options.overdue !== undefined) body.overdue = options.overdue;
       if (options.query) body.query = options.query;
       // dueDate filter: { gt, lte }
       if (options.dueDate) body.dueDate = options.dueDate;
+      if (options.sortKey) body.sortKey = options.sortKey;
+      if (options.sortDirection !== undefined) body.sortDirection = options.sortDirection;
+      // cursor-based pagination
+      if (options.searchAfter && options.searchAfter.length > 0) body.searchAfter = options.searchAfter;
       const response = await this.apiRequest(
         'POST',
         `/locations/${locationId}/tasks/search`,

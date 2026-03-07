@@ -91,14 +91,25 @@ export const billingAPI = {
   },
 
   /**
-   * Search tasks for a location (preview)
+   * Search tasks for a location (preview) — cursor-based pagination via searchAfter
    */
-  searchTasks: async (locationId, filters = {}, skip = 0, limit = 25) => {
+  searchTasks: async (locationId, filters = {}, searchAfter = null, limit = 25) => {
     const response = await apiClient.post('/billing/tasks/search', {
       locationId,
       filters,
-      skip,
+      searchAfter,
       limit
+    });
+    console.log("response tasks", response);
+    return response;
+  },
+
+  /**
+   * Search users for a location's company
+   */
+  searchUsers: async (locationId, query = '') => {
+    const response = await apiClient.get('/billing/users', {
+      params: { locationId, query }
     });
     return response;
   }
