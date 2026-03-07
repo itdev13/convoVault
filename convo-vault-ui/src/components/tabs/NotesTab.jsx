@@ -23,6 +23,8 @@ export default function NotesTab() {
   const [contactsLoading, setContactsLoading] = useState(false);
   const [dropdownValue, setDropdownValue] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const keepOpenRef = useRef(false);
   const searchTimeout = useRef(null);
 
   // Selected contacts chips
@@ -89,6 +91,10 @@ export default function NotesTab() {
   };
 
   const handleContactSelect = (contactId) => {
+    // Prevent dropdown from closing after selection
+    keepOpenRef.current = true;
+    setTimeout(() => { keepOpenRef.current = false; }, 50);
+
     const contact = allContacts.find(c => c.id === contactId);
     if (!contact) return;
     if (selectedContacts.find(c => c.id === contactId)) {
@@ -103,7 +109,7 @@ export default function NotesTab() {
       setNotesLoaded(false);
     }
     setDropdownValue(null);
-    setSearchQuery('');
+    // Keep search query so user can keep selecting from results
   };
 
   const clearSearch = () => {
@@ -339,6 +345,11 @@ export default function NotesTab() {
             <div className="relative" style={{ flex: 1 }}>
               <Select
                 showSearch
+                open={dropdownOpen}
+                onDropdownVisibleChange={(open) => {
+                  if (!open && keepOpenRef.current) return; // stay open after selection
+                  setDropdownOpen(open);
+                }}
                 searchValue={searchQuery}
                 placeholder="Search and add contacts..."
                 filterOption={false}
@@ -349,6 +360,22 @@ export default function NotesTab() {
                 style={{ width: '100%' }}
                 size="large"
                 notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
+                dropdownRender={(menu) => (
+                  <div>
+                    {menu}
+                    <div className="px-3 py-2 border-t border-gray-100 bg-white flex items-center justify-between">
+                      <span className="text-xs text-gray-400">
+                        {selectedContacts.length > 0 ? `${selectedContacts.length} selected` : 'Click to select'}
+                      </span>
+                      <button
+                        onMouseDown={(e) => { e.preventDefault(); setDropdownOpen(false); }}
+                        className="text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded transition-colors"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                )}
               >
                 {dropdownContacts.map(c => {
                   const isChipped = !!selectedContacts.find(s => s.id === c.id);
