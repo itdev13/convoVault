@@ -1199,7 +1199,7 @@ class GHLService {
 
       return {
         links: response.links || [],
-        total: response.total || response.links?.length || 0
+        total: response.totalCount || response.links?.length || 0
       };
     } catch (error) {
       logger.error('Get links failed:', error.message);
