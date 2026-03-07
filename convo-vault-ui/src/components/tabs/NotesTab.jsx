@@ -516,6 +516,50 @@ export default function NotesTab() {
           </div>
         )
       )}
+
+      {/* Info Card */}
+      {!notesLoaded && !notesLoading && (
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-2xl">📝</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">How Notes Export Works</h3>
+              <ul className="space-y-2 text-sm text-gray-700">
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-500 mt-0.5">1.</span>
+                  <span>Select specific contacts above, or leave blank to export all</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-500 mt-0.5">2.</span>
+                  <span>For each contact, we fetch all their notes</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-500 mt-0.5">3.</span>
+                  <span>Notes are exported with contact details and timestamps into a CSV or JSON file</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-500 mt-0.5">4.</span>
+                  <span>You receive an email with a download link when ready</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Columns Info */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
+        <div className="flex flex-wrap gap-2">
+          {['NoteID', 'ContactID', 'ContactName', 'Body', 'DateAdded', 'CreatedBy'].map((col) => (
+            <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
+              {col}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

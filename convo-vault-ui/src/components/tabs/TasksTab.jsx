@@ -566,20 +566,6 @@ export default function TasksTab() {
               </ul>
             </div>
           </div>
-
-          <div className="mt-4 bg-white/60 rounded-lg p-4 border border-green-100">
-            <h4 className="text-sm font-semibold text-gray-800 mb-2">Pricing</h4>
-            <div className="flex items-center gap-6 text-sm text-gray-700">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                <span><strong>$0.002</strong> per task (0.2 cents)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                <span>Charged after export completes</span>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
