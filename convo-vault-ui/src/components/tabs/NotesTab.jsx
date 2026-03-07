@@ -177,6 +177,7 @@ export default function NotesTab() {
           finalAmount,
           finalAmountDollars: finalAmount
         });
+        console.log('estimate', estimate);
       } else {
         // No contacts selected or notes not yet loaded — call API
         const res = await billingAPI.getEstimate(location.id, 'notes', getFilters());
@@ -306,11 +307,11 @@ export default function NotesTab() {
           <span className="text-sm font-semibold text-gray-700">Search & Filters</span>
         </div>
 
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Contact <span className="text-gray-400">(optional — leave blank to export all)</span>
-            </label>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Contact <span className="text-gray-400">(optional — leave blank to export all)</span>
+          </label>
+          <div className="flex gap-3 items-center">
             <Select
               showSearch
               placeholder="Search and add contacts..."
@@ -319,7 +320,7 @@ export default function NotesTab() {
               onSelect={handleContactSelect}
               value={dropdownValue}
               loading={contactsLoading}
-              style={{ width: '100%' }}
+              style={{ flex: 1 }}
               size="large"
               notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
             >
@@ -331,50 +332,50 @@ export default function NotesTab() {
               ))}
             </Select>
 
-            {/* Selected chips */}
-            {selectedContacts.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2 items-center">
-                {selectedContacts.map(contact => (
-                  <div key={contact.id} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full pl-2 pr-1.5 py-1">
-                    <div className="w-4 h-4 bg-blue-400 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-bold" style={{ fontSize: '9px' }}>
-                        {contact.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <span className="text-xs font-medium text-blue-800">{contact.name}</span>
-                    {contact.email && <span className="text-xs text-blue-400 hidden sm:inline">{contact.email}</span>}
-                    <button
-                      onClick={() => removeContact(contact.id)}
-                      className="w-4 h-4 rounded-full hover:bg-blue-200 flex items-center justify-center transition-colors"
-                    >
-                      <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-                <button onClick={clearAll} className="text-xs text-red-400 hover:text-red-600 transition-colors ml-1">
-                  Clear all
-                </button>
-              </div>
-            )}
+            <Button
+              onClick={handleSearch}
+              disabled={selectedContacts.length === 0 || notesLoading}
+              size="large"
+              loading={notesLoading}
+              icon={
+                !notesLoading && (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                )
+              }
+            >
+              Search
+            </Button>
           </div>
 
-          <Button
-            onClick={handleSearch}
-            disabled={selectedContacts.length === 0 || notesLoading}
-            size="large"
-            loading={notesLoading}
-            icon={
-              !notesLoading && (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              )
-            }
-          >
-            Search
-          </Button>
+          {/* Selected chips */}
+          {selectedContacts.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2 items-center">
+              {selectedContacts.map(contact => (
+                <div key={contact.id} className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-full pl-2 pr-1.5 py-1">
+                  <div className="w-4 h-4 bg-blue-400 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-white font-bold" style={{ fontSize: '9px' }}>
+                      {contact.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <span className="text-xs font-medium text-blue-800">{contact.name}</span>
+                  {contact.email && <span className="text-xs text-blue-400 hidden sm:inline">{contact.email}</span>}
+                  <button
+                    onClick={() => removeContact(contact.id)}
+                    className="w-4 h-4 rounded-full hover:bg-blue-200 flex items-center justify-center transition-colors"
+                  >
+                    <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              <button onClick={clearAll} className="text-xs text-red-400 hover:text-red-600 transition-colors ml-1">
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
 
         {!hasSelected && (
@@ -394,8 +395,20 @@ export default function NotesTab() {
         </div>
       ) : notesLoaded && (
         notes.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-10 text-center text-gray-400">
-            <p className="text-sm">No notes found for the selected contact{selectedContacts.length > 1 ? 's' : ''}</p>
+          <div className="bg-white border border-gray-200 rounded-xl p-12 flex flex-col items-center justify-center text-center gap-3">
+            <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center">
+              <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-600">No notes found</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {selectedContacts.length > 0
+                  ? `The selected contact${selectedContacts.length > 1 ? 's have' : ' has'} no notes yet`
+                  : 'No notes available for this location'}
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
