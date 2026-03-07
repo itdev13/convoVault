@@ -202,7 +202,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
     } else if (exportType === 'formSubmissions') {
       // Form Submissions: page-based API returns total in meta
       const result = await ghlService.getFormSubmissions(locationId, {
-        ...filters,
+        formId: filters?.formId,
+        q: filters?.query,
+        startAt: filters?.startDate,
+        endAt: filters?.endDate,
         limit: 1
       });
       counts.formSubmissions = result.total || 0;
@@ -433,7 +436,10 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     } else if (exportType === 'formSubmissions') {
       const result = await ghlService.getFormSubmissions(locationId, {
-        ...filters,
+        formId: filters?.formId,
+        q: filters?.query,
+        startAt: filters?.startDate,
+        endAt: filters?.endDate,
         limit: 1
       });
       totalItems = result.total || 0;
@@ -962,6 +968,39 @@ router.get('/contacts/:contactId/tasks', authenticateSession, async (req, res) =
   } catch (error) {
     logError('Get contact tasks error', error, { contactId: req.params?.contactId });
     res.status(500).json({ success: false, error: 'Failed to fetch tasks' });
+  }
+});
+
+/**
+ * @route POST /api/billing/formSubmissions/search
+ * @desc Search form submissions for a location (for preview in UI)
+ */
+router.post('/formSubmissions/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, page = 1, limit = 25 } = req.body;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const result = await ghlService.getFormSubmissions(locationId, {
+      formId: filters.formId,
+      q: filters.query,
+      startAt: filters.startDate,
+      endAt: filters.endDate,
+      page,
+      limit
+    });
+    res.json({
+      success: true,
+      data: {
+        submissions: result.submissions || [],
+        total: result.total || 0,
+        page,
+        limit
+      }
+    });
+  } catch (error) {
+    logError('Search form submissions error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search form submissions' });
   }
 });
 

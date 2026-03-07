@@ -316,20 +316,32 @@ async function fetchFormSubmissionsPage(locationId, accessToken, page, filters =
 }
 
 /**
- * Fetch all trigger links for a location (no pagination)
+ * Fetch a page of trigger links for a location via /links/search
  */
-async function fetchAllLinks(locationId, accessToken) {
-  const response = await axios.get(`${GHL_API_URL}/links/`, {
+async function fetchLinksPage(locationId, accessToken, skip, filters = {}) {
+  const params = {
+    locationId,
+    limit: 1000,
+    skip: skip || 0
+  };
+  if (filters.query) params.query = filters.query;
+
+  const response = await axios.get(`${GHL_API_URL}/links/search`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'Version': '2021-07-28'
     },
-    params: { locationId }
+    params
   });
 
+  const links = response.data.links || [];
+  const total = response.data.total || links.length;
+
   return {
-    data: response.data.links || []
+    data: links,
+    total,
+    hasMore: links.length === 1000
   };
 }
 
@@ -1344,26 +1356,48 @@ exports.handler = async (event, context) => {
       cursor = hasMoreData ? String(page) : null;
 
     } else if (job.exportType === 'links') {
-      // === LINKS: Single fetch, no pagination ===
-      let linksResult;
-      try {
-        linksResult = await fetchAllLinks(job.locationId, accessToken);
-      } catch (fetchError) {
-        if (fetchError.response?.status === 401) {
-          log('Got 401, refreshing token and retrying...');
-          await refreshAndUpdateToken();
-          linksResult = await fetchAllLinks(job.locationId, accessToken);
-        } else {
-          throw fetchError;
+      // === LINKS: Page-based pagination via /links/search (limit 1000) ===
+      let currentSkip = cursor ? parseInt(cursor) : 0;
+      let hasMoreData_inner = true;
+
+      while (hasMoreData_inner && records.length < BATCH_SIZE) {
+        if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) {
+          hasMoreData = true;
+          break;
+        }
+
+        let pageResult;
+        try {
+          pageResult = await fetchLinksPage(job.locationId, accessToken, currentSkip, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401, refreshing token and retrying...');
+            await refreshAndUpdateToken();
+            pageResult = await fetchLinksPage(job.locationId, accessToken, currentSkip, job.filters || {});
+          } else {
+            throw fetchError;
+          }
+        }
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        currentSkip += pageResult.data.length;
+
+        if (!pageResult.hasMore) {
+          hasMoreData_inner = false;
+          hasMoreData = false;
+        } else if (records.length >= BATCH_SIZE) {
+          hasMoreData = true;
+        }
+
+        if (hasMoreData_inner && records.length < BATCH_SIZE) {
+          await sleep(100);
         }
       }
 
-      records = linksResult.data;
-      recordsFetched = records.length;
-      hasMoreData = false;
-      cursor = null;
+      cursor = hasMoreData ? String(currentSkip) : null;
 
-      log('Fetched all links', { total: records.length });
+      log('Fetched links batch', { fetched: records.length, skip: currentSkip });
 
     } else if (job.exportType === 'socialPosts') {
       // === SOCIAL POSTS: Skip-based pagination ===

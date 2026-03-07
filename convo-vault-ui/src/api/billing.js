@@ -91,6 +91,19 @@ export const billingAPI = {
   },
 
   /**
+   * Search form submissions for a location (preview) — page-based pagination
+   */
+  searchFormSubmissions: async (locationId, filters = {}, page = 1, limit = 25) => {
+    const response = await apiClient.post('/billing/formSubmissions/search', {
+      locationId,
+      filters,
+      page,
+      limit
+    });
+    return response;
+  },
+
+  /**
    * Search trigger links for a location (preview) — page-based pagination
    */
   searchLinks: async (locationId, query = '', page = 1, limit = 25) => {
