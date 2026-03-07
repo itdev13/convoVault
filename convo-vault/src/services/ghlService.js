@@ -971,7 +971,7 @@ class GHLService {
    */
   async getLocationTasks(locationId, options = {}) {
     try {
-      const params = {
+      const body = {
         locationId,
         limit: options.limit || 20,
         skip: options.skip || 0,
@@ -980,18 +980,18 @@ class GHLService {
 
       // contactId is always an array in the API
       if (options.contactIds && options.contactIds.length > 0) {
-        params.contactId = options.contactIds;
+        body.contactId = options.contactIds;
       }
-      if (options.assignedTo) params.assignedTo = options.assignedTo;
-      if (options.completed !== undefined && options.completed !== '') params.completed = options.completed;
-      if (options.query) params.query = options.query;
+      if (options.assignedTo) body.assignedTo = options.assignedTo;
+      if (options.completed !== undefined && options.completed !== '') body.completed = options.completed;
+      if (options.query) body.query = options.query;
       // dueDate filter: { gt, lte }
-      if (options.dueDate) params.dueDate = options.dueDate;
+      if (options.dueDate) body.dueDate = options.dueDate;
       const response = await this.apiRequest(
         'POST',
         `/locations/${locationId}/tasks/search`,
         locationId,
-        { params }
+        body
       );
 
       return {
