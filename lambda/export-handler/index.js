@@ -698,7 +698,7 @@ function linksToCSV(links, includeHeader = true) {
       escapeCsv(link._id),
       escapeCsv(link.name),
       escapeCsv(link.redirectTo || ''),
-      escapeCsv("trigger_link."+link._id),
+      escapeCsv("{{trigger_link."+link._id+"}}"),
     ].join(',');
   }).join('\n');
 
