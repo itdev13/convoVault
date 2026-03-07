@@ -194,20 +194,19 @@ async function fetchNotesForContact(contactId, accessToken) {
 /**
  * Fetch a page of tasks for a location via location-level search API
  */
-async function fetchTasksPage(locationId, accessToken, page, filters = {}) {
-  const params = { locationId, limit: 1000, page };
+async function fetchTasksPage(locationId, accessToken, skip, filters = {}) {
+  const LIMIT = 1000;
+  const params = { locationId, limit: LIMIT, skip, count: true };
 
+  // contactId is always an array in the API
   if (filters.contactIds && filters.contactIds.length > 0) {
-    if (filters.contactIds.length === 1) {
-      params.contactId = filters.contactIds[0];
-    } else {
-      params.contactId = filters.contactIds;
-    }
+    params.contactId = filters.contactIds;
   }
   if (filters.assignedTo) params.assignedTo = filters.assignedTo;
   if (filters.completed !== undefined && filters.completed !== '') params.completed = filters.completed;
-  if (filters.startDate) params.startDate = filters.startDate;
-  if (filters.endDate) params.endDate = filters.endDate;
+  if (filters.query) params.query = filters.query;
+  // dueDate filter: { gt, lte }
+  if (filters.dueDate) params.dueDate = filters.dueDate;
 
   const response = await axios.get(`${GHL_API_URL}/locations/${locationId}/tasks`, {
     headers: {
@@ -220,7 +219,7 @@ async function fetchTasksPage(locationId, accessToken, page, filters = {}) {
 
   const tasks = response.data.tasks || [];
   const total = response.data.total || 0;
-  return { data: tasks, total, hasMore: tasks.length >= 1000 };
+  return { data: tasks, total, hasMore: tasks.length >= LIMIT };
 }
 
 /**
@@ -1220,19 +1219,19 @@ exports.handler = async (event, context) => {
       }
 
     } else if (job.exportType === 'tasks') {
-      // === TASKS: Location-level page-based API (limit 1000 per page) ===
-      let page = cursor ? parseInt(cursor) : 1;
+      // === TASKS: Location-level skip-based API (limit 1000 per page) ===
+      let skip = cursor ? parseInt(cursor) : 0;
 
       while (recordsFetched < BATCH_SIZE && hasMoreData) {
         if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) { break; }
 
         let pageResult;
         try {
-          pageResult = await fetchTasksPage(job.locationId, accessToken, page, job.filters || {});
+          pageResult = await fetchTasksPage(job.locationId, accessToken, skip, job.filters || {});
         } catch (fetchError) {
           if (fetchError.response?.status === 401) {
             await refreshAndUpdateToken();
-            pageResult = await fetchTasksPage(job.locationId, accessToken, page, job.filters || {});
+            pageResult = await fetchTasksPage(job.locationId, accessToken, skip, job.filters || {});
           } else { throw fetchError; }
         }
 
@@ -1246,15 +1245,15 @@ exports.handler = async (event, context) => {
 
         records.push(...pageResult.data);
         recordsFetched += pageResult.data.length;
-        page++;
+        skip += pageResult.data.length;
 
-        log('Fetched tasks page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, page, hasMore: pageResult.hasMore });
+        log('Fetched tasks batch', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, skip, hasMore: pageResult.hasMore });
 
         if (!pageResult.hasMore) { hasMoreData = false; }
         if (hasMoreData && recordsFetched < BATCH_SIZE) { await sleep(100); }
       }
 
-      cursor = hasMoreData ? String(page) : null;
+      cursor = hasMoreData ? String(skip) : null;
 
     } else if (job.exportType === 'opportunities') {
       // === OPPORTUNITIES: Page-based pagination ===

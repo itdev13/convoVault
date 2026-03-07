@@ -175,12 +175,13 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
     } else if (exportType === 'tasks') {
       // Tasks: location-level search API — always upfront billing
+      const taskDueDate = filters?.dueDate || undefined;
       const result = await ghlService.getLocationTasks(locationId, {
         contactIds: filters?.contactIds || [],
         assignedTo: filters?.assignedTo,
         completed: filters?.completed,
-        startDate: filters?.startDate,
-        endDate: filters?.endDate,
+        query: filters?.query,
+        dueDate: taskDueDate,
         limit: 1
       });
       counts.tasks = result.total || 0;
@@ -403,12 +404,13 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     } else if (exportType === 'tasks') {
       // Tasks: location-level search API — always upfront billing
+      const taskDueDate = filters?.dueDate || undefined;
       const result = await ghlService.getLocationTasks(locationId, {
         contactIds: filters?.contactIds || [],
         assignedTo: filters?.assignedTo,
         completed: filters?.completed,
-        startDate: filters?.startDate,
-        endDate: filters?.endDate,
+        query: filters?.query,
+        dueDate: taskDueDate,
         limit: 1
       });
       totalItems = result.total || 0;

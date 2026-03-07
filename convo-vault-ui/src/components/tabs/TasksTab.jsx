@@ -31,7 +31,7 @@ export default function TasksTab() {
   const [selectedContacts, setSelectedContacts] = useState([]);
 
   // Task filters
-  const [assignedTo, setAssignedTo] = useState('');
+  const [taskName, setTaskName] = useState('');
   const [completed, setCompleted] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -122,10 +122,13 @@ export default function TasksTab() {
       contactIds: selectedContacts.map(c => c.id),
       contactNames
     };
-    if (assignedTo) f.assignedTo = assignedTo;
+    if (taskName) f.query = taskName;
     if (completed !== '') f.completed = completed === 'true';
-    if (startDate) f.startDate = dayjs(startDate).startOf('day').toISOString();
-    if (endDate) f.endDate = dayjs(endDate).endOf('day').toISOString();
+    if (startDate || endDate) {
+      f.dueDate = {};
+      if (startDate) f.dueDate.gt = dayjs(startDate).startOf('day').toISOString();
+      if (endDate) f.dueDate.lte = dayjs(endDate).endOf('day').toISOString();
+    }
     return f;
   };
 
@@ -214,7 +217,7 @@ export default function TasksTab() {
           <p className="text-sm text-gray-500 mt-1">
             {selectedContacts.length > 0
               ? `${selectedContacts.length} contact${selectedContacts.length > 1 ? 's' : ''} selected`
-              : 'Export all contact tasks from this sub-account'}
+              : 'Export tasks from this sub-account'}
           </p>
         </div>
         <Button
@@ -254,12 +257,10 @@ export default function TasksTab() {
           <span className="text-sm font-semibold text-gray-700">Filters</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Contact filter */}
-          <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Contacts <span className="text-gray-400">(optional — leave blank to export all)</span>
-            </label>
+          <div className="md:col-span-4">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Contacts</label>
             <div className="relative">
               <Select
                 showSearch
@@ -356,15 +357,16 @@ export default function TasksTab() {
             )}
           </div>
 
-          {/* Assigned To */}
+          {/* Task Name */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Assigned To (User ID)</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Task Name</label>
             <Input
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              placeholder="User ID..."
+              value={taskName}
+              onChange={(e) => setTaskName(e.target.value)}
+              placeholder="Search by task name..."
               size="large"
               allowClear
+              onPressEnter={handleGetEstimate}
             />
           </div>
 
@@ -384,7 +386,7 @@ export default function TasksTab() {
             </Select>
           </div>
 
-          {/* Start Date */}
+          {/* Due Date From */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Due Date From</label>
             <DatePicker
@@ -396,7 +398,7 @@ export default function TasksTab() {
             />
           </div>
 
-          {/* End Date */}
+          {/* Due Date To */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Due Date To</label>
             <DatePicker
@@ -407,38 +409,27 @@ export default function TasksTab() {
               placeholder="To date"
             />
           </div>
+
+          {/* Search button */}
+          <div className="md:col-span-4 flex justify-end">
+            <Button
+              onClick={handleGetEstimate}
+              disabled={isExporting}
+              size="large"
+              type="primary"
+              className="bg-blue-600 hover:bg-blue-700 border-blue-600 px-8"
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              }
+            >
+              Search & Export
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Info Card */}
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-2xl">✅</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">How Tasks Export Works</h3>
-            <ul className="space-y-2 text-sm text-gray-700">
-              <li className="flex items-start gap-2">
-                <span className="text-green-500 mt-0.5">1.</span>
-                <span>Filter by contacts, assigned user, completion status, or due date range</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-green-500 mt-0.5">2.</span>
-                <span>We fetch all matching tasks from your sub-account</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-green-500 mt-0.5">3.</span>
-                <span>Tasks are exported with contact details, title, due dates, and assignments into a CSV or JSON file</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-green-500 mt-0.5">4.</span>
-                <span>You receive an email with a download link when ready</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
 
       {/* CSV Columns Info */}
       <div className="bg-white border border-gray-200 rounded-xl p-6">

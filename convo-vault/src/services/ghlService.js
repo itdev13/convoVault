@@ -974,18 +974,19 @@ class GHLService {
       const params = {
         locationId,
         limit: options.limit || 20,
-        page: options.page || 1
+        skip: options.skip || 0,
+        count: true
       };
 
-      // Pass contactIds as array (empty = all contacts)
+      // contactId is always an array in the API
       if (options.contactIds && options.contactIds.length > 0) {
-        params.contactId = options.contactIds.length === 1 ? options.contactIds[0] : options.contactIds;
+        params.contactId = options.contactIds;
       }
       if (options.assignedTo) params.assignedTo = options.assignedTo;
       if (options.completed !== undefined && options.completed !== '') params.completed = options.completed;
+      if (options.query) params.query = options.query;
+      // dueDate filter: { gt, lte }
       if (options.dueDate) params.dueDate = options.dueDate;
-      if (options.startDate) params.startDate = options.startDate;
-      if (options.endDate) params.endDate = options.endDate;
 
       const response = await this.apiRequest(
         'GET',
