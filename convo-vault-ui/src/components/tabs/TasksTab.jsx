@@ -445,7 +445,7 @@ export default function TasksTab() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Contacts */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-1">
             <MultiSelectDropdown
               label="Contacts"
               items={allContacts}
@@ -467,7 +467,7 @@ export default function TasksTab() {
           </div>
 
           {/* Assigned To (Users) */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-1">
             <MultiSelectDropdown
               label="Assigned To"
               items={allUsers}
@@ -496,7 +496,6 @@ export default function TasksTab() {
               onChange={(e) => setTaskName(e.target.value)}
               placeholder="Search by name..."
               size="large"
-              allowClear
               onPressEnter={handleNewSearch}
             />
           </div>
@@ -552,7 +551,7 @@ export default function TasksTab() {
           </div>
 
           {/* Search button */}
-          <div className="md:col-span-2 flex items-end justify-end">
+          <div className="flex items-end">
             <Button
               onClick={handleNewSearch}
               loading={tasksLoading}

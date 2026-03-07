@@ -976,7 +976,7 @@ class GHLService {
         '/users/search',
         locationId,
         null,
-        { companyId: options.companyId, query: options.query || '' }
+        { companyId: options.companyId, locationId:locationId, query: options.query || '' }
       );
       return response.users || [];
     } catch (error) {
