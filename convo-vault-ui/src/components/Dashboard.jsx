@@ -42,8 +42,6 @@ export default function Dashboard() {
     { id: 'links', label: 'Links', icon: '🔗' },
     { id: 'socialPosts', label: 'Social Posts', icon: '📱' },
     { id: 'callLogs', label: 'Call Logs', icon: '📞' },
-    { id: 'exports', label: 'Export History', icon: '📤' },
-    // { id: 'import', label: 'Import', icon: '📥' },
   ];
 
   const handleConversationSelect = (conversation) => {
@@ -53,7 +51,10 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <Header onSupportClick={() => { setActiveTab('support'); setShowConversationView(false); }} />
+      <Header
+        onExportsClick={() => { setActiveTab('exports'); setShowConversationView(false); }}
+        onSupportClick={() => { setActiveTab('support'); setShowConversationView(false); }}
+      />
       
       <div className="max-w-12xl mx-auto px-3 py-3">
         {/* Updates Banner */}
