@@ -209,7 +209,7 @@ export default function TasksTab() {
     if (selectedContacts.find(x => x.id === id)) {
       setSelectedContacts(prev => prev.filter(x => x.id !== id));
     } else {
-      setSelectedContacts(prev => [...prev, { id: c.id, name: getContactName(c), email: c.email || '' }]);
+      setSelectedContacts(prev => [...prev, { id: c.id, name: getContactName(c), email: c.email || '', phone: c.phone || '' }]);
     }
   };
 
@@ -241,7 +241,7 @@ export default function TasksTab() {
     if (selectedUsers.find(x => x.id === id)) {
       setSelectedUsers(prev => prev.filter(x => x.id !== id));
     } else {
-      setSelectedUsers(prev => [...prev, { id: u.id, name: getUserName(u), email: u.email || '' }]);
+      setSelectedUsers(prev => [...prev, { id: u.id, name: getUserName(u), email: u.email || '', phone: u.phone || '' }]);
     }
   };
 
@@ -281,6 +281,7 @@ export default function TasksTab() {
       f.sortKey = key;
       f.sortDirection = parseInt(dir, 10);
     }
+    f.limit=1
     return f;
   };
 
@@ -462,7 +463,7 @@ export default function TasksTab() {
               placeholder="Search contacts..."
               chipColor="green"
               getItemName={getContactName}
-              getItemSub={(c) => c.email}
+              getItemSub={(c) => c.email || c.phone}
             />
           </div>
 
@@ -484,7 +485,7 @@ export default function TasksTab() {
               placeholder="Search users..."
               chipColor="blue"
               getItemName={getUserName}
-              getItemSub={(u) => u.email}
+              getItemSub={(u) => u.email || u.phone}
             />
           </div>
 

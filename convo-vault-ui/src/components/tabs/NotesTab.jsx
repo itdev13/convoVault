@@ -49,14 +49,14 @@ export default function NotesTab() {
           setAllContacts(list);
           if (list.length > 0) {
             const first = list[0];
-            const firstContact = { id: first.id, name: getContactName(first), email: first.email || '' };
+            const firstContact = { id: first.id, name: getContactName(first), email: first.email || '', phone: first.phone || '' };
             setSelectedContacts([firstContact]);
             // Auto-fetch notes for first contact
             setNotesLoading(true);
             contactsAPI.fetchNotes(location.id, first.id)
               .then(res2 => {
                 if (res2.success) {
-                  setNotes((res2.data.notes || []).map(n => ({ ...n, _contactName: firstContact.name, _contactEmail: firstContact.email, _contactId: first.id })));
+                  setNotes((res2.data.notes || []).map(n => ({ ...n, _contactName: firstContact.name, _contactEmail: firstContact.email || firstContact.phone, _contactId: first.id })));
                   setNotesLoaded(true);
                 }
               })
@@ -104,7 +104,8 @@ export default function NotesTab() {
       setSelectedContacts(prev => [...prev, {
         id: contact.id,
         name: getContactName(contact),
-        email: contact.email || ''
+        email: contact.email || '',
+        phone: contact.phone || ''
       }]);
       setNotesLoaded(false);
     }
@@ -139,7 +140,7 @@ export default function NotesTab() {
       const results = await Promise.all(
         selectedContacts.map(contact =>
           contactsAPI.fetchNotes(location.id, contact.id)
-            .then(res => (res.success ? res.data.notes || [] : []).map(n => ({ ...n, _contactName: contact.name, _contactEmail: contact.email, _contactId: contact.id })))
+            .then(res => (res.success ? res.data.notes || [] : []).map(n => ({ ...n, _contactName: contact.name, _contactEmail: contact.email || contact.phone, _contactId: contact.id })))
             .catch(() => [])
         )
       );
@@ -260,7 +261,8 @@ export default function NotesTab() {
     const matching = allContacts.filter(c => {
       const name = getContactName(c).toLowerCase();
       const email = (c.email || '').toLowerCase();
-      return name.includes(q) || email.includes(q);
+      const phone = (c.phone || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || phone.includes(q);
     });
     const selectedNotMatching = allContacts.filter(c =>
       selectedContacts.find(s => s.id === c.id) && !matching.find(m => m.id === c.id)
@@ -392,7 +394,7 @@ export default function NotesTab() {
                           )}
                         </div>
                         <span className={`font-medium ${isChipped ? 'text-blue-700' : ''}`}>{getContactName(c)}</span>
-                        {c.email && <span className="text-gray-400 text-xs">{c.email}</span>}
+                        {(c.email || c.phone) && <span className="text-gray-400 text-xs">{c.email || c.phone}</span>}
                       </div>
                     </Select.Option>
                   );
@@ -439,7 +441,7 @@ export default function NotesTab() {
                     </span>
                   </div>
                   <span className="text-xs font-medium text-blue-800">{contact.name}</span>
-                  {contact.email && <span className="text-xs text-blue-400 hidden sm:inline">{contact.email}</span>}
+                  {(contact.email || contact.phone) && <span className="text-xs text-blue-400 hidden sm:inline">{contact.email || contact.phone}</span>}
                   <button
                     onClick={() => removeContact(contact.id)}
                     className="w-4 h-4 rounded-full hover:bg-blue-200 flex items-center justify-center transition-colors"
@@ -523,7 +525,7 @@ export default function NotesTab() {
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
-          {['NoteID', 'ContactID', 'ContactName', 'Body', 'UserID', 'DateAdded', 'Relations'].map((col) => (
+          {['NoteID', 'ContactID', 'ContactName', 'Body', 'BodyText','UserID', 'DateAdded', 'Relations'].map((col) => (
             <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
               {col}
             </span>

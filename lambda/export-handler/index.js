@@ -557,7 +557,7 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
  */
 function notesToCSV(notes, includeHeader = true) {
   const header = includeHeader
-    ? 'NoteID,ContactID,ContactName,Body,UserID,DateAdded,Relations\n'
+    ? 'NoteID,ContactID,ContactName,Body,BodyText,UserID,DateAdded,Relations\n'
     : '';
 
   const serializeRelations = (relations) => {
@@ -570,7 +570,8 @@ function notesToCSV(notes, includeHeader = true) {
       escapeCsv(note.id),
       escapeCsv(note.contactId),
       escapeCsv(note.contactName || ''),
-      escapeCsv(note.bodyText || note.body || ''),
+      escapeCsv(note.body || ''),
+      escapeCsv(note.bodyText || ''),
       escapeCsv(note.userId || ''),
       escapeCsv(formatDate(note.dateAdded)),
       escapeCsv(serializeRelations(note.relations))
