@@ -8,6 +8,7 @@ import ExportProgress from '../ExportProgress';
 const TEMPLATE_LIMIT = 25;
 
 const TYPE_OPTIONS = [
+  { value: '', label: 'All Channels' },
   { value: 'email', label: 'Email' },
   { value: 'sms', label: 'SMS' },
   { value: 'whatsapp', label: 'WhatsApp' }
@@ -209,15 +210,13 @@ export default function TemplatesTab() {
           <div className="min-w-[200px]">
             <label className="block text-xs font-medium text-gray-600 mb-1">Channel</label>
             <Select
-              value={type || undefined}
+              value={type || ''}
               onChange={(val) => setType(val || '')}
-              placeholder="All Channels"
-              allowClear
               style={{ width: '100%' }}
               size="large"
             >
               {TYPE_OPTIONS.map(opt => (
-                <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
+                <Select.Option key={opt.value || '__all'} value={opt.value}>{opt.label}</Select.Option>
               ))}
             </Select>
           </div>

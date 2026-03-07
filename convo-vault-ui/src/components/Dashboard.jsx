@@ -34,6 +34,7 @@ export default function Dashboard() {
   const tabs = [
     { id: 'messages', label: 'Messages', icon: '📊' },
     { id: 'conversations', label: 'Conversations', icon: '💬' },
+    { id: 'templates', label: 'Templates', icon: '📄' },
     { id: 'notes', label: 'Notes', icon: '📝' },
     { id: 'tasks', label: 'Tasks', icon: '✅' },
     { id: 'opportunities', label: 'Opportunities', icon: '💰' },
@@ -41,7 +42,6 @@ export default function Dashboard() {
     { id: 'links', label: 'Links', icon: '🔗' },
     { id: 'socialPosts', label: 'Social Posts', icon: '📱' },
     { id: 'callLogs', label: 'Call Logs', icon: '📞' },
-    { id: 'templates', label: 'Templates', icon: '📄' },
     { id: 'exports', label: 'Export History', icon: '📤' },
     // { id: 'import', label: 'Import', icon: '📥' },
   ];
