@@ -15,6 +15,7 @@ export default function ExportEstimateModal({
   usingDefaultDates = false,
   postExportBilling = false
 }) {
+  console.log('estimate modal props', estimate, exportType, postExportBilling);
   const [email, setEmail] = useState('');
   const [exportFormat, setExportFormat] = useState('csv');
 
@@ -428,12 +429,7 @@ export default function ExportEstimateModal({
 
               <div className="flex justify-between items-center pt-3 border-t border-blue-200">
                 <span className="text-lg font-bold text-gray-800">Total</span>
-              {(['notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'].includes(exportType)) && (
-                <span className="text-xl font-bold text-green-600">{formatCurrency(estimate.itemCounts?.finalAmount)}</span>
-              )}
-              {(['conversations', 'messages'].includes(exportType)) && (
                 <span className="text-xl font-bold text-green-600">{formatCurrency(estimate.finalAmount)}</span>
-              )}
               </div>
             </div>
           </div>
