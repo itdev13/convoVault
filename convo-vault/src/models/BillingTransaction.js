@@ -19,7 +19,7 @@ const billingTransactionSchema = new mongoose.Schema({
   // Transaction type
   type: {
     type: String,
-    enum: ['export_conversations', 'export_messages', 'export_notes', 'export_tasks', 'export_opportunities', 'export_formSubmissions', 'export_links', 'export_socialPosts', 'export_callLogs'],
+    enum: ['export_conversations', 'export_messages', 'export_notes', 'export_tasks', 'export_opportunities', 'export_formSubmissions', 'export_links', 'export_socialPosts', 'export_callLogs', 'export_templates'],
     required: true
   },
 
@@ -49,6 +49,7 @@ const billingTransactionSchema = new mongoose.Schema({
     links: { type: Number, default: 0 },
     socialPosts: { type: Number, default: 0 },
     callLogs: { type: Number, default: 0 },
+    templates: { type: Number, default: 0 },
     total: { type: Number, default: 0 }
   },
 

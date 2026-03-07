@@ -14,6 +14,7 @@ import FormSubmissionsTab from './tabs/FormSubmissionsTab';
 import LinksTab from './tabs/LinksTab';
 import SocialPostsTab from './tabs/SocialPostsTab';
 import CallLogsTab from './tabs/CallLogsTab';
+import TemplatesTab from './tabs/TemplatesTab';
 import ConversationMessages from './ConversationMessages';
 
 export default function Dashboard() {
@@ -40,6 +41,7 @@ export default function Dashboard() {
     { id: 'links', label: 'Links', icon: '🔗' },
     { id: 'socialPosts', label: 'Social Posts', icon: '📱' },
     { id: 'callLogs', label: 'Call Logs', icon: '📞' },
+    { id: 'templates', label: 'Templates', icon: '📄' },
     { id: 'exports', label: 'Export History', icon: '📤' },
     // { id: 'import', label: 'Import', icon: '📥' },
   ];
@@ -123,6 +125,7 @@ export default function Dashboard() {
               {activeTab === 'links' && <LinksTab />}
               {activeTab === 'socialPosts' && <SocialPostsTab />}
               {activeTab === 'callLogs' && <CallLogsTab />}
+              {activeTab === 'templates' && <TemplatesTab />}
               {activeTab === 'exports' && <ExportTab />}
               {activeTab === 'import' && <ImportTab />}
               {activeTab === 'support' && <SupportTab />}

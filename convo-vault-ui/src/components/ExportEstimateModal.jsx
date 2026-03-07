@@ -380,6 +380,20 @@ export default function ExportEstimateModal({
                   </div>
                 </div>
               )}
+
+              {/* Templates */}
+              {estimate.breakdown?.templates?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Templates</span>
+                    <div className="text-xs text-gray-500">1 credit per template</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.templates.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.templates.count)} credits</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -401,8 +415,8 @@ export default function ExportEstimateModal({
                 </>
               )}
 
-              {/* Show credit-based pricing for notes/tasks/opportunities/formSubmissions/links/socialPosts (1 item = 1 credit) */}
-              {(['notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'].includes(exportType)) && (
+              {/* Show credit-based pricing for notes/tasks/opportunities/formSubmissions/links/socialPosts/templates (1 item = 1 credit) */}
+              {(['notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'].includes(exportType)) && (
                 <>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Credits</span>

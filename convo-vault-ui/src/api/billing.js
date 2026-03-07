@@ -144,6 +144,19 @@ export const billingAPI = {
   },
 
   /**
+   * Search templates for a location (preview) — page-based pagination
+   */
+  searchTemplates: async (locationId, filters = {}, page = 1, limit = 25) => {
+    const response = await apiClient.post('/billing/templates/search', {
+      locationId,
+      filters,
+      page,
+      limit
+    });
+    return response;
+  },
+
+  /**
    * Search users for a location's company
    */
   searchUsers: async (locationId, query = '') => {

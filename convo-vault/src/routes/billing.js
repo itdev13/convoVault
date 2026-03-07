@@ -68,7 +68,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -76,8 +76,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date range (not applicable for notes/links)
-    if (!['notes', 'links'].includes(exportType)) {
+    // Validate date range (not applicable for notes/links/templates)
+    if (!['notes', 'links', 'templates'].includes(exportType)) {
       const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
       if (!dateValidation.valid) {
         return res.status(400).json({
@@ -99,7 +99,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       formSubmissions: 0,
       links: 0,
       socialPosts: 0,
-      callLogs: 0
+      callLogs: 0,
+      templates: 0
     };
 
     if (exportType === 'conversations') {
@@ -229,6 +230,14 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         pageSize: 1
       });
       counts.callLogs = result.total || 0;
+
+    } else if (exportType === 'templates') {
+      // Templates: returns totalCount directly
+      const result = await ghlService.getTemplates(locationId, {
+        type: filters?.type,
+        limit: '1'
+      });
+      counts.templates = result.total || 0;
     }
 
     // Get access token to fetch actual prices from GHL
@@ -279,7 +288,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -304,8 +313,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date range (not applicable for notes/links)
-    if (!['notes', 'links'].includes(exportType)) {
+    // Validate date range (not applicable for notes/links/templates)
+    if (!['notes', 'links', 'templates'].includes(exportType)) {
       const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
       if (!dateValidation.valid) {
         return res.status(400).json({
@@ -328,7 +337,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       formSubmissions: 0,
       links: 0,
       socialPosts: 0,
-      callLogs: 0
+      callLogs: 0,
+      templates: 0
     };
     let totalItems = 0;
 
@@ -465,6 +475,14 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
       totalItems = result.total || 0;
       counts.callLogs = totalItems;
+
+    } else if (exportType === 'templates') {
+      const result = await ghlService.getTemplates(locationId, {
+        type: filters?.type,
+        limit: '1'
+      });
+      totalItems = result.total || 0;
+      counts.templates = totalItems;
 
     } else {
       const result = await ghlService.exportMessages(locationId, {
@@ -606,6 +624,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       contactName: filters?.contactName || null,
       // Form submission-specific filters
       formId: filters?.formId || null,
+      // Template-specific filters
+      templateType: filters?.type || null,
       // Call log-specific filters
       agentId: filters?.agentId || null,
       callType: filters?.callType || null,
@@ -1105,6 +1125,37 @@ router.post('/tasks/search', authenticateSession, async (req, res) => {
   } catch (error) {
     logError('Search tasks error', error, { locationId: req.body?.locationId });
     res.status(500).json({ success: false, error: 'Failed to search tasks' });
+  }
+});
+
+/**
+ * @route POST /api/billing/templates/search
+ * @desc Search templates for a location (for preview in UI)
+ */
+router.post('/templates/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, page = 1, limit = 25 } = req.body;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const skip = (page - 1) * limit;
+    const result = await ghlService.getTemplates(locationId, {
+      type: filters.type,
+      limit: String(limit),
+      skip: String(skip)
+    });
+    res.json({
+      success: true,
+      data: {
+        templates: result.templates || [],
+        total: result.total || 0,
+        page,
+        limit
+      }
+    });
+  } catch (error) {
+    logError('Search templates error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search templates' });
   }
 });
 

@@ -25,6 +25,7 @@ const METER_IDS = {
   links: '69864aed1265653fdd7c0620',
   socialPosts: '69864aed1265653fdd7c0620',
   callLogs: '69864aed1265653fdd7c0620',
+  templates: '69864aed1265653fdd7c0620',
   businesses: '69864aed1265653fdd7c0620'
 };
 
@@ -38,7 +39,8 @@ const DEFAULT_UNIT_PRICES = {
   formSubmissions: 0.002,  // 0.2 cents per form submission (with volume discounts)
   links: 0.002,            // 0.2 cents per link (with volume discounts)
   socialPosts: 0.002,      // 0.2 cents per social post (with volume discounts)
-  callLogs: 0.002          // 0.2 cents per call log (with volume discounts)
+  callLogs: 0.002,         // 0.2 cents per call log (with volume discounts)
+  templates: 0.002         // 0.2 cents per template (with volume discounts)
 };
 
 // Cached prices from GHL API
@@ -152,7 +154,8 @@ class BillingService {
       formSubmissions = 0,
       links = 0,
       socialPosts = 0,
-      callLogs = 0
+      callLogs = 0,
+      templates = 0
     } = counts;
 
     // Use provided prices or defaults
@@ -167,8 +170,9 @@ class BillingService {
     const linksCost = links * (unitPrices.links || DEFAULT_UNIT_PRICES.links);
     const socialPostsCost = socialPosts * (unitPrices.socialPosts || DEFAULT_UNIT_PRICES.socialPosts);
     const callLogsCost = callLogs * (unitPrices.callLogs || DEFAULT_UNIT_PRICES.callLogs);
-    const discountableBase = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost;
-    const discountableItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs;
+    const templatesCost = templates * (unitPrices.templates || DEFAULT_UNIT_PRICES.templates);
+    const discountableBase = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost + templatesCost;
+    const discountableItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs + templates;
 
     // Notes/tasks: flat rate, NO discounts
     const notesTasksPrice = unitPrices.notesAndTasks || DEFAULT_UNIT_PRICES.notesAndTasks;
@@ -204,6 +208,7 @@ class BillingService {
         links,
         socialPosts,
         callLogs,
+        templates,
         total: totalItems
       },
       breakdown: {
@@ -256,6 +261,11 @@ class BillingService {
           count: callLogs,
           unitPrice: unitPrices.callLogs || DEFAULT_UNIT_PRICES.callLogs,
           subtotal: callLogsCost
+        },
+        templates: {
+          count: templates,
+          unitPrice: unitPrices.templates || DEFAULT_UNIT_PRICES.templates,
+          subtotal: templatesCost
         }
       },
       baseAmount,

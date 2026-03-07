@@ -274,6 +274,37 @@ async function fetchOpportunitiesPage(locationId, accessToken, page, filters = {
 }
 
 /**
+ * Fetch a page of templates for a location
+ * GET /locations/{locationId}/templates
+ */
+async function fetchTemplatesPage(locationId, accessToken, skip, filters = {}) {
+  const params = {
+    limit: '100',
+    skip: String(skip || 0),
+    deleted: false
+  };
+  if (filters.templateType) params.type = filters.templateType;
+
+  const response = await axios.get(`${GHL_API_URL}/locations/${locationId}/templates`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    },
+    params
+  });
+
+  const templates = response.data.templates || [];
+  const total = response.data.totalCount || 0;
+
+  return {
+    data: templates,
+    total,
+    hasMore: templates.length === 100
+  };
+}
+
+/**
  * Fetch a page of form submissions for a location
  */
 async function fetchFormSubmissionsPage(locationId, accessToken, page, filters = {}) {
@@ -699,6 +730,31 @@ function linksToCSV(links, includeHeader = true) {
       escapeCsv(link.name),
       escapeCsv(link.redirectTo || ''),
       escapeCsv("{{trigger_link."+link._id+"}}"),
+      escapeCsv(formatDate(link.dateAdded)),
+      escapeCsv(formatDate(link.dateUpdated))
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert templates to CSV format
+ */
+function templatesToCSV(templates, includeHeader = true) {
+  const header = includeHeader
+    ? 'TemplateID,Name,Type,LocationID,OriginID,DateAdded,DateUpdated\n'
+    : '';
+
+  const rows = templates.map(t => {
+    return [
+      escapeCsv(t._id || t.id || ''),
+      escapeCsv(t.name || ''),
+      escapeCsv(t.type || ''),
+      escapeCsv(t.locationId || ''),
+      escapeCsv(t.originId || ''),
+      escapeCsv(formatDate(t.dateAdded)),
+      escapeCsv(formatDate(t.dateUpdated))
     ].join(',');
   }).join('\n');
 
@@ -824,7 +880,8 @@ async function sendEmail(email, downloadUrl, jobDetails) {
         jobDetails.exportType === 'formSubmissions' ? 'Form Submissions' :
         jobDetails.exportType === 'links' ? 'Links' :
         jobDetails.exportType === 'socialPosts' ? 'Social Posts' :
-        jobDetails.exportType === 'callLogs' ? 'Call Logs' : 'Messages'
+        jobDetails.exportType === 'callLogs' ? 'Call Logs' :
+        jobDetails.exportType === 'templates' ? 'Templates' : 'Messages'
       } Export is Ready`,
       htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1480,6 +1537,50 @@ exports.handler = async (event, context) => {
 
       cursor = hasMoreData ? String(page) : null;
 
+    } else if (job.exportType === 'templates') {
+      // === TEMPLATES: Skip-based pagination (limit 100) ===
+      let currentSkip = cursor ? parseInt(cursor) : 0;
+      let hasMoreData_inner = true;
+
+      while (hasMoreData_inner && records.length < BATCH_SIZE) {
+        if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) {
+          hasMoreData = true;
+          break;
+        }
+
+        let pageResult;
+        try {
+          pageResult = await fetchTemplatesPage(job.locationId, accessToken, currentSkip, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401, refreshing token and retrying...');
+            await refreshAndUpdateToken();
+            pageResult = await fetchTemplatesPage(job.locationId, accessToken, currentSkip, job.filters || {});
+          } else {
+            throw fetchError;
+          }
+        }
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        currentSkip += pageResult.data.length;
+
+        log('Fetched templates page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, skip: currentSkip });
+
+        if (!pageResult.hasMore) {
+          hasMoreData_inner = false;
+          hasMoreData = false;
+        } else if (records.length >= BATCH_SIZE) {
+          hasMoreData = true;
+        }
+
+        if (hasMoreData_inner && records.length < BATCH_SIZE) {
+          await sleep(100);
+        }
+      }
+
+      cursor = hasMoreData ? String(currentSkip) : null;
+
     } else {
       // === CONVERSATIONS/MESSAGES: Standard pagination ===
       while (recordsFetched < BATCH_SIZE && hasMoreData) {
@@ -1581,6 +1682,8 @@ exports.handler = async (event, context) => {
         content = socialPostsToCSV(records, isFirstPart);
       } else if (job.exportType === 'callLogs') {
         content = callLogsToCSV(records, isFirstPart);
+      } else if (job.exportType === 'templates') {
+        content = templatesToCSV(records, isFirstPart);
       } else {
         content = messagesToCSV(records, isFirstPart, job.filters?.channel || '');
       }

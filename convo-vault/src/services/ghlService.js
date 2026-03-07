@@ -1239,6 +1239,37 @@ class GHLService {
     }
   }
   /**
+   * Get templates for a location
+   * GET /locations/{locationId}/templates
+   */
+  async getTemplates(locationId, options = {}) {
+    try {
+      const params = {
+        limit: String(options.limit || 25),
+        skip: String(options.skip || 0),
+        deleted: false
+      };
+      if (options.type) params.type = options.type;
+
+      const response = await this.apiRequest(
+        'GET',
+        `/locations/${locationId}/templates`,
+        locationId,
+        null,
+        params
+      );
+
+      return {
+        templates: response.templates || [],
+        total: response.totalCount || 0
+      };
+    } catch (error) {
+      logger.error('Get templates failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Get voice AI call logs for a location
    * GET /voice-ai/dashboard/call-logs
    * Note: Uses Version header 2021-04-15
