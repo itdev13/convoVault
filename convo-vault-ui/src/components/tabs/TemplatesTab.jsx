@@ -7,13 +7,6 @@ import ExportProgress from '../ExportProgress';
 
 const TEMPLATE_LIMIT = 25;
 
-const TYPE_OPTIONS = [
-  { value: '', label: 'All Channels' },
-  { value: 'email', label: 'Email' },
-  { value: 'sms', label: 'SMS' },
-  { value: 'whatsapp', label: 'WhatsApp' }
-];
-
 const TYPE_COLORS = {
   email: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
   sms: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
@@ -210,14 +203,15 @@ export default function TemplatesTab() {
           <div className="min-w-[200px]">
             <label className="block text-xs font-medium text-gray-600 mb-1">Channel</label>
             <Select
-              value={type || ''}
+              value={type || undefined}
               onChange={(val) => setType(val || '')}
               style={{ width: '100%' }}
               size="large"
             >
-              {TYPE_OPTIONS.map(opt => (
-                <Select.Option key={opt.value || '__all'} value={opt.value}>{opt.label}</Select.Option>
-              ))}
+              <Select.Option value={undefined}>All Channels</Select.Option>
+              <Select.Option value="email">Email</Select.Option>
+              <Select.Option value="sms">SMS</Select.Option>
+              <Select.Option value="whatsapp">WhatsApp</Select.Option>
             </Select>
           </div>
 
