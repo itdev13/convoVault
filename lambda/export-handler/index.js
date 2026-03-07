@@ -690,16 +690,15 @@ function formSubmissionsToCSV(submissions, includeHeader = true) {
  */
 function linksToCSV(links, includeHeader = true) {
   const header = includeHeader
-    ? 'LinkID,Name,RedirectTo,FieldKey,LocationID\n'
+    ? 'LinkID,Name,RedirectTo,FieldKey,dateAdded,dateUpdated\n'
     : '';
 
   const rows = links.map(link => {
     return [
-      escapeCsv(link.id),
+      escapeCsv(link._id),
       escapeCsv(link.name),
       escapeCsv(link.redirectTo || ''),
-      escapeCsv(link.fieldKey || ''),
-      escapeCsv(link.locationId || '')
+      escapeCsv("trigger_link."+link._id),
     ].join(',');
   }).join('\n');
 
