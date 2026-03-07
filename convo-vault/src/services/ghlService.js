@@ -987,9 +987,8 @@ class GHLService {
       if (options.query) params.query = options.query;
       // dueDate filter: { gt, lte }
       if (options.dueDate) params.dueDate = options.dueDate;
-      console.log("params tasks", params);
       const response = await this.apiRequest(
-        'GET',
+        'POST',
         `/locations/${locationId}/tasks/search`,
         locationId,
         { params }
