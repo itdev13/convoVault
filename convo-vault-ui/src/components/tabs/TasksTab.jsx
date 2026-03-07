@@ -155,7 +155,7 @@ export default function TasksTab() {
   const [currentSearchAfter, setCurrentSearchAfter] = useState(null);  // cursor for current page
   const [searchAfterHistory, setSearchAfterHistory] = useState([]);    // stack for back nav
   const [nextSearchAfter, setNextSearchAfter] = useState(null);        // cursor returned by last fetch
-  const TASK_LIMIT = 1;
+  const TASK_LIMIT = 25;
 
   const getUserName = (u) => `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || u?.name || u?.email || 'Unknown';
   const getContactName = (c) => c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
