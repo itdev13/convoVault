@@ -915,7 +915,7 @@ router.get('/contacts/:contactId/notes', authenticateSession, async (req, res) =
     }
 
     const result = await ghlService.getContactNotes(locationId, contactId);
-
+    console.log('get contact notes result', result);
     res.json({
       success: true,
       data: {
@@ -945,6 +945,7 @@ router.get('/contacts/:contactId/tasks', authenticateSession, async (req, res) =
 
     const result = await ghlService.getContactTasks(locationId, contactId);
 
+    console.log('get contact tasks result', result);
     res.json({
       success: true,
       data: {
