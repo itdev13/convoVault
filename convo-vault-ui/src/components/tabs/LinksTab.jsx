@@ -190,7 +190,6 @@ export default function LinksTab() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search links by name..."
               size="large"
-              allowClear
               onPressEnter={handleNewSearch}
               prefix={
                 <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
