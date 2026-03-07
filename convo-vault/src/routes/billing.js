@@ -145,38 +145,49 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       }
 
     } else if (exportType === 'notes' || exportType === 'tasks') {
-      // Notes/Tasks: per-contact APIs - sample contacts to estimate count
-      const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
-      const totalContacts = contactResult.total || 0;
-
-      if (totalContacts > 0) {
-        // Sample up to 10 contacts to estimate average items per contact
-        const SAMPLE_SIZE = Math.min(10, totalContacts);
-        const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
-        const sampleContacts = sampleResult.contacts || [];
-
-        let totalItemsInSample = 0;
-        for (const contact of sampleContacts) {
-          try {
-            if (exportType === 'notes') {
-              const result = await ghlService.getContactNotes(locationId, contact.id);
-              totalItemsInSample += result.total;
-            } else {
-              const result = await ghlService.getContactTasks(locationId, contact.id);
-              totalItemsInSample += result.total;
-            }
-          } catch (err) {
-            logger.warn('Failed to fetch for contact during estimation:', { contactId: contact.id });
-          }
-        }
-
-        const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
-        const estimatedTotal = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
-
+      if (filters?.contactId) {
+        // Exact count for a specific contact
         if (exportType === 'notes') {
-          counts.notes = estimatedTotal;
+          const result = await ghlService.getContactNotes(locationId, filters.contactId);
+          counts.notes = result.total;
         } else {
-          counts.tasks = estimatedTotal;
+          const result = await ghlService.getContactTasks(locationId, filters.contactId);
+          counts.tasks = result.total;
+        }
+      } else {
+        // Notes/Tasks: per-contact APIs - sample contacts to estimate count
+        const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
+        const totalContacts = contactResult.total || 0;
+
+        if (totalContacts > 0) {
+          // Sample up to 10 contacts to estimate average items per contact
+          const SAMPLE_SIZE = Math.min(10, totalContacts);
+          const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
+          const sampleContacts = sampleResult.contacts || [];
+
+          let totalItemsInSample = 0;
+          for (const contact of sampleContacts) {
+            try {
+              if (exportType === 'notes') {
+                const result = await ghlService.getContactNotes(locationId, contact.id);
+                totalItemsInSample += result.total;
+              } else {
+                const result = await ghlService.getContactTasks(locationId, contact.id);
+                totalItemsInSample += result.total;
+              }
+            } catch (err) {
+              logger.warn('Failed to fetch for contact during estimation:', { contactId: contact.id });
+            }
+          }
+
+          const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
+          const estimatedTotal = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
+
+          if (exportType === 'notes') {
+            counts.notes = estimatedTotal;
+          } else {
+            counts.tasks = estimatedTotal;
+          }
         }
       }
 
@@ -327,35 +338,48 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       totalItems = result.total || result.conversations?.length || 0;
       counts.conversations = totalItems;
     } else if (exportType === 'notes' || exportType === 'tasks') {
-      // Notes/Tasks: sample contacts to estimate
-      const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
-      const totalContacts = contactResult.total || 0;
-
-      if (totalContacts > 0) {
-        const SAMPLE_SIZE = Math.min(10, totalContacts);
-        const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
-        const sampleContacts = sampleResult.contacts || [];
-
-        let totalItemsInSample = 0;
-        for (const contact of sampleContacts) {
-          try {
-            if (exportType === 'notes') {
-              const result = await ghlService.getContactNotes(locationId, contact.id);
-              totalItemsInSample += result.total;
-            } else {
-              const result = await ghlService.getContactTasks(locationId, contact.id);
-              totalItemsInSample += result.total;
-            }
-          } catch (err) {
-            logger.warn('Sample contact fetch failed:', { contactId: contact.id });
-          }
+      if (filters?.contactId) {
+        // Exact count for a specific contact
+        if (exportType === 'notes') {
+          const result = await ghlService.getContactNotes(locationId, filters.contactId);
+          totalItems = result.total;
+          counts.notes = totalItems;
+        } else {
+          const result = await ghlService.getContactTasks(locationId, filters.contactId);
+          totalItems = result.total;
+          counts.tasks = totalItems;
         }
+      } else {
+        // Notes/Tasks: sample contacts to estimate
+        const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
+        const totalContacts = contactResult.total || 0;
 
-        const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
-        totalItems = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
+        if (totalContacts > 0) {
+          const SAMPLE_SIZE = Math.min(10, totalContacts);
+          const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
+          const sampleContacts = sampleResult.contacts || [];
 
-        if (exportType === 'notes') counts.notes = totalItems;
-        else counts.tasks = totalItems;
+          let totalItemsInSample = 0;
+          for (const contact of sampleContacts) {
+            try {
+              if (exportType === 'notes') {
+                const result = await ghlService.getContactNotes(locationId, contact.id);
+                totalItemsInSample += result.total;
+              } else {
+                const result = await ghlService.getContactTasks(locationId, contact.id);
+                totalItemsInSample += result.total;
+              }
+            } catch (err) {
+              logger.warn('Sample contact fetch failed:', { contactId: contact.id });
+            }
+          }
+
+          const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
+          totalItems = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
+
+          if (exportType === 'notes') counts.notes = totalItems;
+          else counts.tasks = totalItems;
+        }
       }
     } else if (exportType === 'opportunities') {
       // Opportunities: location-level search API returns total directly
@@ -830,6 +854,37 @@ router.get('/forms', authenticateSession, async (req, res) => {
       success: false,
       error: 'Failed to get forms'
     });
+  }
+});
+
+/**
+ * @route GET /api/billing/contacts/search
+ * @desc Search contacts for a location (for filter dropdowns)
+ */
+router.get('/contacts/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, query, limit } = req.query;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    const result = await ghlService.searchContacts(locationId, {
+      query: query || '',
+      limit: parseInt(limit) || 20
+    });
+
+    res.json({
+      success: true,
+      data: {
+        contacts: result.contacts || [],
+        total: result.total || 0
+      }
+    });
+
+  } catch (error) {
+    logError('Search contacts error', error, { locationId: req.query?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search contacts' });
   }
 });
 

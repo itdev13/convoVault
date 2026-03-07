@@ -1048,6 +1048,31 @@ exports.handler = async (event, context) => {
     log('Starting batch', { cursor, skip, alreadyProcessed: job.processedItems || 0 });
 
     if (job.exportType === 'notes' || job.exportType === 'tasks') {
+      if (job.filters?.contactId) {
+        // === NOTES/TASKS: Single contact shortcut ===
+        let items;
+        try {
+          if (job.exportType === 'notes') {
+            items = await fetchNotesForContact(job.filters.contactId, accessToken);
+          } else {
+            items = await fetchTasksForContact(job.filters.contactId, accessToken);
+          }
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401 on single-contact fetch, refreshing token...');
+            await refreshAndUpdateToken();
+            items = job.exportType === 'notes'
+              ? await fetchNotesForContact(job.filters.contactId, accessToken)
+              : await fetchTasksForContact(job.filters.contactId, accessToken);
+          } else {
+            throw fetchError;
+          }
+        }
+        items.forEach(item => { item.contactId = job.filters.contactId; });
+        records.push(...items);
+        hasMoreData = false;
+        cursor = null;
+      } else {
       // === NOTES/TASKS: Per-contact iteration ===
       // cursor = last processed contact ID (used as startAfterId)
       let contactStartAfter = cursor;
@@ -1150,6 +1175,7 @@ exports.handler = async (event, context) => {
 
       // Set cursor for next Lambda invocation (or null if done)
       cursor = hasMoreData ? contactStartAfter : null;
+      } // end else (all contacts)
 
     } else if (job.exportType === 'opportunities') {
       // === OPPORTUNITIES: Page-based pagination ===
