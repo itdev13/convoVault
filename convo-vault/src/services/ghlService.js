@@ -976,7 +976,6 @@ class GHLService {
         limit: options.limit || 20,
         skip: options.skip || 0,
         count: true,
-        isLocation: true
       };
 
       // contactId is always an array in the API
@@ -988,7 +987,7 @@ class GHLService {
       if (options.query) params.query = options.query;
       // dueDate filter: { gt, lte }
       if (options.dueDate) params.dueDate = options.dueDate;
-
+      console.log("params tasks", params);
       const response = await this.apiRequest(
         'GET',
         `/locations/${locationId}/tasks/search`,
