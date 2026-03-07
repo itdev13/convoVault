@@ -88,5 +88,18 @@ export const billingAPI = {
       params: { locationId }
     });
     return response;
+  },
+
+  /**
+   * Search tasks for a location (preview)
+   */
+  searchTasks: async (locationId, filters = {}, skip = 0, limit = 25) => {
+    const response = await apiClient.post('/billing/tasks/search', {
+      locationId,
+      filters,
+      skip,
+      limit
+    });
+    return response;
   }
 };

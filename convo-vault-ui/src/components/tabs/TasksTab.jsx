@@ -36,6 +36,15 @@ export default function TasksTab() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  // Task search results
+  const [tasks, setTasks] = useState([]);
+  const [tasksTotal, setTasksTotal] = useState(0);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState(null);
+  const [searched, setSearched] = useState(false);
+  const [taskSkip, setTaskSkip] = useState(0);
+  const TASK_LIMIT = 25;
+
   const getContactName = (c) =>
     c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
 
@@ -75,7 +84,6 @@ export default function TasksTab() {
   const handleContactSelect = (contactId) => {
     keepOpenRef.current = true;
     setTimeout(() => { keepOpenRef.current = false; }, 50);
-
     const contact = allContacts.find(c => c.id === contactId);
     if (!contact) return;
     if (selectedContacts.find(c => c.id === contactId)) {
@@ -132,6 +140,30 @@ export default function TasksTab() {
     return f;
   };
 
+  const handleSearch = async (skip = 0) => {
+    setTasksLoading(true);
+    setTasksError(null);
+    setSearched(true);
+    try {
+      const res = await billingAPI.searchTasks(location.id, getFilters(), skip, TASK_LIMIT);
+      if (res.success) {
+        setTasks(res.data.tasks || []);
+        setTasksTotal(res.data.total || 0);
+        setTaskSkip(skip);
+      } else {
+        setTasksError(res.error || 'Failed to search tasks');
+        setTasks([]);
+        setTasksTotal(0);
+      }
+    } catch (err) {
+      setTasksError(err.message || 'Failed to search tasks');
+      setTasks([]);
+      setTasksTotal(0);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
   const handleGetEstimate = async () => {
     setExportModalVisible(true);
     setEstimating(true);
@@ -182,7 +214,6 @@ export default function TasksTab() {
 
   const isExporting = activeJob && ['pending', 'processing'].includes(activeJob.status);
 
-  // Dropdown: matching contacts first, then selected-not-matching at bottom
   const dropdownContacts = (() => {
     if (!searchQuery) return allContacts;
     const q = searchQuery.toLowerCase();
@@ -196,6 +227,20 @@ export default function TasksTab() {
     );
     return [...matching, ...selectedNotMatching];
   })();
+
+  const contactNamesMap = Object.fromEntries(selectedContacts.map(c => [c.id, c.name]));
+
+  const formatDueDate = (dueDate) => {
+    if (!dueDate) return null;
+    try {
+      const d = new Date(dueDate);
+      if (isNaN(d.getTime())) return null;
+      return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch { return null; }
+  };
+
+  const hasPrev = taskSkip > 0;
+  const hasNext = taskSkip + TASK_LIMIT < tasksTotal;
 
   return (
     <div className="space-y-6">
@@ -215,9 +260,9 @@ export default function TasksTab() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Tasks</h2>
           <p className="text-sm text-gray-500 mt-1">
-            {selectedContacts.length > 0
-              ? `${selectedContacts.length} contact${selectedContacts.length > 1 ? 's' : ''} selected`
-              : 'Export tasks from this sub-account'}
+            {searched && tasksTotal > 0
+              ? `${tasksTotal.toLocaleString()} task${tasksTotal !== 1 ? 's' : ''} found`
+              : 'Search and export tasks from this sub-account'}
           </p>
         </div>
         <Button
@@ -232,7 +277,7 @@ export default function TasksTab() {
             </svg>
           }
         >
-          {selectedContacts.length > 1 ? `Export ${selectedContacts.length} Contacts` : 'Export Tasks'}
+          Export Tasks
         </Button>
       </div>
 
@@ -249,17 +294,17 @@ export default function TasksTab() {
       )}
 
       {/* Filters */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
           </svg>
-          <span className="text-sm font-semibold text-gray-700">Filters</span>
-        </div>
+          Filter Tasks
+        </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Contact filter */}
-          <div className="md:col-span-4">
+          {/* Contacts — narrower, 2 of 4 cols */}
+          <div className="md:col-span-2">
             <label className="block text-xs font-medium text-gray-600 mb-1">Contacts</label>
             <div className="relative">
               <Select
@@ -270,7 +315,7 @@ export default function TasksTab() {
                   setDropdownOpen(open);
                 }}
                 searchValue={searchQuery}
-                placeholder="Search and add contacts..."
+                placeholder="Search contacts..."
                 filterOption={false}
                 onSearch={handleContactSearch}
                 onSelect={handleContactSelect}
@@ -309,7 +354,7 @@ export default function TasksTab() {
                           )}
                         </div>
                         <span className={`font-medium ${isChipped ? 'text-blue-700' : ''}`}>{getContactName(c)}</span>
-                        {c.email && <span className="text-gray-400 text-xs">{c.email}</span>}
+                        {c.email && <span className="text-gray-400 text-xs truncate max-w-[120px]">{c.email}</span>}
                       </div>
                     </Select.Option>
                   );
@@ -327,30 +372,27 @@ export default function TasksTab() {
                 </button>
               )}
             </div>
-
-            {/* Selected chips */}
             {selectedContacts.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2 items-center">
+              <div className="mt-2 flex flex-wrap gap-1.5 items-center">
                 {selectedContacts.map(contact => (
-                  <div key={contact.id} className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-full pl-2 pr-1.5 py-1">
-                    <div className="w-4 h-4 bg-green-400 rounded-full flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-bold" style={{ fontSize: '9px' }}>
+                  <div key={contact.id} className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-full pl-2 pr-1 py-0.5">
+                    <div className="w-3.5 h-3.5 bg-green-400 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold" style={{ fontSize: '8px' }}>
                         {contact.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <span className="text-xs font-medium text-green-800">{contact.name}</span>
-                    {contact.email && <span className="text-xs text-green-400 hidden sm:inline">{contact.email}</span>}
                     <button
                       onClick={() => removeContact(contact.id)}
-                      className="w-4 h-4 rounded-full hover:bg-green-200 flex items-center justify-center transition-colors"
+                      className="w-3.5 h-3.5 rounded-full hover:bg-green-200 flex items-center justify-center transition-colors"
                     >
-                      <svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-2.5 h-2.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>
                 ))}
-                <button onClick={clearAll} className="text-xs text-red-400 hover:text-red-600 transition-colors ml-1">
+                <button onClick={clearAll} className="text-xs text-red-400 hover:text-red-600 transition-colors">
                   Clear all
                 </button>
               </div>
@@ -363,14 +405,14 @@ export default function TasksTab() {
             <Input
               value={taskName}
               onChange={(e) => setTaskName(e.target.value)}
-              placeholder="Search by task name..."
+              placeholder="Search by name..."
               size="large"
               allowClear
-              onPressEnter={handleGetEstimate}
+              onPressEnter={() => handleSearch(0)}
             />
           </div>
 
-          {/* Completed */}
+          {/* Status */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
             <Select
@@ -394,7 +436,7 @@ export default function TasksTab() {
               onChange={(date) => setStartDate(date ? date.format('YYYY-MM-DD') : '')}
               style={{ width: '100%' }}
               size="large"
-              placeholder="From date"
+              placeholder="From"
             />
           </div>
 
@@ -406,36 +448,178 @@ export default function TasksTab() {
               onChange={(date) => setEndDate(date ? date.format('YYYY-MM-DD') : '')}
               style={{ width: '100%' }}
               size="large"
-              placeholder="To date"
+              placeholder="To"
             />
           </div>
 
-          {/* Search button */}
-          <div className="md:col-span-4 flex justify-end">
+          {/* Search button — spans remaining 2 cols, right-aligned */}
+          <div className="md:col-span-2 flex items-end justify-end">
             <Button
-              onClick={handleGetEstimate}
-              disabled={isExporting}
+              onClick={() => handleSearch(0)}
+              loading={tasksLoading}
               size="large"
               type="primary"
-              className="bg-blue-600 hover:bg-blue-700 border-blue-600 px-8"
-              icon={
+              className="px-8"
+              icon={!tasksLoading && (
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-              }
+              )}
             >
-              Search & Export
+              Search
             </Button>
           </div>
         </div>
       </div>
 
+      {/* Loading */}
+      {tasksLoading && (
+        <div className="text-center py-14">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">Searching tasks...</p>
+        </div>
+      )}
 
-      {/* CSV Columns Info */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
+      {/* Error */}
+      {tasksError && !tasksLoading && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p className="font-medium text-red-800 text-sm">Error loading tasks</p>
+            <p className="text-red-600 text-xs mt-1">{tasksError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* No results */}
+      {searched && !tasksLoading && !tasksError && tasks.length === 0 && (
+        <div className="text-center py-16 bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl border-2 border-dashed border-yellow-300">
+          <div className="text-4xl mb-3">🔍</div>
+          <h3 className="text-base font-semibold text-gray-900 mb-1">No Tasks Found</h3>
+          <p className="text-gray-500 text-sm">Try adjusting your filters and search again</p>
+        </div>
+      )}
+
+      {/* Pagination + Task List */}
+      {!tasksLoading && !tasksError && tasks.length > 0 && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500">
+              Showing {taskSkip + 1}–{Math.min(taskSkip + tasks.length, tasksTotal)} of {tasksTotal.toLocaleString()} tasks
+            </span>
+            <div className="flex gap-2">
+              <Button size="small" disabled={!hasPrev} onClick={() => handleSearch(taskSkip - TASK_LIMIT)}>
+                Previous
+              </Button>
+              <Button size="small" disabled={!hasNext} type="primary" onClick={() => handleSearch(taskSkip + TASK_LIMIT)}>
+                Next
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {tasks.map((task) => {
+              const dueDateStr = formatDueDate(task.dueDate);
+              const isOverdue = task.dueDate && !task.completed && new Date(task.dueDate) < new Date();
+              const contactName = task.contactId
+                ? (contactNamesMap[task.contactId] || task.contactId)
+                : null;
+
+              return (
+                <div
+                  key={task.id || task._id}
+                  className="bg-white border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:shadow-sm transition-all"
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Status indicator */}
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                      task.completed ? 'bg-green-100 border border-green-400' : 'border-2 border-gray-300'
+                    }`}>
+                      {task.completed && (
+                        <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={`font-medium text-sm ${task.completed ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                          {task.title || '(No title)'}
+                        </p>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {dueDateStr && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              isOverdue
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {isOverdue ? 'Overdue · ' : ''}{dueDateStr}
+                            </span>
+                          )}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            task.completed
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {task.completed ? 'Done' : 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {task.body && (
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.body}</p>
+                      )}
+
+                      <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+                        {contactName && (
+                          <span className="flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <span className="font-mono">{contactName}</span>
+                          </span>
+                        )}
+                        {task.assignedTo && (
+                          <span className="flex items-center gap-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span className="font-mono">{task.assignedTo}</span>
+                          </span>
+                        )}
+                        {task.dateAdded && (
+                          <span>Added {new Date(task.dateAdded).toLocaleDateString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom pagination */}
+          {(hasPrev || hasNext) && (
+            <div className="flex justify-center gap-2 pt-2">
+              <Button disabled={!hasPrev} onClick={() => handleSearch(taskSkip - TASK_LIMIT)}>
+                Previous
+              </Button>
+              <Button disabled={!hasNext} type="primary" onClick={() => handleSearch(taskSkip + TASK_LIMIT)}>
+                Next
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Export Columns Info */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
-          {['TaskID', 'ContactID', 'ContactName', 'Title', 'Body', 'DueDate', 'Completed', 'AssignedTo', 'UserID', 'DateAdded'].map((col) => (
+          {['TaskID', 'ContactID', 'ContactName', 'Title', 'Body', 'DueDate', 'Completed', 'AssignedTo', 'DateAdded'].map((col) => (
             <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
               {col}
             </span>

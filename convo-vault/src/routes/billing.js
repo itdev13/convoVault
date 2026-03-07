@@ -954,6 +954,41 @@ router.get('/contacts/:contactId/tasks', authenticateSession, async (req, res) =
 });
 
 /**
+ * @route POST /api/billing/tasks/search
+ * @desc Search tasks for a location (for preview in UI)
+ */
+router.post('/tasks/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, skip = 0, limit = 25 } = req.body;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    const result = await ghlService.getLocationTasks(locationId, {
+      contactIds: filters.contactIds || [],
+      assignedTo: filters.assignedTo,
+      completed: filters.completed,
+      query: filters.query,
+      dueDate: filters.dueDate,
+      skip,
+      limit
+    });
+
+    res.json({
+      success: true,
+      data: {
+        tasks: result.tasks || [],
+        total: result.total || 0
+      }
+    });
+  } catch (error) {
+    logError('Search tasks error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search tasks' });
+  }
+});
+
+/**
  * @route GET /api/billing/contacts/search
  * @desc Search contacts for a location (for filter dropdowns)
  */
