@@ -196,29 +196,28 @@ async function fetchNotesForContact(contactId, accessToken) {
  */
 async function fetchTasksPage(locationId, accessToken, skip, filters = {}) {
   const LIMIT = 1000;
-  const params = { locationId, limit: LIMIT, skip, count: true, isLocation: true };
+  const body = { limit: LIMIT, skip, count: true };
 
   // contactId is always an array in the API
   if (filters.contactIds && filters.contactIds.length > 0) {
-    params.contactId = filters.contactIds;
+    body.contactId = filters.contactIds;
   }
-  if (filters.assignedTo) params.assignedTo = filters.assignedTo;
-  if (filters.completed !== undefined && filters.completed !== '') params.completed = filters.completed;
-  if (filters.query) params.query = filters.query;
+  if (filters.assignedTo) body.assignedTo = filters.assignedTo;
+  if (filters.completed !== undefined && filters.completed !== '') body.completed = filters.completed;
+  if (filters.query) body.query = filters.query;
   // dueDate filter: { gt, lte }
-  if (filters.dueDate) params.dueDate = filters.dueDate;
+  if (filters.dueDate) body.dueDate = filters.dueDate;
 
-  const response = await axios.get(`${GHL_API_URL}/locations/${locationId}/tasks`, {
+  const response = await axios.post(`${GHL_API_URL}/locations/${locationId}/tasks/search`, body, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'Version': '2021-07-28'
-    },
-    params
+    }
   });
 
   const tasks = response.data.tasks || [];
-  const total = response.data.total || 0;
+  const total = response.data.count || response.data.total || 0;
   return { data: tasks, total, hasMore: tasks.length >= LIMIT };
 }
 

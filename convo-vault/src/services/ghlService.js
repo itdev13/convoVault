@@ -995,7 +995,7 @@ class GHLService {
 
       return {
         tasks: response.tasks || [],
-        total: response.total || 0
+        total: response.count || response.total || 0
       };
     } catch (error) {
       logger.error('Get location tasks failed:', { locationId, error: error.message });
