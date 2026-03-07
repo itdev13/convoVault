@@ -991,7 +991,7 @@ class GHLService {
 
       const response = await this.apiRequest(
         'GET',
-        `/locations/${locationId}/tasks`,
+        `/locations/${locationId}/tasks/search`,
         locationId,
         { params }
       );
