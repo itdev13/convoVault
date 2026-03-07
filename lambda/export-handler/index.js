@@ -743,14 +743,32 @@ function linksToCSV(links, includeHeader = true) {
  */
 function templatesToCSV(templates, includeHeader = true) {
   const header = includeHeader
-    ? 'TemplateID,Name,Type,LocationID,OriginID,DateAdded,DateUpdated\n'
+    ? 'TemplateID,Name,Type,Subject,Body,HTML,Attachments,LocationID,OriginID,DateAdded,DateUpdated\n'
     : '';
 
   const rows = templates.map(t => {
+    const tpl = t.template || {};
+    // Email: subject, html, attachments; SMS/WhatsApp: body
+    const subject = tpl.subject || '';
+    const body = tpl.body || '';
+    const html = tpl.html || '';
+
+    // Attachments: prefer template.attachments (emails), fallback to urlAttachments
+    const attachments = Array.isArray(tpl.attachments) && tpl.attachments.length > 0
+      ? tpl.attachments
+      : Array.isArray(t.urlAttachments) && t.urlAttachments.length > 0
+        ? t.urlAttachments
+        : [];
+    const attachmentList = attachments.join('; ');
+
     return [
       escapeCsv(t._id || t.id || ''),
       escapeCsv(t.name || ''),
       escapeCsv(t.type || ''),
+      escapeCsv(subject),
+      escapeCsv(body),
+      escapeCsv(html),
+      escapeCsv(attachmentList),
       escapeCsv(t.locationId || ''),
       escapeCsv(t.originId || ''),
       escapeCsv(formatDate(t.dateAdded)),

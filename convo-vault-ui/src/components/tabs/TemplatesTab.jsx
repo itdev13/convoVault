@@ -208,7 +208,7 @@ export default function TemplatesTab() {
               style={{ width: '100%' }}
               size="large"
             >
-              <Select.Option value={undefined}>All Channels</Select.Option>
+              <Select.Option value={undefined}>All</Select.Option>
               <Select.Option value="email">Email</Select.Option>
               <Select.Option value="sms">SMS</Select.Option>
               <Select.Option value="whatsapp">WhatsApp</Select.Option>
@@ -303,7 +303,25 @@ export default function TemplatesTab() {
                           </span>
                         )}
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                      {/* Email: subject */}
+                      {tpl.template?.subject && (
+                        <p className="text-xs text-gray-600 mt-1 font-medium">Subject: {tpl.template.subject}</p>
+                      )}
+                      {/* SMS/WhatsApp: body */}
+                      {tpl.template?.body && (
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{tpl.template.body}</p>
+                      )}
+                      {/* Email: html preview (strip tags) */}
+                      {!tpl.template?.body && tpl.template?.html && (
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                          {tpl.template.html.replace(/<[^>]*>/g, '').slice(0, 200)}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mt-1">
+                        {(tpl.template?.attachments?.length > 0 || tpl.urlAttachments?.length > 0) && (() => {
+                          const count = (tpl.template?.attachments?.length || 0) + (tpl.urlAttachments?.length || 0);
+                          return <span className="text-gray-400">{count} attachment{count !== 1 ? 's' : ''}</span>;
+                        })()}
                         {tpl.originId && (
                           <span className="text-gray-400">Origin: {tpl.originId}</span>
                         )}
@@ -330,7 +348,7 @@ export default function TemplatesTab() {
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
-          {['TemplateID', 'Name', 'Type', 'LocationID', 'OriginID', 'DateAdded', 'DateUpdated'].map((col) => (
+          {['TemplateID', 'Name', 'Type', 'Subject', 'Body', 'HTML', 'Attachments', 'LocationID', 'OriginID', 'DateAdded', 'DateUpdated'].map((col) => (
             <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">{col}</span>
           ))}
         </div>
