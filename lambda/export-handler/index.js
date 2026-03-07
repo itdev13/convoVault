@@ -563,13 +563,8 @@ function notesToCSV(notes, includeHeader = true) {
  */
 function tasksToCSV(tasks, includeHeader = true) {
   const header = includeHeader
-    ? 'TaskID,ContactID,ContactName,Title,Body,DueDate,Completed,AssignedTo,UserID,DateAdded,Relations\n'
+    ? 'TaskID,ContactID,ContactName,Title,Body,DueDate,Completed,AssignedTo\n'
     : '';
-
-  const serializeRelations = (relations) => {
-    if (!Array.isArray(relations) || relations.length === 0) return '';
-    return relations.map(r => `${r.objectKey}:${r.recordId}`).join('|');
-  };
 
   const rows = tasks.map(task => {
     return [
@@ -581,9 +576,6 @@ function tasksToCSV(tasks, includeHeader = true) {
       escapeCsv(task.dueDate ? formatDate(task.dueDate) : ''),
       escapeCsv(task.completed != null ? (task.completed ? 'Yes' : 'No') : ''),
       escapeCsv(task.assignedTo || ''),
-      escapeCsv(task.userId || ''),
-      escapeCsv(formatDate(task.dateAdded)),
-      escapeCsv(serializeRelations(task.relations))
     ].join(',');
   }).join('\n');
 
