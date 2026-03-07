@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
-import { Button, Select, DatePicker, Input, Tooltip, message as antMessage } from 'antd';
+import { Button, Select, DatePicker, Input, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 import dayjs from 'dayjs';
@@ -193,22 +193,6 @@ export default function OpportunitiesTab() {
           >
             Export Opportunities
           </Button>
-          <Tooltip
-            title={
-              <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                <strong>Pay-per-use export</strong>
-                <br />
-                $0.002 per opportunity. Volume discounts apply.
-              </div>
-            }
-            placement="left"
-          >
-            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center cursor-help">
-              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </Tooltip>
         </div>
       </div>
 
@@ -349,25 +333,6 @@ export default function OpportunitiesTab() {
           </div>
         </div>
 
-        <div className="mt-4 bg-white/60 rounded-lg p-4 border border-purple-100">
-          <h4 className="text-sm font-semibold text-gray-800 mb-2">Pricing</h4>
-          <div className="flex items-center gap-6 text-sm text-gray-700">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span><strong>$0.002</strong> per opportunity (0.2 cents)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-              <span>Volume discounts apply</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 bg-purple-50 border border-purple-200 rounded-lg p-3">
-          <p className="text-xs text-purple-800">
-            <strong>Volume Discounts:</strong> 1,000-2,000: 20% off | 2,000-5,000: 40% off | 5,000-30,000: 50% off | 30,000+: 70% off
-          </p>
-        </div>
       </div>
 
       {/* CSV Columns Info */}

@@ -75,8 +75,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date range (not applicable for notes/tasks/links)
-    if (!['notes', 'tasks', 'links'].includes(exportType)) {
+    // Validate date range (not applicable for notes/links)
+    if (!['notes', 'links'].includes(exportType)) {
       const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
       if (!dateValidation.valid) {
         return res.status(400).json({
@@ -144,33 +144,23 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         counts.emailMessages = emailCount;
       }
 
-    } else if (exportType === 'notes' || exportType === 'tasks') {
+    } else if (exportType === 'notes') {
       if (filters?.contactId) {
-        // Exact count for a single contact
-        if (exportType === 'notes') {
-          const result = await ghlService.getContactNotes(locationId, filters.contactId);
-          counts.notes = result.total;
-        } else {
-          const result = await ghlService.getContactTasks(locationId, filters.contactId);
-          counts.tasks = result.total;
-        }
+        const result = await ghlService.getContactNotes(locationId, filters.contactId);
+        counts.notes = result.total;
       } else if (filters?.contactIds?.length > 0) {
-        // Exact count for multiple specific contacts
         let total = 0;
         for (const cId of filters.contactIds) {
           try {
-            const result = exportType === 'notes'
-              ? await ghlService.getContactNotes(locationId, cId)
-              : await ghlService.getContactTasks(locationId, cId);
+            const result = await ghlService.getContactNotes(locationId, cId);
             total += result.total;
           } catch (err) {
-            logger.warn('Failed to count for contact during estimation:', { contactId: cId });
+            logger.warn('Failed to count notes for contact during estimation:', { contactId: cId });
           }
         }
-        if (exportType === 'notes') counts.notes = total;
-        else counts.tasks = total;
+        counts.notes = total;
       } else {
-        // Notes/Tasks: all contacts — use post-export billing (charge after Lambda based on actual count)
+        // Notes: all contacts — use post-export billing
         return res.json({
           success: true,
           data: {
@@ -182,6 +172,18 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           }
         });
       }
+
+    } else if (exportType === 'tasks') {
+      // Tasks: location-level search API — always upfront billing
+      const result = await ghlService.getLocationTasks(locationId, {
+        contactIds: filters?.contactIds || [],
+        assignedTo: filters?.assignedTo,
+        completed: filters?.completed,
+        startDate: filters?.startDate,
+        endDate: filters?.endDate,
+        limit: 1
+      });
+      counts.tasks = result.total || 0;
 
     } else if (exportType === 'opportunities') {
       // Opportunities: location-level search API returns total directly
@@ -294,8 +296,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date range (not applicable for notes/tasks/links)
-    if (!['notes', 'tasks', 'links'].includes(exportType)) {
+    // Validate date range (not applicable for notes/links)
+    if (!['notes', 'links'].includes(exportType)) {
       const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
       if (!dateValidation.valid) {
         return res.status(400).json({
@@ -329,83 +331,58 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
       totalItems = result.total || result.conversations?.length || 0;
       counts.conversations = totalItems;
-    } else if (exportType === 'notes' || exportType === 'tasks') {
+    } else if (exportType === 'notes') {
       if (filters?.contactId) {
-        // Exact count for a single contact
-        if (exportType === 'notes') {
-          const result = await ghlService.getContactNotes(locationId, filters.contactId);
-          totalItems = result.total;
-          counts.notes = totalItems;
-        } else {
-          const result = await ghlService.getContactTasks(locationId, filters.contactId);
-          totalItems = result.total;
-          counts.tasks = totalItems;
-        }
+        const result = await ghlService.getContactNotes(locationId, filters.contactId);
+        totalItems = result.total;
+        counts.notes = totalItems;
       } else if (filters?.contactIds?.length > 0) {
-        // Exact count for multiple specific contacts
         let total = 0;
         for (const cId of filters.contactIds) {
           try {
-            const result = exportType === 'notes'
-              ? await ghlService.getContactNotes(locationId, cId)
-              : await ghlService.getContactTasks(locationId, cId);
+            const result = await ghlService.getContactNotes(locationId, cId);
             total += result.total;
           } catch (err) {
-            logger.warn('Sample contact fetch failed:', { contactId: cId });
+            logger.warn('Sample contact notes fetch failed:', { contactId: cId });
           }
         }
         totalItems = total;
-        if (exportType === 'notes') counts.notes = totalItems;
-        else counts.tasks = totalItems;
+        counts.notes = totalItems;
       } else {
-        // Notes/Tasks: all contacts — post-export billing, skip upfront charge
-        // Create a deferred transaction and start Lambda; Lambda charges after export
+        // Notes: all contacts — post-export billing
         const oauthTokenCheck = await OAuthToken.findActiveToken(locationId);
         if (!oauthTokenCheck || !oauthTokenCheck.refreshToken) {
           return res.status(400).json({ success: false, error: 'No valid OAuth token found for this location' });
         }
 
         const transaction = await BillingTransaction.create({
-          locationId,
-          companyId,
-          type: `export_${exportType}`,
-          itemCounts: { notes: 0, tasks: 0, total: 0 },
+          locationId, companyId, type: 'export_notes',
+          itemCounts: { notes: 0, total: 0 },
           pricing: { baseAmount: 0, discountPercent: 0, discountAmount: 0, finalAmount: 0 },
-          meterCharges: [],
-          status: 'deferred',
-          userId
+          meterCharges: [], status: 'deferred', userId
         });
 
         const jobFiltersDeferred = {
           channel: null, startDate: null, endDate: null,
-          contactId: null, contactIds: [],
-          query: null, id: null, conversationId: null,
-          lastMessageType: null, lastMessageDirection: null, status: null,
-          lastMessageAction: null, sortBy: null,
-          pipelineId: null, pipelineStageId: null,
-          formId: null, agentId: null, callType: null, actionType: null,
-          contactNames: null
+          contactId: null, contactIds: [], query: null, id: null,
+          conversationId: null, lastMessageType: null, lastMessageDirection: null,
+          status: null, lastMessageAction: null, sortBy: null,
+          pipelineId: null, pipelineStageId: null, formId: null,
+          agentId: null, callType: null, actionType: null, contactNames: null
         };
 
         const exportJob = await ExportJob.create({
-          locationId, companyId,
-          billingTransactionId: transaction._id,
-          exportType, format: format || 'csv',
-          filters: jobFiltersDeferred,
-          totalItems: 0,
-          postExportBilling: true,
-          status: 'pending',
-          notificationEmail: notificationEmail || null,
-          userId
+          locationId, companyId, billingTransactionId: transaction._id,
+          exportType: 'notes', format: format || 'csv', filters: jobFiltersDeferred,
+          totalItems: 0, postExportBilling: true, status: 'pending',
+          notificationEmail: notificationEmail || null, userId
         });
 
         transaction.exportJobId = exportJob._id;
         await transaction.save();
 
         const lambdaParams = {
-          FunctionName: LAMBDA_FUNCTION_NAME,
-          InvocationType: 'Event',
-          Qualifier: '$LATEST',
+          FunctionName: LAMBDA_FUNCTION_NAME, InvocationType: 'Event', Qualifier: '$LATEST',
           Payload: JSON.stringify({ exportJobId: exportJob._id.toString() })
         };
         const lambdaResult = await lambda.invoke(lambdaParams).promise();
@@ -418,13 +395,25 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         return res.json({
           success: true,
           data: {
-            jobId: exportJob._id.toString(),
-            status: 'processing',
-            totalItems: 0,
-            message: 'Export started. You will be charged $0.002 per note/task after export completes.'
+            jobId: exportJob._id.toString(), status: 'processing', totalItems: 0,
+            message: 'Export started. You will be charged $0.002 per note after export completes.'
           }
         });
       }
+
+    } else if (exportType === 'tasks') {
+      // Tasks: location-level search API — always upfront billing
+      const result = await ghlService.getLocationTasks(locationId, {
+        contactIds: filters?.contactIds || [],
+        assignedTo: filters?.assignedTo,
+        completed: filters?.completed,
+        startDate: filters?.startDate,
+        endDate: filters?.endDate,
+        limit: 1
+      });
+      totalItems = result.total || 0;
+      counts.tasks = totalItems;
+
     } else if (exportType === 'opportunities') {
       // Opportunities: location-level search API returns total directly
       const result = await ghlService.searchOpportunities(locationId, {

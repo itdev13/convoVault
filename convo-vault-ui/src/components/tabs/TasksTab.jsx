@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
 import { contactsAPI } from '../../api/contacts';
-import { Button, Select, message as antMessage, Spin } from 'antd';
+import { Button, Select, Input, DatePicker, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
+import dayjs from 'dayjs';
 
 export default function TasksTab() {
   const { location } = useAuth();
@@ -14,7 +15,6 @@ export default function TasksTab() {
   const [estimating, setEstimating] = useState(false);
   const [estimate, setEstimate] = useState(null);
   const [estimateError, setEstimateError] = useState(null);
-  const [postExportBilling, setPostExportBilling] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
 
@@ -30,40 +30,22 @@ export default function TasksTab() {
   // Selected contacts chips
   const [selectedContacts, setSelectedContacts] = useState([]);
 
-  // Tasks results — flat list with contactName attached
-  const [tasks, setTasks] = useState([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
-  const [tasksLoaded, setTasksLoaded] = useState(false);
+  // Task filters
+  const [assignedTo, setAssignedTo] = useState('');
+  const [completed, setCompleted] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const getContactName = (c) =>
     c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
 
-  // Load 100 contacts on mount, auto-select first
+  // Load 100 contacts on mount
   useEffect(() => {
     if (!location?.id) return;
     setContactsLoading(true);
     contactsAPI.search(location.id, '', 100)
       .then(res => {
-        if (res.success) {
-          const list = res.data.contacts || [];
-          setAllContacts(list);
-          if (list.length > 0) {
-            const first = list[0];
-            const firstContact = { id: first.id, name: getContactName(first), email: first.email || '' };
-            setSelectedContacts([firstContact]);
-            // Auto-fetch tasks for first contact
-            setTasksLoading(true);
-            contactsAPI.fetchTasks(location.id, first.id)
-              .then(res2 => {
-                if (res2.success) {
-                  setTasks((res2.data.tasks || []).map(t => ({ ...t, _contactName: firstContact.name, _contactEmail: firstContact.email, _contactId: first.id })));
-                  setTasksLoaded(true);
-                }
-              })
-              .catch(console.error)
-              .finally(() => setTasksLoading(false));
-          }
-        }
+        if (res.success) setAllContacts(res.data.contacts || []);
       })
       .catch(console.error)
       .finally(() => setContactsLoading(false));
@@ -91,14 +73,12 @@ export default function TasksTab() {
   };
 
   const handleContactSelect = (contactId) => {
-    // Prevent dropdown from closing after selection
     keepOpenRef.current = true;
     setTimeout(() => { keepOpenRef.current = false; }, 50);
 
     const contact = allContacts.find(c => c.id === contactId);
     if (!contact) return;
     if (selectedContacts.find(c => c.id === contactId)) {
-      // Toggle off — remove from chips
       removeContact(contactId);
     } else {
       setSelectedContacts(prev => [...prev, {
@@ -106,7 +86,6 @@ export default function TasksTab() {
         name: getContactName(contact),
         email: contact.email || ''
       }]);
-      setTasksLoaded(false);
     }
     setDropdownValue(null);
   };
@@ -118,38 +97,9 @@ export default function TasksTab() {
 
   const removeContact = (contactId) => {
     setSelectedContacts(prev => prev.filter(c => c.id !== contactId));
-    setTasksLoaded(false);
   };
 
-  const clearAll = () => {
-    setSelectedContacts([]);
-    setTasks([]);
-    setTasksLoaded(false);
-  };
-
-  // Search = fetch tasks for ALL selected contacts in parallel
-  const handleSearch = async () => {
-    if (selectedContacts.length === 0) return;
-    setTasksLoading(true);
-    setTasksLoaded(false);
-    setTasks([]);
-
-    try {
-      const results = await Promise.all(
-        selectedContacts.map(contact =>
-          contactsAPI.fetchTasks(location.id, contact.id)
-            .then(res => (res.success ? res.data.tasks || [] : []).map(t => ({ ...t, _contactName: contact.name, _contactEmail: contact.email, _contactId: contact.id })))
-            .catch(() => [])
-        )
-      );
-      setTasks(results.flat());
-      setTasksLoaded(true);
-    } catch (err) {
-      antMessage.error('Failed to load tasks');
-    } finally {
-      setTasksLoading(false);
-    }
-  };
+  const clearAll = () => setSelectedContacts([]);
 
   // Poll active job
   useEffect(() => {
@@ -167,10 +117,16 @@ export default function TasksTab() {
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
   const getFilters = () => {
-    if (selectedContacts.length === 0) return {};
     const contactNames = Object.fromEntries(selectedContacts.map(c => [c.id, c.name]));
-    if (selectedContacts.length === 1) return { contactId: selectedContacts[0].id, contactNames };
-    return { contactIds: selectedContacts.map(c => c.id), contactNames };
+    const f = {
+      contactIds: selectedContacts.map(c => c.id),
+      contactNames
+    };
+    if (assignedTo) f.assignedTo = assignedTo;
+    if (completed !== '') f.completed = completed === 'true';
+    if (startDate) f.startDate = dayjs(startDate).startOf('day').toISOString();
+    if (endDate) f.endDate = dayjs(endDate).endOf('day').toISOString();
+    return f;
   };
 
   const handleGetEstimate = async () => {
@@ -178,34 +134,12 @@ export default function TasksTab() {
     setEstimating(true);
     setEstimate(null);
     setEstimateError(null);
-    setPostExportBilling(false);
     try {
-      if (selectedContacts.length > 0 && tasksLoaded) {
-        // Exact count already known from loaded tasks — calculate cost locally
-        const count = tasks.length;
-        const unitPrice = 0.002;
-        const finalAmount = count * unitPrice;
-        setEstimate({
-          itemCounts: { tasks: count, total: count },
-          breakdown: { tasks: { count, unitPrice, subtotal: finalAmount } },
-          baseAmount: finalAmount,
-          discountPercent: 0,
-          discountAmount: 0,
-          finalAmount,
-          finalAmountDollars: finalAmount
-        });
+      const res = await billingAPI.getEstimate(location.id, 'tasks', getFilters());
+      if (res.success) {
+        setEstimate(res.data.estimate);
       } else {
-        // No contacts selected or tasks not yet loaded — call API
-        const res = await billingAPI.getEstimate(location.id, 'tasks', getFilters());
-        if (res.success) {
-          if (res.data.postExportBilling) {
-            setPostExportBilling(true);
-          } else {
-            setEstimate(res.data.estimate);
-          }
-        } else {
-          setEstimateError(res.error || 'Failed to calculate estimate');
-        }
+        setEstimateError(res.error || 'Failed to calculate estimate');
       }
     } catch (err) {
       setEstimateError(err.message || 'Failed to calculate estimate');
@@ -240,19 +174,12 @@ export default function TasksTab() {
   };
 
   const handleModalClose = () => {
-    if (!processing) { setExportModalVisible(false); setEstimate(null); setEstimateError(null); setPostExportBilling(false); }
-  };
-
-  const formatDate = (val) => {
-    if (!val) return '—';
-    try { return new Date(val).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
-    catch { return '—'; }
+    if (!processing) { setExportModalVisible(false); setEstimate(null); setEstimateError(null); }
   };
 
   const isExporting = activeJob && ['pending', 'processing'].includes(activeJob.status);
-  const hasSelected = selectedContacts.length > 0;
 
-  // Dropdown: matching contacts first, then selected contacts not matching (so they're always visible)
+  // Dropdown: matching contacts first, then selected-not-matching at bottom
   const dropdownContacts = (() => {
     if (!searchQuery) return allContacts;
     const q = searchQuery.toLowerCase();
@@ -278,7 +205,6 @@ export default function TasksTab() {
         estimate={estimate}
         error={estimateError}
         exportType="tasks"
-        postExportBilling={postExportBilling}
       />
 
       {/* Header */}
@@ -286,35 +212,25 @@ export default function TasksTab() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Tasks</h2>
           <p className="text-sm text-gray-500 mt-1">
-            {hasSelected
+            {selectedContacts.length > 0
               ? `${selectedContacts.length} contact${selectedContacts.length > 1 ? 's' : ''} selected`
               : 'Export all contact tasks from this sub-account'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {tasksLoaded && tasks.length > 0 && (
-            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 text-center mr-1">
-              <div className="text-xl font-bold text-green-700">{tasks.length}</div>
-              <div className="text-xs text-green-500">Tasks Found</div>
-            </div>
-          )}
-          <Button
-            onClick={handleGetEstimate}
-            disabled={isExporting}
-            size="large"
-            type="primary"
-            className="bg-green-600 hover:bg-green-700 border-green-600"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            }
-          >
-            {hasSelected
-              ? selectedContacts.length === 1 ? 'Export Tasks' : `Export ${selectedContacts.length} Contacts`
-              : 'Export All Tasks'}
-          </Button>
-        </div>
+        <Button
+          onClick={handleGetEstimate}
+          disabled={isExporting}
+          size="large"
+          type="primary"
+          className="bg-green-600 hover:bg-green-700 border-green-600"
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          }
+        >
+          {selectedContacts.length > 1 ? `Export ${selectedContacts.length} Contacts` : 'Export Tasks'}
+        </Button>
       </div>
 
       {/* Active Export Progress */}
@@ -329,28 +245,28 @@ export default function TasksTab() {
         />
       )}
 
-      {/* Search & Filters */}
+      {/* Filters */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
           <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
           </svg>
-          <span className="text-sm font-semibold text-gray-700">Search & Filters</span>
+          <span className="text-sm font-semibold text-gray-700">Filters</span>
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">
-            Contact <span className="text-gray-400">(optional — leave blank to export all)</span>
-          </label>
-          <div className="flex gap-3 items-center">
-            <div className="relative" style={{ flex: 1 }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Contact filter */}
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Contacts <span className="text-gray-400">(optional — leave blank to export all)</span>
+            </label>
+            <div className="relative">
               <Select
                 showSearch
                 open={dropdownOpen}
                 onDropdownVisibleChange={(open) => {
                   if (!open && keepOpenRef.current) return;
                   setDropdownOpen(open);
-                  if (!open && selectedContacts.length > 0) handleSearch();
                 }}
                 searchValue={searchQuery}
                 placeholder="Search and add contacts..."
@@ -370,7 +286,7 @@ export default function TasksTab() {
                         {selectedContacts.length > 0 ? `${selectedContacts.length} selected` : 'Click to select'}
                       </span>
                       <button
-                        onMouseDown={(e) => { e.preventDefault(); setDropdownOpen(false); if (selectedContacts.length > 0) handleSearch(); }}
+                        onMouseDown={(e) => { e.preventDefault(); setDropdownOpen(false); }}
                         className="text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded transition-colors"
                       >
                         Done
@@ -411,162 +327,124 @@ export default function TasksTab() {
               )}
             </div>
 
-            <Button
-              onClick={handleSearch}
-              disabled={selectedContacts.length === 0 || tasksLoading}
-              size="large"
-              loading={tasksLoading}
-              icon={
-                !tasksLoading && (
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                )
-              }
-            >
-              Search
-            </Button>
+            {/* Selected chips */}
+            {selectedContacts.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2 items-center">
+                {selectedContacts.map(contact => (
+                  <div key={contact.id} className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-full pl-2 pr-1.5 py-1">
+                    <div className="w-4 h-4 bg-green-400 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold" style={{ fontSize: '9px' }}>
+                        {contact.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <span className="text-xs font-medium text-green-800">{contact.name}</span>
+                    {contact.email && <span className="text-xs text-green-400 hidden sm:inline">{contact.email}</span>}
+                    <button
+                      onClick={() => removeContact(contact.id)}
+                      className="w-4 h-4 rounded-full hover:bg-green-200 flex items-center justify-center transition-colors"
+                    >
+                      <svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                <button onClick={clearAll} className="text-xs text-red-400 hover:text-red-600 transition-colors ml-1">
+                  Clear all
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Selected chips */}
-          {selectedContacts.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2 items-center">
-              {selectedContacts.map(contact => (
-                <div key={contact.id} className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-full pl-2 pr-1.5 py-1">
-                  <div className="w-4 h-4 bg-green-400 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold" style={{ fontSize: '9px' }}>
-                      {contact.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <span className="text-xs font-medium text-green-800">{contact.name}</span>
-                  {contact.email && <span className="text-xs text-green-400 hidden sm:inline">{contact.email}</span>}
-                  <button
-                    onClick={() => removeContact(contact.id)}
-                    className="w-4 h-4 rounded-full hover:bg-green-200 flex items-center justify-center transition-colors"
-                  >
-                    <svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-              <button onClick={clearAll} className="text-xs text-red-400 hover:text-red-600 transition-colors ml-1">
-                Clear all
-              </button>
-            </div>
-          )}
-        </div>
+          {/* Assigned To */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Assigned To (User ID)</label>
+            <Input
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              placeholder="User ID..."
+              size="large"
+              allowClear
+            />
+          </div>
 
-        {!hasSelected && (
-          <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2 mt-3">
-            <strong>Export All:</strong> No contact selected — will export tasks for all contacts. You'll be charged <strong>$0.002 per task</strong> after the export completes.
-          </p>
-        )}
+          {/* Completed */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+            <Select
+              value={completed || undefined}
+              onChange={(val) => setCompleted(val || '')}
+              placeholder="All Tasks"
+              allowClear
+              style={{ width: '100%' }}
+              size="large"
+            >
+              <Select.Option value="true">Completed</Select.Option>
+              <Select.Option value="false">Incomplete</Select.Option>
+            </Select>
+          </div>
+
+          {/* Start Date */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Due Date From</label>
+            <DatePicker
+              value={startDate ? dayjs(startDate) : null}
+              onChange={(date) => setStartDate(date ? date.format('YYYY-MM-DD') : '')}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="From date"
+            />
+          </div>
+
+          {/* End Date */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Due Date To</label>
+            <DatePicker
+              value={endDate ? dayjs(endDate) : null}
+              onChange={(date) => setEndDate(date ? date.format('YYYY-MM-DD') : '')}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="To date"
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Tasks Results */}
-      {tasksLoading ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-12 flex items-center justify-center gap-3">
-          <Spin />
-          <span className="text-gray-400 text-sm">
-            Loading tasks for {selectedContacts.length} contact{selectedContacts.length > 1 ? 's' : ''}...
-          </span>
-        </div>
-      ) : tasksLoaded && (
-        tasks.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-12 flex flex-col items-center justify-center text-center gap-3">
-            <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center">
-              <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-600">No tasks found</p>
-              <p className="text-xs text-gray-400 mt-1">
-                {selectedContacts.length > 0
-                  ? `The selected contact${selectedContacts.length > 1 ? 's have' : ' has'} no tasks yet`
-                  : 'No tasks available for this location'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {tasks.map((task, i) => (
-              <div key={task.id || i} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-green-200 transition-colors">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="w-8 h-8 bg-green-50 border border-green-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-semibold text-green-600">{task._contactName}</span>
-                        {task._contactEmail && <span className="text-xs text-gray-400">{task._contactEmail}</span>}
-                        {task.completed && (
-                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Completed</span>
-                        )}
-                      </div>
-                      {task.title && <p className="text-sm font-medium text-gray-800 mb-1">{task.title}</p>}
-                      {(task.bodyText || task.body) && <p className="text-xs text-gray-500 whitespace-pre-wrap">{task.bodyText || task.body}</p>}
-                      {task.assignedTo && (
-                        <p className="text-xs text-gray-400 mt-1">Assigned to: {task.assignedTo}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-400 flex-shrink-0 text-right">
-                    {task.dueDate && (
-                      <div className={new Date(task.dueDate) < new Date() && !task.completed ? 'text-red-400' : ''}>
-                        Due: {formatDate(task.dueDate)}
-                      </div>
-                    )}
-                    <div className="mt-1 text-gray-300">{formatDate(task.dateAdded)}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      )}
-
       {/* Info Card */}
-      {!tasksLoaded && !tasksLoading && (
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-2xl">✅</span>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">How Tasks Export Works</h3>
-              <ul className="space-y-2 text-sm text-gray-700">
-                <li className="flex items-start gap-2">
-                  <span className="text-green-500 mt-0.5">1.</span>
-                  <span>Select specific contacts above, or leave blank to export all</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-500 mt-0.5">2.</span>
-                  <span>For each contact, we fetch all their tasks</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-500 mt-0.5">3.</span>
-                  <span>Tasks are exported with contact details, title, status, due dates, and assignments into a CSV or JSON file</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-500 mt-0.5">4.</span>
-                  <span>You receive an email with a download link when ready</span>
-                </li>
-              </ul>
-            </div>
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <span className="text-2xl">✅</span>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">How Tasks Export Works</h3>
+            <ul className="space-y-2 text-sm text-gray-700">
+              <li className="flex items-start gap-2">
+                <span className="text-green-500 mt-0.5">1.</span>
+                <span>Filter by contacts, assigned user, completion status, or due date range</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-green-500 mt-0.5">2.</span>
+                <span>We fetch all matching tasks from your sub-account</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-green-500 mt-0.5">3.</span>
+                <span>Tasks are exported with contact details, title, due dates, and assignments into a CSV or JSON file</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-green-500 mt-0.5">4.</span>
+                <span>You receive an email with a download link when ready</span>
+              </li>
+            </ul>
           </div>
         </div>
-      )}
+      </div>
 
       {/* CSV Columns Info */}
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
-          {['TaskID', 'ContactID', 'ContactName', 'Title', 'Body', 'DueDate', 'Completed', 'AssignedTo'].map((col) => (
+          {['TaskID', 'ContactID', 'ContactName', 'Title', 'Body', 'DueDate', 'Completed', 'AssignedTo', 'UserID', 'DateAdded'].map((col) => (
             <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
               {col}
             </span>

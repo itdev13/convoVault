@@ -191,15 +191,36 @@ async function fetchNotesForContact(contactId, accessToken) {
 /**
  * Fetch all tasks for a specific contact
  */
-async function fetchTasksForContact(contactId, accessToken) {
-  const response = await axios.get(`${GHL_API_URL}/contacts/${contactId}/tasks`, {
+/**
+ * Fetch a page of tasks for a location via location-level search API
+ */
+async function fetchTasksPage(locationId, accessToken, page, filters = {}) {
+  const params = { locationId, limit: 1000, page };
+
+  if (filters.contactIds && filters.contactIds.length > 0) {
+    if (filters.contactIds.length === 1) {
+      params.contactId = filters.contactIds[0];
+    } else {
+      params.contactId = filters.contactIds;
+    }
+  }
+  if (filters.assignedTo) params.assignedTo = filters.assignedTo;
+  if (filters.completed !== undefined && filters.completed !== '') params.completed = filters.completed;
+  if (filters.startDate) params.startDate = filters.startDate;
+  if (filters.endDate) params.endDate = filters.endDate;
+
+  const response = await axios.get(`${GHL_API_URL}/locations/${locationId}/tasks`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'Version': '2021-07-28'
-    }
+    },
+    params
   });
-  return response.data.tasks || [];
+
+  const tasks = response.data.tasks || [];
+  const total = response.data.total || 0;
+  return { data: tasks, total, hasMore: tasks.length >= 1000 };
 }
 
 /**
@@ -1116,26 +1137,17 @@ exports.handler = async (event, context) => {
 
     log('Starting batch', { cursor, skip, alreadyProcessed: job.processedItems || 0 });
 
-    if (job.exportType === 'notes' || job.exportType === 'tasks') {
+    if (job.exportType === 'notes') {
       if (job.filters?.contactId) {
-        // === NOTES/TASKS: Single contact shortcut ===
+        // === NOTES: Single contact ===
         let items;
         try {
-          if (job.exportType === 'notes') {
-            items = await fetchNotesForContact(job.filters.contactId, accessToken);
-          } else {
-            items = await fetchTasksForContact(job.filters.contactId, accessToken);
-          }
+          items = await fetchNotesForContact(job.filters.contactId, accessToken);
         } catch (fetchError) {
           if (fetchError.response?.status === 401) {
-            log('Got 401 on single-contact fetch, refreshing token...');
             await refreshAndUpdateToken();
-            items = job.exportType === 'notes'
-              ? await fetchNotesForContact(job.filters.contactId, accessToken)
-              : await fetchTasksForContact(job.filters.contactId, accessToken);
-          } else {
-            throw fetchError;
-          }
+            items = await fetchNotesForContact(job.filters.contactId, accessToken);
+          } else { throw fetchError; }
         }
         const singleName = (job.filters.contactNames || {})[job.filters.contactId] || '';
         items.forEach(item => { item.contactId = job.filters.contactId; item.contactName = singleName; });
@@ -1143,29 +1155,17 @@ exports.handler = async (event, context) => {
         hasMoreData = false;
         cursor = null;
       } else if (job.filters?.contactIds?.length > 0) {
-        // === NOTES/TASKS: Multiple specific contacts ===
-        const contactIds = job.filters.contactIds;
-        for (const cId of contactIds) {
-          const remaining = context.getRemainingTimeInMillis();
-          if (remaining < TIMEOUT_BUFFER_MS) {
-            log('Approaching timeout during multi-contact fetch');
-            hasMoreData = true;
-            break;
-          }
+        // === NOTES: Multiple specific contacts ===
+        for (const cId of job.filters.contactIds) {
+          if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) { hasMoreData = true; break; }
           let items;
           try {
-            items = job.exportType === 'notes'
-              ? await fetchNotesForContact(cId, accessToken)
-              : await fetchTasksForContact(cId, accessToken);
+            items = await fetchNotesForContact(cId, accessToken);
           } catch (fetchError) {
             if (fetchError.response?.status === 401) {
               await refreshAndUpdateToken();
-              items = job.exportType === 'notes'
-                ? await fetchNotesForContact(cId, accessToken)
-                : await fetchTasksForContact(cId, accessToken);
-            } else {
-              throw fetchError;
-            }
+              items = await fetchNotesForContact(cId, accessToken);
+            } else { throw fetchError; }
           }
           const cName = (job.filters.contactNames || {})[cId] || '';
           items.forEach(item => { item.contactId = cId; item.contactName = cName; });
@@ -1175,109 +1175,86 @@ exports.handler = async (event, context) => {
         hasMoreData = false;
         cursor = null;
       } else {
-      // === NOTES/TASKS: Per-contact iteration ===
-      // cursor = last processed contact ID (used as startAfterId)
-      let contactStartAfter = cursor;
-
-      while (recordsFetched < BATCH_SIZE && hasMoreData) {
-        const remaining = context.getRemainingTimeInMillis();
-        if (remaining < TIMEOUT_BUFFER_MS) {
-          log('Approaching timeout, saving progress', { remainingMs: remaining });
-          break;
-        }
-
-        // Fetch a page of contacts
-        let contactsResult;
-        try {
-          contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
-        } catch (fetchError) {
-          if (fetchError.response?.status === 401) {
-            log('Got 401 on contacts fetch, refreshing token...');
-            await refreshAndUpdateToken();
-            contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
-          } else {
-            throw fetchError;
-          }
-        }
-
-        const contacts = contactsResult.contacts;
-        if (contacts.length === 0) {
-          hasMoreData = false;
-          break;
-        }
-
-        log('Fetched contacts page', { count: contacts.length, startAfter: contactStartAfter });
-
-        // Process each contact on this page
-        let stoppedEarly = false;
-        for (const contact of contacts) {
-          const remaining = context.getRemainingTimeInMillis();
-          if (remaining < TIMEOUT_BUFFER_MS) {
-            log('Approaching timeout mid-contact iteration');
-            stoppedEarly = true;
-            break;
-          }
-          if (recordsFetched >= BATCH_SIZE) {
-            stoppedEarly = true;
-            break;
-          }
-
-          // Fetch notes or tasks for this contact, with 401/429 retry
-          let items;
+        // === NOTES: All contacts — per-contact iteration ===
+        let contactStartAfter = cursor;
+        while (recordsFetched < BATCH_SIZE && hasMoreData) {
+          if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) { break; }
+          let contactsResult;
           try {
-            if (job.exportType === 'notes') {
-              items = await fetchNotesForContact(contact.id, accessToken);
-            } else {
-              items = await fetchTasksForContact(contact.id, accessToken);
-            }
+            contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
           } catch (fetchError) {
             if (fetchError.response?.status === 401) {
-              log('Got 401, refreshing token...');
               await refreshAndUpdateToken();
-              items = job.exportType === 'notes'
-                ? await fetchNotesForContact(contact.id, accessToken)
-                : await fetchTasksForContact(contact.id, accessToken);
-            } else if (fetchError.response?.status === 429) {
-              log('Rate limited, waiting 2s before retry...');
-              await sleep(2000);
-              items = job.exportType === 'notes'
-                ? await fetchNotesForContact(contact.id, accessToken)
-                : await fetchTasksForContact(contact.id, accessToken);
-            } else {
-              throw fetchError;
-            }
+              contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
+            } else { throw fetchError; }
           }
-
-          // Enrich items with contact info
-          const contactName = contact.contactName || contact.name ||
-            `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Unknown';
-          items.forEach(item => {
-            item.contactId = contact.id;
-            item.contactName = contactName;
-          });
-
-          records.push(...items);
-          recordsFetched += items.length;
-          contactStartAfter = contact.id;
-
-          // Rate limiting between contacts (GHL: 100 req/10 sec)
-          await sleep(150);
+          const contacts = contactsResult.contacts;
+          if (contacts.length === 0) { hasMoreData = false; break; }
+          let stoppedEarly = false;
+          for (const contact of contacts) {
+            if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS || recordsFetched >= BATCH_SIZE) { stoppedEarly = true; break; }
+            let items;
+            try {
+              items = await fetchNotesForContact(contact.id, accessToken);
+            } catch (fetchError) {
+              if (fetchError.response?.status === 401) {
+                await refreshAndUpdateToken();
+                items = await fetchNotesForContact(contact.id, accessToken);
+              } else if (fetchError.response?.status === 429) {
+                await sleep(2000);
+                items = await fetchNotesForContact(contact.id, accessToken);
+              } else { throw fetchError; }
+            }
+            const contactName = contact.contactName || contact.name ||
+              `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Unknown';
+            items.forEach(item => { item.contactId = contact.id; item.contactName = contactName; });
+            records.push(...items);
+            recordsFetched += items.length;
+            contactStartAfter = contact.id;
+            await sleep(150);
+          }
+          if (stoppedEarly) break;
+          if (contacts.length < 100) { hasMoreData = false; }
         }
-
-        // If we stopped early (timeout/batch full), keep hasMoreData=true
-        if (stoppedEarly) {
-          break;
-        }
-
-        // Check if this was the last page of contacts
-        if (contacts.length < 100) {
-          hasMoreData = false;
-        }
+        cursor = hasMoreData ? contactStartAfter : null;
       }
 
-      // Set cursor for next Lambda invocation (or null if done)
-      cursor = hasMoreData ? contactStartAfter : null;
-      } // end else (all contacts)
+    } else if (job.exportType === 'tasks') {
+      // === TASKS: Location-level page-based API (limit 1000 per page) ===
+      let page = cursor ? parseInt(cursor) : 1;
+
+      while (recordsFetched < BATCH_SIZE && hasMoreData) {
+        if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) { break; }
+
+        let pageResult;
+        try {
+          pageResult = await fetchTasksPage(job.locationId, accessToken, page, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            await refreshAndUpdateToken();
+            pageResult = await fetchTasksPage(job.locationId, accessToken, page, job.filters || {});
+          } else { throw fetchError; }
+        }
+
+        // Enrich tasks with contactName from contactNames map if available
+        const contactNamesMap = job.filters?.contactNames || {};
+        pageResult.data.forEach(task => {
+          if (!task.contactName && task.contactId) {
+            task.contactName = contactNamesMap[task.contactId] || '';
+          }
+        });
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        page++;
+
+        log('Fetched tasks page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, page, hasMore: pageResult.hasMore });
+
+        if (!pageResult.hasMore) { hasMoreData = false; }
+        if (hasMoreData && recordsFetched < BATCH_SIZE) { await sleep(100); }
+      }
+
+      cursor = hasMoreData ? String(page) : null;
 
     } else if (job.exportType === 'opportunities') {
       // === OPPORTUNITIES: Page-based pagination ===

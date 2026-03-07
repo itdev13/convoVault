@@ -966,6 +966,45 @@ class GHLService {
     }
   }
   /**
+   * Search tasks for a location
+   * GET /locations/:locationId/tasks
+   */
+  async getLocationTasks(locationId, options = {}) {
+    try {
+      const params = {
+        locationId,
+        limit: options.limit || 20,
+        page: options.page || 1
+      };
+
+      // Pass contactIds as array (empty = all contacts)
+      if (options.contactIds && options.contactIds.length > 0) {
+        params.contactId = options.contactIds.length === 1 ? options.contactIds[0] : options.contactIds;
+      }
+      if (options.assignedTo) params.assignedTo = options.assignedTo;
+      if (options.completed !== undefined && options.completed !== '') params.completed = options.completed;
+      if (options.dueDate) params.dueDate = options.dueDate;
+      if (options.startDate) params.startDate = options.startDate;
+      if (options.endDate) params.endDate = options.endDate;
+
+      const response = await this.apiRequest(
+        'GET',
+        `/locations/${locationId}/tasks`,
+        locationId,
+        { params }
+      );
+
+      return {
+        tasks: response.tasks || [],
+        total: response.total || 0
+      };
+    } catch (error) {
+      logger.error('Get location tasks failed:', { locationId, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
    * Search opportunities for a location
    * GET /opportunities/search
    */
