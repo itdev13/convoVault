@@ -177,7 +177,6 @@ export default function NotesTab() {
           finalAmount,
           finalAmountDollars: finalAmount
         });
-        console.log('estimate', estimate);
       } else {
         // No contacts selected or notes not yet loaded — call API
         const res = await billingAPI.getEstimate(location.id, 'notes', getFilters());
@@ -239,6 +238,7 @@ export default function NotesTab() {
 
   return (
     <div className="space-y-6">
+      {console.log('postExportBilling', estimate, postExportBilling)}
       <ExportEstimateModal
         visible={exportModalVisible}
         onCancel={handleModalClose}
