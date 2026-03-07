@@ -321,7 +321,7 @@ async function fetchFormSubmissionsPage(locationId, accessToken, page, filters =
 async function fetchLinksPage(locationId, accessToken, skip, filters = {}) {
   const params = {
     locationId,
-    limit: 1000,
+    limit: 10,
     skip: skip || 0
   };
   if (filters.query) params.query = filters.query;
