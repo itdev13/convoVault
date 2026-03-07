@@ -18,9 +18,10 @@ export default function ExportEstimateModal({
   const [email, setEmail] = useState('');
   const [exportFormat, setExportFormat] = useState('csv');
 
-  // Format currency (value is in dollars) - round to 2 decimal places
+  // Format currency (value is in dollars) - use 4 decimal places for sub-cent amounts
   const formatCurrency = (value) => {
     const num = Number(value) || 0;
+    if (num > 0 && num < 0.01) return `$${num.toFixed(4)}`;
     return `$${num.toFixed(2)}`;
   };
 
@@ -427,7 +428,12 @@ export default function ExportEstimateModal({
 
               <div className="flex justify-between items-center pt-3 border-t border-blue-200">
                 <span className="text-lg font-bold text-gray-800">Total</span>
+              {(['notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'].includes(exportType)) && (
+                <span className="text-xl font-bold text-green-600">{formatCurrency(estimate.itemCounts?.finalAmount)}</span>
+              )}
+              {(['conversations', 'messages'].includes(exportType)) && (
                 <span className="text-xl font-bold text-green-600">{formatCurrency(estimate.finalAmount)}</span>
+              )}
               </div>
             </div>
           </div>
