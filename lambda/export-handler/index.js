@@ -30,7 +30,7 @@ const EMAIL_FROM_ADDRESS = 'support@vaultsuite.store';
 const BATCH_SIZE = 10000;           // Records per Lambda invocation
 const API_PAGE_SIZE = 100;          // Records per GHL API call
 const API_MESSAGES_PAGE_SIZE = 500;
-const TIMEOUT_BUFFER_MS = 14 * 60 * 1000;  // 14 min buffer before timeout
+const TIMEOUT_BUFFER_MS = 13 * 60 * 1000;  // 14 min buffer before timeout
 
 // MongoDB client (reused across warm invocations)
 let dbClient = null;
@@ -861,13 +861,14 @@ async function chargePostExport(db, job, actualCount, accessToken) {
   const finalAmount = actualCount * NOTES_TASKS_UNIT_PRICE;
   const transactionId = job.billingTransactionId.toString();
 
+
   const response = await axios.post(
     `${GHL_API_URL}/marketplace/billing/charges`,
     {
       companyId: job.companyId,
       meterId: NOTES_TASKS_METER_ID,
       units: actualCount,
-      price: Number((finalAmount / actualCount).toFixed(4)),
+      price: NOTES_TASKS_UNIT_PRICE,
       appId: GHL_APP_ID,
       eventId: transactionId,
       locationId: job.locationId,
