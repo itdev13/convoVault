@@ -22,6 +22,7 @@ export default function NotesTab() {
   const [allContacts, setAllContacts] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [dropdownValue, setDropdownValue] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const searchTimeout = useRef(null);
 
   // Selected contacts chips
@@ -67,8 +68,9 @@ export default function NotesTab() {
   }, [location?.id]);
 
   const handleContactSearch = (query) => {
+    setSearchQuery(query);
     clearTimeout(searchTimeout.current);
-    if (!query) return;
+    if (!query.trim()) return;
     searchTimeout.current = setTimeout(async () => {
       setContactsLoading(true);
       try {
@@ -89,7 +91,10 @@ export default function NotesTab() {
   const handleContactSelect = (contactId) => {
     const contact = allContacts.find(c => c.id === contactId);
     if (!contact) return;
-    if (!selectedContacts.find(c => c.id === contactId)) {
+    if (selectedContacts.find(c => c.id === contactId)) {
+      // Toggle off — remove from chips
+      removeContact(contactId);
+    } else {
       setSelectedContacts(prev => [...prev, {
         id: contact.id,
         name: getContactName(contact),
@@ -98,6 +103,12 @@ export default function NotesTab() {
       setNotesLoaded(false);
     }
     setDropdownValue(null);
+    setSearchQuery('');
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    clearTimeout(searchTimeout.current);
   };
 
   const removeContact = (contactId) => {
@@ -234,11 +245,24 @@ export default function NotesTab() {
 
   const isExporting = activeJob && ['pending', 'processing'].includes(activeJob.status);
   const hasSelected = selectedContacts.length > 0;
-  const availableContacts = allContacts.filter(c => !selectedContacts.find(s => s.id === c.id));
+
+  // Dropdown: matching contacts first, then selected contacts not matching (so they're always visible)
+  const dropdownContacts = (() => {
+    if (!searchQuery) return allContacts;
+    const q = searchQuery.toLowerCase();
+    const matching = allContacts.filter(c => {
+      const name = getContactName(c).toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      return name.includes(q) || email.includes(q);
+    });
+    const selectedNotMatching = allContacts.filter(c =>
+      selectedContacts.find(s => s.id === c.id) && !matching.find(m => m.id === c.id)
+    );
+    return [...matching, ...selectedNotMatching];
+  })();
 
   return (
     <div className="space-y-6">
-      {console.log('postExportBilling', estimate, postExportBilling)}
       <ExportEstimateModal
         visible={exportModalVisible}
         onCancel={handleModalClose}
@@ -312,25 +336,51 @@ export default function NotesTab() {
             Contact <span className="text-gray-400">(optional — leave blank to export all)</span>
           </label>
           <div className="flex gap-3 items-center">
-            <Select
-              showSearch
-              placeholder="Search and add contacts..."
-              filterOption={false}
-              onSearch={handleContactSearch}
-              onSelect={handleContactSelect}
-              value={dropdownValue}
-              loading={contactsLoading}
-              style={{ flex: 1 }}
-              size="large"
-              notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
-            >
-              {availableContacts.map(c => (
-                <Select.Option key={c.id} value={c.id}>
-                  <span className="font-medium">{getContactName(c)}</span>
-                  {c.email && <span className="text-gray-400 text-xs ml-2">{c.email}</span>}
-                </Select.Option>
-              ))}
-            </Select>
+            <div className="relative" style={{ flex: 1 }}>
+              <Select
+                showSearch
+                searchValue={searchQuery}
+                placeholder="Search and add contacts..."
+                filterOption={false}
+                onSearch={handleContactSearch}
+                onSelect={handleContactSelect}
+                value={dropdownValue}
+                loading={contactsLoading}
+                style={{ width: '100%' }}
+                size="large"
+                notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
+              >
+                {dropdownContacts.map(c => {
+                  const isChipped = !!selectedContacts.find(s => s.id === c.id);
+                  return (
+                    <Select.Option key={c.id} value={c.id}>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 ${isChipped ? 'bg-blue-500' : 'border border-gray-300'}`}>
+                          {isChipped && (
+                            <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className={`font-medium ${isChipped ? 'text-blue-700' : ''}`}>{getContactName(c)}</span>
+                        {c.email && <span className="text-gray-400 text-xs">{c.email}</span>}
+                      </div>
+                    </Select.Option>
+                  );
+                })}
+              </Select>
+              {searchQuery && (
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); clearSearch(); }}
+                  className="absolute top-1/2 -translate-y-1/2 z-10 text-gray-400 hover:text-gray-600 flex items-center justify-center w-5 h-5 rounded-full hover:bg-gray-200 transition-colors"
+                  style={{ right: '32px' }}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
 
             <Button
               onClick={handleSearch}
