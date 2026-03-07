@@ -185,6 +185,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         dueDate: filters?.dueDate,
         sortKey: filters?.sortKey,
         sortDirection: filters?.sortDirection,
+        unAssigned: filters.unAssigned,
+        businessId: filters.businessId,
         limit: 1
       });
       counts.tasks = result.total || 0;

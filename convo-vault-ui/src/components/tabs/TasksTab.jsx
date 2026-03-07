@@ -138,6 +138,7 @@ export default function TasksTab() {
 
   // Task filters
   const [taskName, setTaskName] = useState('');
+  const [businessId, setBusinessId] = useState('');
   const [completed, setCompleted] = useState('');
   const [overdue, setOverdue] = useState('');
   const [unAssigned, setUnAssigned] = useState('');
@@ -280,6 +281,9 @@ export default function TasksTab() {
       const [key, dir] = sortBy.split('_');
       f.sortKey = key;
       f.sortDirection = parseInt(dir, 10);
+    }
+    if(businessId != ''){
+      f.businessId = businessId;
     }
     f.limit=1
     return f;
@@ -526,6 +530,17 @@ export default function TasksTab() {
               <Select.Option value="true">Unassigned Only</Select.Option>
               <Select.Option value="false">Assigned Only</Select.Option>
             </Select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Task Name</label>
+            <Input
+              value={businessId}
+              onChange={(e) => setBusinessId(e.target.value)}
+              placeholder="Search by businessId..."
+              size="large"
+              onPressEnter={handleNewSearch}
+            />
           </div>
 
           {/* Sort By */}

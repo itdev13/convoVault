@@ -210,6 +210,8 @@ async function fetchTasksPage(locationId, accessToken, skip, filters = {}) {
   if (filters.dueDate) body.dueDate = filters.dueDate;
   if (filters.sortKey) body.sortKey = filters.sortKey;
   if (filters.sortDirection !== undefined) body.sortDirection = filters.sortDirection;
+  if (filters.businessId != undefined) body.businessId = filters.businessId;
+  if (filters.unAssigned != undefined) body.unAssigned = filters.unAssigned;
 
   const response = await axios.post(`${GHL_API_URL}/locations/${locationId}/tasks/search`, body, {
     headers: {
