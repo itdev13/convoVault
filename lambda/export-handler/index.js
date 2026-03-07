@@ -535,17 +535,17 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
  */
 function notesToCSV(notes, includeHeader = true) {
   const header = includeHeader
-    ? 'NoteID,ContactID,ContactName,Body,DateAdded,CreatedBy\n'
+    ? 'NoteID,ContactID,ContactName,Body,UserID,DateAdded\n'
     : '';
 
   const rows = notes.map(note => {
     return [
       escapeCsv(note.id),
       escapeCsv(note.contactId),
-      escapeCsv(note.contactName),
-      escapeCsv(note.body),
-      escapeCsv(formatDate(note.dateAdded)),
-      escapeCsv(note.userId || note.createdBy || '')
+      escapeCsv(note.contactName || ''),
+      escapeCsv(note.bodyText || note.body || ''),
+      escapeCsv(note.userId || ''),
+      escapeCsv(formatDate(note.dateAdded))
     ].join(',');
   }).join('\n');
 
@@ -557,19 +557,18 @@ function notesToCSV(notes, includeHeader = true) {
  */
 function tasksToCSV(tasks, includeHeader = true) {
   const header = includeHeader
-    ? 'TaskID,ContactID,ContactName,Title,Body,DueDate,Status,Completed,AssignedTo,DateAdded\n'
+    ? 'TaskID,ContactID,ContactName,Title,Body,DueDate,Completed,AssignedTo,UserID,DateAdded\n'
     : '';
 
   const rows = tasks.map(task => {
     return [
       escapeCsv(task.id),
       escapeCsv(task.contactId),
-      escapeCsv(task.contactName),
-      escapeCsv(task.title),
-      escapeCsv(task.body),
-      escapeCsv(formatDate(task.dueDate)),
-      escapeCsv(task.status || ''),
-      escapeCsv(task.completed ? 'Yes' : 'No'),
+      escapeCsv(task.contactName || ''),
+      escapeCsv(task.title || ''),
+      escapeCsv(task.bodyText || task.body || ''),
+      escapeCsv(task.dueDate ? formatDate(task.dueDate) : ''),
+      escapeCsv(task.completed != null ? (task.completed ? 'Yes' : 'No') : ''),
       escapeCsv(task.assignedTo || ''),
       escapeCsv(formatDate(task.dateAdded))
     ].join(',');
@@ -1133,7 +1132,8 @@ exports.handler = async (event, context) => {
             throw fetchError;
           }
         }
-        items.forEach(item => { item.contactId = job.filters.contactId; });
+        const singleName = (job.filters.contactNames || {})[job.filters.contactId] || '';
+        items.forEach(item => { item.contactId = job.filters.contactId; item.contactName = singleName; });
         records.push(...items);
         hasMoreData = false;
         cursor = null;
@@ -1162,7 +1162,8 @@ exports.handler = async (event, context) => {
               throw fetchError;
             }
           }
-          items.forEach(item => { item.contactId = cId; });
+          const cName = (job.filters.contactNames || {})[cId] || '';
+          items.forEach(item => { item.contactId = cId; item.contactName = cName; });
           records.push(...items);
           await sleep(150);
         }

@@ -64,7 +64,9 @@ const exportJobSchema = new mongoose.Schema({
     callType: { type: String, default: null },
     actionType: { type: String, default: null },
     // Notes/Tasks multi-contact export
-    contactIds: { type: [String], default: [] }
+    contactIds: { type: [String], default: [] },
+    // Notes/Tasks contact name lookup map { contactId: "Name" }
+    contactNames: { type: mongoose.Schema.Types.Mixed, default: null }
   },
 
   // Progress tracking

@@ -167,9 +167,10 @@ export default function TasksTab() {
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
   const getFilters = () => {
-    if (selectedContacts.length === 1) return { contactId: selectedContacts[0].id };
-    if (selectedContacts.length > 1) return { contactIds: selectedContacts.map(c => c.id) };
-    return {};
+    if (selectedContacts.length === 0) return {};
+    const contactNames = Object.fromEntries(selectedContacts.map(c => [c.id, c.name]));
+    if (selectedContacts.length === 1) return { contactId: selectedContacts[0].id, contactNames };
+    return { contactIds: selectedContacts.map(c => c.id), contactNames };
   };
 
   const handleGetEstimate = async () => {
@@ -494,15 +495,9 @@ export default function TasksTab() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="w-8 h-8 bg-green-50 border border-green-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      {task.completed ? (
-                        <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                      )}
+                      <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -511,12 +506,9 @@ export default function TasksTab() {
                         {task.completed && (
                           <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Completed</span>
                         )}
-                        {task.status && !task.completed && (
-                          <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{task.status}</span>
-                        )}
                       </div>
-                      <p className="text-sm font-medium text-gray-800">{task.title || '(no title)'}</p>
-                      {task.body && <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap">{task.body}</p>}
+                      {task.title && <p className="text-sm font-medium text-gray-800 mb-1">{task.title}</p>}
+                      {(task.bodyText || task.body) && <p className="text-xs text-gray-500 whitespace-pre-wrap">{task.bodyText || task.body}</p>}
                       {task.assignedTo && (
                         <p className="text-xs text-gray-400 mt-1">Assigned to: {task.assignedTo}</p>
                       )}
@@ -524,11 +516,11 @@ export default function TasksTab() {
                   </div>
                   <div className="text-xs text-gray-400 flex-shrink-0 text-right">
                     {task.dueDate && (
-                      <div className={task.completed ? 'text-green-500' : new Date(task.dueDate) < new Date() ? 'text-red-400' : ''}>
+                      <div className={new Date(task.dueDate) < new Date() && !task.completed ? 'text-red-400' : ''}>
                         Due: {formatDate(task.dueDate)}
                       </div>
                     )}
-                    {task.dateAdded && <div className="mt-1 text-gray-300">Added: {formatDate(task.dateAdded)}</div>}
+                    <div className="mt-1 text-gray-300">{formatDate(task.dateAdded)}</div>
                   </div>
                 </div>
               </div>
@@ -573,7 +565,7 @@ export default function TasksTab() {
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
-          {['TaskID', 'ContactID', 'ContactName', 'Title', 'Body', 'DueDate', 'Status', 'Completed', 'AssignedTo', 'DateAdded'].map((col) => (
+          {['TaskID', 'ContactID', 'ContactName', 'Title', 'Body', 'DueDate', 'Completed', 'AssignedTo', 'UserID', 'DateAdded'].map((col) => (
             <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
               {col}
             </span>

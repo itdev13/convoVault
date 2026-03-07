@@ -383,7 +383,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
           lastMessageType: null, lastMessageDirection: null, status: null,
           lastMessageAction: null, sortBy: null,
           pipelineId: null, pipelineStageId: null,
-          formId: null, agentId: null, callType: null, actionType: null
+          formId: null, agentId: null, callType: null, actionType: null,
+          contactNames: null
         };
 
         const exportJob = await ExportJob.create({
@@ -599,7 +600,9 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       // Call log-specific filters
       agentId: filters?.agentId || null,
       callType: filters?.callType || null,
-      actionType: filters?.actionType || null
+      actionType: filters?.actionType || null,
+      // Notes/Tasks contact name map { contactId: "Name" }
+      contactNames: filters?.contactNames || null
     };
 
     const exportJob = await ExportJob.create({
@@ -915,7 +918,7 @@ router.get('/contacts/:contactId/notes', authenticateSession, async (req, res) =
     }
 
     const result = await ghlService.getContactNotes(locationId, contactId);
-    console.log('get contact notes result', result);
+
     res.json({
       success: true,
       data: {
@@ -945,7 +948,6 @@ router.get('/contacts/:contactId/tasks', authenticateSession, async (req, res) =
 
     const result = await ghlService.getContactTasks(locationId, contactId);
 
-    console.log('get contact tasks result', result);
     res.json({
       success: true,
       data: {
