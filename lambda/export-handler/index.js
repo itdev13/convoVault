@@ -535,8 +535,13 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
  */
 function notesToCSV(notes, includeHeader = true) {
   const header = includeHeader
-    ? 'NoteID,ContactID,ContactName,Body,UserID,DateAdded\n'
+    ? 'NoteID,ContactID,ContactName,Body,UserID,DateAdded,Relations\n'
     : '';
+
+  const serializeRelations = (relations) => {
+    if (!Array.isArray(relations) || relations.length === 0) return '';
+    return relations.map(r => `${r.objectKey}:${r.recordId}`).join('|');
+  };
 
   const rows = notes.map(note => {
     return [
@@ -545,7 +550,8 @@ function notesToCSV(notes, includeHeader = true) {
       escapeCsv(note.contactName || ''),
       escapeCsv(note.bodyText || note.body || ''),
       escapeCsv(note.userId || ''),
-      escapeCsv(formatDate(note.dateAdded))
+      escapeCsv(formatDate(note.dateAdded)),
+      escapeCsv(serializeRelations(note.relations))
     ].join(',');
   }).join('\n');
 
@@ -557,8 +563,13 @@ function notesToCSV(notes, includeHeader = true) {
  */
 function tasksToCSV(tasks, includeHeader = true) {
   const header = includeHeader
-    ? 'TaskID,ContactID,ContactName,Title,Body,DueDate,Completed,AssignedTo,UserID,DateAdded\n'
+    ? 'TaskID,ContactID,ContactName,Title,Body,DueDate,Completed,AssignedTo,UserID,DateAdded,Relations\n'
     : '';
+
+  const serializeRelations = (relations) => {
+    if (!Array.isArray(relations) || relations.length === 0) return '';
+    return relations.map(r => `${r.objectKey}:${r.recordId}`).join('|');
+  };
 
   const rows = tasks.map(task => {
     return [
@@ -570,7 +581,9 @@ function tasksToCSV(tasks, includeHeader = true) {
       escapeCsv(task.dueDate ? formatDate(task.dueDate) : ''),
       escapeCsv(task.completed != null ? (task.completed ? 'Yes' : 'No') : ''),
       escapeCsv(task.assignedTo || ''),
-      escapeCsv(formatDate(task.dateAdded))
+      escapeCsv(task.userId || ''),
+      escapeCsv(formatDate(task.dateAdded)),
+      escapeCsv(serializeRelations(task.relations))
     ].join(',');
   }).join('\n');
 

@@ -350,6 +350,7 @@ export default function TasksTab() {
                 onDropdownVisibleChange={(open) => {
                   if (!open && keepOpenRef.current) return;
                   setDropdownOpen(open);
+                  if (!open && selectedContacts.length > 0) handleSearch();
                 }}
                 searchValue={searchQuery}
                 placeholder="Search and add contacts..."
@@ -369,7 +370,7 @@ export default function TasksTab() {
                         {selectedContacts.length > 0 ? `${selectedContacts.length} selected` : 'Click to select'}
                       </span>
                       <button
-                        onMouseDown={(e) => { e.preventDefault(); setDropdownOpen(false); }}
+                        onMouseDown={(e) => { e.preventDefault(); setDropdownOpen(false); if (selectedContacts.length > 0) handleSearch(); }}
                         className="text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded transition-colors"
                       >
                         Done
@@ -565,7 +566,7 @@ export default function TasksTab() {
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
-          {['TaskID', 'ContactID', 'ContactName', 'Title', 'Body', 'DueDate', 'Completed', 'AssignedTo', 'UserID', 'DateAdded'].map((col) => (
+          {['TaskID', 'ContactID', 'ContactName', 'Title', 'Body', 'DueDate', 'Completed', 'AssignedTo', 'UserID', 'DateAdded', 'Relations'].map((col) => (
             <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
               {col}
             </span>

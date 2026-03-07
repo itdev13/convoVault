@@ -350,6 +350,7 @@ export default function NotesTab() {
                 onDropdownVisibleChange={(open) => {
                   if (!open && keepOpenRef.current) return; // stay open after selection
                   setDropdownOpen(open);
+                  if (!open && selectedContacts.length > 0) handleSearch();
                 }}
                 searchValue={searchQuery}
                 placeholder="Search and add contacts..."
@@ -369,7 +370,7 @@ export default function NotesTab() {
                         {selectedContacts.length > 0 ? `${selectedContacts.length} selected` : 'Click to select'}
                       </span>
                       <button
-                        onMouseDown={(e) => { e.preventDefault(); setDropdownOpen(false); }}
+                        onMouseDown={(e) => { e.preventDefault(); setDropdownOpen(false); if (selectedContacts.length > 0) handleSearch(); }}
                         className="text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded transition-colors"
                       >
                         Done
@@ -504,7 +505,7 @@ export default function NotesTab() {
                         <span className="text-xs font-semibold text-blue-600">{note._contactName}</span>
                         {note._contactEmail && <span className="text-xs text-gray-400">{note._contactEmail}</span>}
                       </div>
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{note.bodyText || note.body || '(empty note)'}</p>
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{note.body || note.bodyText || '(empty note)'}</p>
                     </div>
                   </div>
                   <div className="text-xs text-gray-400 flex-shrink-0 text-right">
@@ -554,7 +555,7 @@ export default function NotesTab() {
       <div className="bg-white border border-gray-200 rounded-xl p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
-          {['NoteID', 'ContactID', 'ContactName', 'Body', 'UserID', 'DateAdded'].map((col) => (
+          {['NoteID', 'ContactID', 'ContactName', 'Body', 'UserID', 'DateAdded', 'Relations'].map((col) => (
             <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
               {col}
             </span>
