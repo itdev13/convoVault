@@ -972,7 +972,6 @@ class GHLService {
   async getLocationTasks(locationId, options = {}) {
     try {
       const body = {
-        locationId,
         limit: options.limit || 20,
         skip: options.skip || 0,
         count: true,
