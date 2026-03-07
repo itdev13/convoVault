@@ -975,7 +975,8 @@ class GHLService {
         locationId,
         limit: options.limit || 20,
         skip: options.skip || 0,
-        count: true
+        count: true,
+        isLocation: true
       };
 
       // contactId is always an array in the API

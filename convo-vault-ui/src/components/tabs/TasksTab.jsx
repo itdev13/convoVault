@@ -48,7 +48,7 @@ export default function TasksTab() {
   const getContactName = (c) =>
     c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
 
-  // Load 100 contacts on mount
+  // Load 100 contacts on mount + initial task search
   useEffect(() => {
     if (!location?.id) return;
     setContactsLoading(true);
@@ -58,6 +58,8 @@ export default function TasksTab() {
       })
       .catch(console.error)
       .finally(() => setContactsLoading(false));
+
+    handleSearch(0);
   }, [location?.id]);
 
   const handleContactSearch = (query) => {
@@ -407,7 +409,6 @@ export default function TasksTab() {
               onChange={(e) => setTaskName(e.target.value)}
               placeholder="Search by name..."
               size="large"
-              allowClear
               onPressEnter={() => handleSearch(0)}
             />
           </div>
@@ -453,7 +454,7 @@ export default function TasksTab() {
           </div>
 
           {/* Search button — spans remaining 2 cols, right-aligned */}
-          <div className="md:col-span-2 flex items-end justify-end">
+          <div className="md:col-span-2 flex items-center">
             <Button
               onClick={() => handleSearch(0)}
               loading={tasksLoading}

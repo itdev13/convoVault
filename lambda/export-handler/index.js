@@ -196,7 +196,7 @@ async function fetchNotesForContact(contactId, accessToken) {
  */
 async function fetchTasksPage(locationId, accessToken, skip, filters = {}) {
   const LIMIT = 1000;
-  const params = { locationId, limit: LIMIT, skip, count: true };
+  const params = { locationId, limit: LIMIT, skip, count: true, isLocation: true };
 
   // contactId is always an array in the API
   if (filters.contactIds && filters.contactIds.length > 0) {
