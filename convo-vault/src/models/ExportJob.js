@@ -62,7 +62,9 @@ const exportJobSchema = new mongoose.Schema({
     // Call log-specific filters
     agentId: { type: String, default: null },
     callType: { type: String, default: null },
-    actionType: { type: String, default: null }
+    actionType: { type: String, default: null },
+    // Notes/Tasks multi-contact export
+    contactIds: { type: [String], default: [] }
   },
 
   // Progress tracking

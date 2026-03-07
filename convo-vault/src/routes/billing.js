@@ -146,7 +146,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
     } else if (exportType === 'notes' || exportType === 'tasks') {
       if (filters?.contactId) {
-        // Exact count for a specific contact
+        // Exact count for a single contact
         if (exportType === 'notes') {
           const result = await ghlService.getContactNotes(locationId, filters.contactId);
           counts.notes = result.total;
@@ -154,6 +154,21 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           const result = await ghlService.getContactTasks(locationId, filters.contactId);
           counts.tasks = result.total;
         }
+      } else if (filters?.contactIds?.length > 0) {
+        // Exact count for multiple specific contacts
+        let total = 0;
+        for (const cId of filters.contactIds) {
+          try {
+            const result = exportType === 'notes'
+              ? await ghlService.getContactNotes(locationId, cId)
+              : await ghlService.getContactTasks(locationId, cId);
+            total += result.total;
+          } catch (err) {
+            logger.warn('Failed to count for contact during estimation:', { contactId: cId });
+          }
+        }
+        if (exportType === 'notes') counts.notes = total;
+        else counts.tasks = total;
       } else {
         // Notes/Tasks: per-contact APIs - sample contacts to estimate count
         const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
@@ -339,7 +354,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       counts.conversations = totalItems;
     } else if (exportType === 'notes' || exportType === 'tasks') {
       if (filters?.contactId) {
-        // Exact count for a specific contact
+        // Exact count for a single contact
         if (exportType === 'notes') {
           const result = await ghlService.getContactNotes(locationId, filters.contactId);
           totalItems = result.total;
@@ -349,6 +364,22 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
           totalItems = result.total;
           counts.tasks = totalItems;
         }
+      } else if (filters?.contactIds?.length > 0) {
+        // Exact count for multiple specific contacts
+        let total = 0;
+        for (const cId of filters.contactIds) {
+          try {
+            const result = exportType === 'notes'
+              ? await ghlService.getContactNotes(locationId, cId)
+              : await ghlService.getContactTasks(locationId, cId);
+            total += result.total;
+          } catch (err) {
+            logger.warn('Sample contact fetch failed:', { contactId: cId });
+          }
+        }
+        totalItems = total;
+        if (exportType === 'notes') counts.notes = totalItems;
+        else counts.tasks = totalItems;
       } else {
         // Notes/Tasks: sample contacts to estimate
         const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
@@ -538,6 +569,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       startDate: filters?.startDate ? new Date(filters.startDate) : null,
       endDate: filters?.endDate ? new Date(filters.endDate) : null,
       contactId: filters?.contactId || null,
+      contactIds: filters?.contactIds?.length > 0 ? filters.contactIds : [],
       // Conversation-specific filters
       query: filters?.query || null,
       id: filters?.id || null,
@@ -854,6 +886,35 @@ router.get('/forms', authenticateSession, async (req, res) => {
       success: false,
       error: 'Failed to get forms'
     });
+  }
+});
+
+/**
+ * @route GET /api/billing/contacts/:contactId/notes
+ * @desc Get notes for a specific contact (for preview)
+ */
+router.get('/contacts/:contactId/notes', authenticateSession, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { locationId } = req.query;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    const result = await ghlService.getContactNotes(locationId, contactId);
+
+    res.json({
+      success: true,
+      data: {
+        notes: result.notes || [],
+        total: result.total || 0
+      }
+    });
+
+  } catch (error) {
+    logError('Get contact notes error', error, { contactId: req.params?.contactId });
+    res.status(500).json({ success: false, error: 'Failed to fetch notes' });
   }
 });
 

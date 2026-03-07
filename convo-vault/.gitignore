@@ -5,4 +5,4 @@ node_modules/
 logs/
 uploads/
 *.log
-
+settings.local.json

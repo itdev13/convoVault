@@ -1072,6 +1072,37 @@ exports.handler = async (event, context) => {
         records.push(...items);
         hasMoreData = false;
         cursor = null;
+      } else if (job.filters?.contactIds?.length > 0) {
+        // === NOTES/TASKS: Multiple specific contacts ===
+        const contactIds = job.filters.contactIds;
+        for (const cId of contactIds) {
+          const remaining = context.getRemainingTimeInMillis();
+          if (remaining < TIMEOUT_BUFFER_MS) {
+            log('Approaching timeout during multi-contact fetch');
+            hasMoreData = true;
+            break;
+          }
+          let items;
+          try {
+            items = job.exportType === 'notes'
+              ? await fetchNotesForContact(cId, accessToken)
+              : await fetchTasksForContact(cId, accessToken);
+          } catch (fetchError) {
+            if (fetchError.response?.status === 401) {
+              await refreshAndUpdateToken();
+              items = job.exportType === 'notes'
+                ? await fetchNotesForContact(cId, accessToken)
+                : await fetchTasksForContact(cId, accessToken);
+            } else {
+              throw fetchError;
+            }
+          }
+          items.forEach(item => { item.contactId = cId; });
+          records.push(...items);
+          await sleep(150);
+        }
+        hasMoreData = false;
+        cursor = null;
       } else {
       // === NOTES/TASKS: Per-contact iteration ===
       // cursor = last processed contact ID (used as startAfterId)
