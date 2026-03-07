@@ -1020,7 +1020,7 @@ router.post('/links/search', authenticateSession, async (req, res) => {
       success: true,
       data: {
         links: result.links || [],
-        total: result.total || 0,
+        total: result.totalCount || 0,
         page,
         limit
       }

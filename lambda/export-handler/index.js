@@ -336,7 +336,7 @@ async function fetchLinksPage(locationId, accessToken, skip, filters = {}) {
   });
 
   const links = response.data.links || [];
-  const total = response.data.total || links.length;
+  const total = response.data.totalCount || links.length;
 
   return {
     data: links,
