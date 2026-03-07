@@ -11,5 +11,11 @@ export const contactsAPI = {
     return await apiClient.get(`/billing/contacts/${contactId}/notes`, {
       params: { locationId }
     });
+  },
+
+  fetchTasks: async (locationId, contactId) => {
+    return await apiClient.get(`/billing/contacts/${contactId}/tasks`, {
+      params: { locationId }
+    });
   }
 };
