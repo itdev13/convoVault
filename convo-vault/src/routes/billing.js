@@ -170,40 +170,17 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         if (exportType === 'notes') counts.notes = total;
         else counts.tasks = total;
       } else {
-        // Notes/Tasks: per-contact APIs - sample contacts to estimate count
-        const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
-        const totalContacts = contactResult.total || 0;
-
-        if (totalContacts > 0) {
-          // Sample up to 10 contacts to estimate average items per contact
-          const SAMPLE_SIZE = Math.min(10, totalContacts);
-          const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
-          const sampleContacts = sampleResult.contacts || [];
-
-          let totalItemsInSample = 0;
-          for (const contact of sampleContacts) {
-            try {
-              if (exportType === 'notes') {
-                const result = await ghlService.getContactNotes(locationId, contact.id);
-                totalItemsInSample += result.total;
-              } else {
-                const result = await ghlService.getContactTasks(locationId, contact.id);
-                totalItemsInSample += result.total;
-              }
-            } catch (err) {
-              logger.warn('Failed to fetch for contact during estimation:', { contactId: contact.id });
-            }
+        // Notes/Tasks: all contacts — use post-export billing (charge after Lambda based on actual count)
+        return res.json({
+          success: true,
+          data: {
+            estimate: null,
+            postExportBilling: true,
+            unitPrice: 0.002,
+            exportType,
+            filters
           }
-
-          const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
-          const estimatedTotal = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
-
-          if (exportType === 'notes') {
-            counts.notes = estimatedTotal;
-          } else {
-            counts.tasks = estimatedTotal;
-          }
-        }
+        });
       }
 
     } else if (exportType === 'opportunities') {
@@ -381,36 +358,71 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         if (exportType === 'notes') counts.notes = totalItems;
         else counts.tasks = totalItems;
       } else {
-        // Notes/Tasks: sample contacts to estimate
-        const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
-        const totalContacts = contactResult.total || 0;
-
-        if (totalContacts > 0) {
-          const SAMPLE_SIZE = Math.min(10, totalContacts);
-          const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
-          const sampleContacts = sampleResult.contacts || [];
-
-          let totalItemsInSample = 0;
-          for (const contact of sampleContacts) {
-            try {
-              if (exportType === 'notes') {
-                const result = await ghlService.getContactNotes(locationId, contact.id);
-                totalItemsInSample += result.total;
-              } else {
-                const result = await ghlService.getContactTasks(locationId, contact.id);
-                totalItemsInSample += result.total;
-              }
-            } catch (err) {
-              logger.warn('Sample contact fetch failed:', { contactId: contact.id });
-            }
-          }
-
-          const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
-          totalItems = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
-
-          if (exportType === 'notes') counts.notes = totalItems;
-          else counts.tasks = totalItems;
+        // Notes/Tasks: all contacts — post-export billing, skip upfront charge
+        // Create a deferred transaction and start Lambda; Lambda charges after export
+        const oauthTokenCheck = await OAuthToken.findActiveToken(locationId);
+        if (!oauthTokenCheck || !oauthTokenCheck.refreshToken) {
+          return res.status(400).json({ success: false, error: 'No valid OAuth token found for this location' });
         }
+
+        const transaction = await BillingTransaction.create({
+          locationId,
+          companyId,
+          type: `export_${exportType}`,
+          itemCounts: { notes: 0, tasks: 0, total: 0 },
+          pricing: { baseAmount: 0, discountPercent: 0, discountAmount: 0, finalAmount: 0 },
+          meterCharges: [],
+          status: 'deferred',
+          userId
+        });
+
+        const jobFiltersDeferred = {
+          channel: null, startDate: null, endDate: null,
+          contactId: null, contactIds: [],
+          query: null, id: null, conversationId: null,
+          lastMessageType: null, lastMessageDirection: null, status: null,
+          lastMessageAction: null, sortBy: null,
+          pipelineId: null, pipelineStageId: null,
+          formId: null, agentId: null, callType: null, actionType: null
+        };
+
+        const exportJob = await ExportJob.create({
+          locationId, companyId,
+          billingTransactionId: transaction._id,
+          exportType, format: format || 'csv',
+          filters: jobFiltersDeferred,
+          totalItems: 0,
+          postExportBilling: true,
+          status: 'pending',
+          notificationEmail: notificationEmail || null,
+          userId
+        });
+
+        transaction.exportJobId = exportJob._id;
+        await transaction.save();
+
+        const lambdaParams = {
+          FunctionName: LAMBDA_FUNCTION_NAME,
+          InvocationType: 'Event',
+          Qualifier: '$LATEST',
+          Payload: JSON.stringify({ exportJobId: exportJob._id.toString() })
+        };
+        const lambdaResult = await lambda.invoke(lambdaParams).promise();
+
+        exportJob.status = 'processing';
+        exportJob.startedAt = new Date();
+        exportJob.lambdaRequestId = lambdaResult.$response?.requestId || null;
+        await exportJob.save();
+
+        return res.json({
+          success: true,
+          data: {
+            jobId: exportJob._id.toString(),
+            status: 'processing',
+            totalItems: 0,
+            message: 'Export started. You will be charged $0.002 per note/task after export completes.'
+          }
+        });
       }
     } else if (exportType === 'opportunities') {
       // Opportunities: location-level search API returns total directly

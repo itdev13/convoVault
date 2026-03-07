@@ -12,7 +12,8 @@ export default function ExportEstimateModal({
   estimate = null,
   error = null,
   exportType = 'messages',
-  usingDefaultDates = false
+  usingDefaultDates = false,
+  postExportBilling = false
 }) {
   const [email, setEmail] = useState('');
   const [exportFormat, setExportFormat] = useState('csv');
@@ -120,8 +121,82 @@ export default function ExportEstimateModal({
         />
       )}
 
+      {/* Post-Export Billing State (notes/tasks all-contacts) */}
+      {postExportBilling && !estimating && !error && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+            <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-blue-900 mb-1">All Contacts Export — Billed After Export</p>
+              <p className="text-sm text-blue-800">
+                Since no specific contacts are selected, all contacts in the location will be exported.
+                The total count is unknown upfront — you will be charged <strong>$0.002 per {exportType === 'notes' ? 'note' : 'task'}</strong> after the export completes.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-700">Price per {exportType === 'notes' ? 'note' : 'task'}</span>
+              <span className="font-semibold text-gray-800">$0.0020</span>
+            </div>
+            <div className="flex justify-between items-center text-sm mt-2">
+              <span className="text-gray-700">Billing</span>
+              <span className="font-semibold text-green-700">After export completes</span>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Email Address
+              <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="email"
+              placeholder="your@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              size="large"
+              className="rounded-lg"
+              status={email && !isValidEmail(email) ? 'error' : ''}
+              style={{ backgroundColor: 'white', borderColor: email && !isValidEmail(email) ? '#ef4444' : '#d1d5db', fontSize: '14px' }}
+            />
+            {email && !isValidEmail(email) && (
+              <p className="text-xs text-red-500 mt-1">Please enter a valid email address</p>
+            )}
+            <p className="text-xs text-gray-500 mt-2">We'll send you the download link when your export is ready.</p>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
+            <Radio.Group value={exportFormat} onChange={(e) => setExportFormat(e.target.value)}>
+              <Radio value="csv">CSV</Radio>
+              <Radio value="json">JSON</Radio>
+            </Radio.Group>
+          </div>
+
+          <div className="flex gap-3">
+            <Button onClick={onCancel} className="flex-1 h-11" disabled={loading}>Cancel</Button>
+            <Button
+              type="primary"
+              onClick={handleConfirm}
+              loading={loading}
+              disabled={!isValidEmail(email)}
+              className="flex-1 h-11 bg-green-600 hover:bg-green-700 border-green-600 hover:border-green-700"
+            >
+              {loading ? 'Starting...' : 'Start Export'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* No Data State */}
-      {estimate && !estimating && (!estimate.itemCounts?.total || estimate.itemCounts?.total === 0) && (
+      {!postExportBilling && estimate && !estimating && (!estimate.itemCounts?.total || estimate.itemCounts?.total === 0) && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
             <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,7 +205,9 @@ export default function ExportEstimateModal({
           </div>
           <h4 className="text-lg font-semibold text-gray-700 mb-2">No Data Available to Export</h4>
           <p className="text-sm text-gray-500 max-w-xs">
-            There are no {exportType} matching your current filters. Try adjusting your date range or filters.
+            {['notes', 'tasks'].includes(exportType)
+              ? `There are no ${exportType}.`
+              : `There are no ${exportType} matching your current filters. Try adjusting your date range or filters.`}
           </p>
           <Button onClick={onCancel} className="mt-6">
             Close
@@ -139,7 +216,7 @@ export default function ExportEstimateModal({
       )}
 
       {/* Estimate Content */}
-      {estimate && !estimating && estimate.itemCounts?.total > 0 && (
+      {!postExportBilling && estimate && !estimating && estimate.itemCounts?.total > 0 && (
         <div className="space-y-2">
           {/* Default Date Range Info Banner */}
           {usingDefaultDates && (
@@ -149,18 +226,6 @@ export default function ExportEstimateModal({
               </svg>
               <p className="text-sm text-blue-800">
                 Showing data from the <strong>last 6 months</strong>. To change the time frame, close this modal and adjust the date filters.
-              </p>
-            </div>
-          )}
-
-          {/* Sampling Disclaimer for Notes/Tasks */}
-          {(exportType === 'notes' || exportType === 'tasks') && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
-              <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm text-amber-800">
-                Estimated count is based on sampling. Actual count may vary. You will only be charged for the actual number of {exportType} exported.
               </p>
             </div>
           )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
 import { contactsAPI } from '../../api/contacts';
-import { Button, Select, Tooltip, message as antMessage, Spin } from 'antd';
+import { Button, Select, message as antMessage, Spin } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 
@@ -14,6 +14,7 @@ export default function NotesTab() {
   const [estimating, setEstimating] = useState(false);
   const [estimate, setEstimate] = useState(null);
   const [estimateError, setEstimateError] = useState(null);
+  const [postExportBilling, setPostExportBilling] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
 
@@ -45,7 +46,19 @@ export default function NotesTab() {
           setAllContacts(list);
           if (list.length > 0) {
             const first = list[0];
-            setSelectedContacts([{ id: first.id, name: getContactName(first), email: first.email || '' }]);
+            const firstContact = { id: first.id, name: getContactName(first), email: first.email || '' };
+            setSelectedContacts([firstContact]);
+            // Auto-fetch notes for first contact
+            setNotesLoading(true);
+            contactsAPI.fetchNotes(location.id, first.id)
+              .then(res2 => {
+                if (res2.success) {
+                  setNotes((res2.data.notes || []).map(n => ({ ...n, _contactName: firstContact.name, _contactEmail: firstContact.email, _contactId: first.id })));
+                  setNotesLoaded(true);
+                }
+              })
+              .catch(console.error)
+              .finally(() => setNotesLoading(false));
           }
         }
       })
@@ -148,10 +161,35 @@ export default function NotesTab() {
     setEstimating(true);
     setEstimate(null);
     setEstimateError(null);
+    setPostExportBilling(false);
     try {
-      const res = await billingAPI.getEstimate(location.id, 'notes', getFilters());
-      if (res.success) setEstimate(res.data.estimate);
-      else setEstimateError(res.error || 'Failed to calculate estimate');
+      if (selectedContacts.length > 0 && notesLoaded) {
+        // Exact count already known from loaded notes — calculate cost locally
+        const count = notes.length;
+        const unitPrice = 0.002;
+        const finalAmount = count * unitPrice;
+        setEstimate({
+          itemCounts: { notes: count, total: count },
+          breakdown: { notes: { count, unitPrice, subtotal: finalAmount } },
+          baseAmount: finalAmount,
+          discountPercent: 0,
+          discountAmount: 0,
+          finalAmount,
+          finalAmountDollars: finalAmount
+        });
+      } else {
+        // No contacts selected or notes not yet loaded — call API
+        const res = await billingAPI.getEstimate(location.id, 'notes', getFilters());
+        if (res.success) {
+          if (res.data.postExportBilling) {
+            setPostExportBilling(true);
+          } else {
+            setEstimate(res.data.estimate);
+          }
+        } else {
+          setEstimateError(res.error || 'Failed to calculate estimate');
+        }
+      }
     } catch (err) {
       setEstimateError(err.message || 'Failed to calculate estimate');
     } finally {
@@ -185,7 +223,7 @@ export default function NotesTab() {
   };
 
   const handleModalClose = () => {
-    if (!processing) { setExportModalVisible(false); setEstimate(null); setEstimateError(null); }
+    if (!processing) { setExportModalVisible(false); setEstimate(null); setEstimateError(null); setPostExportBilling(false); }
   };
 
   const formatDate = (val) => {
@@ -209,6 +247,7 @@ export default function NotesTab() {
         estimate={estimate}
         error={estimateError}
         exportType="notes"
+        postExportBilling={postExportBilling}
       />
 
       {/* Header */}
@@ -243,16 +282,6 @@ export default function NotesTab() {
               ? selectedContacts.length === 1 ? 'Export Notes' : `Export ${selectedContacts.length} Contacts`
               : 'Export All Notes'}
           </Button>
-          <Tooltip
-            title={<div style={{ fontSize: '13px', lineHeight: '1.6' }}><strong>Pay-per-use</strong><br />$0.002 per note. No volume discounts.<br />All-contacts estimate is based on sampling.</div>}
-            placement="left"
-          >
-            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center cursor-help">
-              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </Tooltip>
         </div>
       </div>
 
@@ -349,8 +378,8 @@ export default function NotesTab() {
         </div>
 
         {!hasSelected && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mt-3">
-            <strong>Export All:</strong> No contact selected — will export notes for all contacts. Estimate is based on sampling a subset.
+          <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2 mt-3">
+            <strong>Export All:</strong> No contact selected — will export notes for all contacts. You'll be charged <strong>$0.002 per note</strong> after the export completes.
           </p>
         )}
       </div>

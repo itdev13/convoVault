@@ -70,7 +70,7 @@ const billingTransactionSchema = new mongoose.Schema({
   // Transaction status
   status: {
     type: String,
-    enum: ['pending', 'charged', 'failed', 'refunded', 'tested'],
+    enum: ['pending', 'charged', 'failed', 'refunded', 'tested', 'deferred'],
     default: 'pending'
   },
 

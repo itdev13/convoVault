@@ -14,6 +14,12 @@ const GHL_OAUTH_URL = process.env.GHL_OAUTH_URL || 'https://services.leadconnect
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
 
+// Post-export billing constants (notes/tasks all-contacts)
+const GHL_APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
+const NOTES_TASKS_METER_ID = '69864aed1265653fdd7c0620';
+const NOTES_TASKS_UNIT_PRICE = 0.002;
+const INTERNAL_TESTING_COMPANY_IDS = ['PG9VJ27QFRumQrOGB2Ee', '7IlT9P1bafOCnq2JV00t'];
+
 // Brevo Email configuration
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
@@ -832,6 +838,64 @@ async function sendEmail(email, downloadUrl, jobDetails) {
 }
 
 /**
+ * Charge GHL wallet after export completes (post-export billing for notes/tasks all-contacts)
+ */
+async function chargePostExport(db, job, actualCount, accessToken) {
+  if (INTERNAL_TESTING_COMPANY_IDS.includes(job.companyId)) {
+    console.log('[PostExportBilling] Internal testing company - skipping charge', { companyId: job.companyId });
+    await db.collection('billingtransactions').updateOne(
+      { _id: new ObjectId(job.billingTransactionId.toString()) },
+      { $set: {
+        status: 'tested',
+        internalTesting: true,
+        paymentIgnored: true,
+        [`itemCounts.${job.exportType}`]: actualCount,
+        'itemCounts.total': actualCount,
+        'pricing.finalAmount': actualCount * NOTES_TASKS_UNIT_PRICE,
+        'pricing.baseAmount': actualCount * NOTES_TASKS_UNIT_PRICE
+      }}
+    );
+    return;
+  }
+
+  const finalAmount = actualCount * NOTES_TASKS_UNIT_PRICE;
+  const transactionId = job.billingTransactionId.toString();
+
+  const response = await axios.post(
+    `${GHL_API_URL}/marketplace/billing/charges`,
+    {
+      companyId: job.companyId,
+      meterId: NOTES_TASKS_METER_ID,
+      units: actualCount,
+      price: Number((finalAmount / actualCount).toFixed(4)),
+      appId: GHL_APP_ID,
+      eventId: transactionId,
+      locationId: job.locationId,
+      description: 'Exported Data ' + '_' + new Date().toDateString()
+    },
+    {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Version': '2021-07-28'
+      }
+    }
+  );
+
+  await db.collection('billingtransactions').updateOne(
+    { _id: new ObjectId(transactionId) },
+    { $set: {
+      status: 'charged',
+      ghlChargeId: response.data?.chargeId || response.data?.id || null,
+      [`itemCounts.${job.exportType}`]: actualCount,
+      'itemCounts.total': actualCount,
+      'pricing.finalAmount': finalAmount,
+      'pricing.baseAmount': finalAmount
+    }}
+  );
+}
+
+/**
  * Extract exportJobId from event (handles both normal and durable execution formats)
  */
 function extractExportJobId(event) {
@@ -1637,6 +1701,16 @@ exports.handler = async (event, context) => {
         completedAt: new Date(),
         totalBatches: currentBatch
       });
+
+      // Post-export billing: charge actual count for notes/tasks all-contacts exports
+      if (job.postExportBilling && processedItems > 0) {
+        try {
+          await chargePostExport(db, job, processedItems, accessToken);
+          log('Post-export billing completed', { qty: processedItems, amount: processedItems * NOTES_TASKS_UNIT_PRICE });
+        } catch (billingError) {
+          log('Post-export billing failed (export still successful)', { error: billingError.message });
+        }
+      }
 
       // Send email notification
       let emailSent = false;

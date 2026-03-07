@@ -200,6 +200,12 @@ const exportJobSchema = new mongoose.Schema({
     default: null
   },
 
+  // Post-export billing: charge after Lambda based on actual count (notes/tasks all-contacts)
+  postExportBilling: {
+    type: Boolean,
+    default: false
+  },
+
   // User who initiated
   userId: {
     type: String,
