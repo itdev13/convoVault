@@ -49,7 +49,7 @@ let cacheExpiry = null;
 
 // Volume discount tiers
 const DISCOUNT_TIERS = [
-  { min: 0, max: 1000, discount: 0 },
+  { min: 0, max: 1000, discount: 10 },
   { min: 1000, max: 2000, discount: 20 },
   { min: 2000, max: 5000, discount: 40 },
   { min: 5000, max: 30000, discount: 50 },
