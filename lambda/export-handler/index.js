@@ -636,7 +636,7 @@ function tasksToCSV(tasks, includeHeader = true) {
 
   const rows = tasks.map(task => {
     return [
-      escapeCsv(task.id),
+      escapeCsv(task._id),
       escapeCsv(task.contactId),
       escapeCsv(task.contactName || ''),
       escapeCsv(task.title || ''),
