@@ -632,6 +632,11 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       actionType: filters?.actionType || null,
       // Notes/Tasks contact name map { contactId: "Name" }
       contactNames: filters?.contactNames || null,
+      // Task-specific filters
+      dueDate: filters?.dueDate ? { gt: filters.dueDate.gt || null, lte: filters.dueDate.lte || null } : null,
+      businessId: filters?.businessId || null,
+      completed: filters?.completed ?? null,
+      overdue: filters?.overdue ?? null,
       unAssigned: filters?.unAssigned != null ? filters?.unAssigned : null,
     };
 

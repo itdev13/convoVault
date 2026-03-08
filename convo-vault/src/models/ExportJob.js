@@ -75,7 +75,14 @@ const exportJobSchema = new mongoose.Schema({
     actionType: { type: String, default: null },
     // Notes/Tasks contact name lookup map { contactId: "Name" }
     contactNames: { type: mongoose.Schema.Types.Mixed, default: null },
-    // Tasks unassigned filter
+    // Task-specific filters
+    dueDate: {
+      gt: { type: String, default: null },
+      lte: { type: String, default: null }
+    },
+    businessId: { type: String, default: null },
+    completed: { type: Boolean, default: null },
+    overdue: { type: Boolean, default: null },
     unAssigned: { type: Boolean, default: null }
   },
 
