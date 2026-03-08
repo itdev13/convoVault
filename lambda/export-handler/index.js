@@ -19,7 +19,7 @@ const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
 // Post-export billing constants (notes/tasks all-contacts)
 const GHL_APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
 const NOTES_TASKS_METER_ID = '69864aed1265653fdd7c0620';
-const NOTES_TASKS_UNIT_PRICE = 0.002;
+const NOTES_TASKS_UNIT_PRICE = 0.015;
 const INTERNAL_TESTING_COMPANY_IDS = ['PG9VJ27QFRumQrOGB2Ee', '7IlT9P1bafOCnq2JV00t'];
 
 // Brevo Email configuration

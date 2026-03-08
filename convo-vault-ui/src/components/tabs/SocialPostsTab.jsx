@@ -185,7 +185,7 @@ export default function SocialPostsTab() {
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
               <div className="text-2xl mb-2">💰</div>
               <h4 className="font-semibold text-sm">Volume Discounts</h4>
-              <p className="text-xs text-white/70 mt-1">Pay-per-use at $0.002/post with bulk savings</p>
+              <p className="text-xs text-white/70 mt-1">Pay-per-use at $0.015/post with bulk savings</p>
             </div>
           </div>
 
@@ -278,7 +278,7 @@ export default function SocialPostsTab() {
                 <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
                   <strong>Pay-per-use export</strong>
                   <br />
-                  $0.002 per post. Volume discounts apply.
+                  $0.01 per post. Volume discounts apply.
                 </div>
               }
               placement="left"
@@ -374,7 +374,7 @@ export default function SocialPostsTab() {
             <div className="flex items-center gap-6 text-sm text-gray-700">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                <span><strong>$0.002</strong> per post (0.2 cents)</span>
+                <span><strong>$0.015</strong> per post (0.2 cents)</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-pink-500 rounded-full"></span>

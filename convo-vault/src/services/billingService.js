@@ -34,13 +34,13 @@ const DEFAULT_UNIT_PRICES = {
   conversations: 0.025,    // 2.5 cents per conversation (1 credit)
   smsWhatsapp: 0.025,      // 2.5 cents per text message (1 credit)
   email: 0.075,            // 7.5 cents per email message (3 credits)
-  notesAndTasks: 0.002,    // 0.2 cents per note/task (no discounts)
-  opportunities: 0.002,    // 0.2 cents per opportunity (with volume discounts)
-  formSubmissions: 0.002,  // 0.2 cents per form submission (with volume discounts)
-  links: 0.002,            // 0.2 cents per link (with volume discounts)
-  socialPosts: 0.002,      // 0.2 cents per social post (with volume discounts)
-  callLogs: 0.002,         // 0.2 cents per call log (with volume discounts)
-  templates: 0.002         // 0.2 cents per template (with volume discounts)
+  notesAndTasks: 0.015,    // 0.015 cents per note/task (no discounts)
+  opportunities: 0.015,    // 0.015 cents per opportunity (with volume discounts)
+  formSubmissions: 0.015,  // 0.015 cents per form submission (with volume discounts)
+  links: 0.015,            // 0.015 cents per link (with volume discounts)
+  socialPosts: 0.015,      // 0.015 cents per social post (with volume discounts)
+  callLogs: 0.015,         // 0.015 cents per call log (with volume discounts)
+  templates: 0.015         // 0.015 cents per template (with volume discounts)
 };
 
 // Cached prices from GHL API

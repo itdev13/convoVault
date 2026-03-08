@@ -185,7 +185,7 @@ export default function NotesTab() {
       if (selectedContacts.length > 0 && notesLoaded) {
         // Exact count already known from loaded notes — calculate cost locally
         const count = notes.length;
-        const unitPrice = 0.002;
+        const unitPrice = 0.01;
         const finalAmount = count * unitPrice;
         setEstimate({
           itemCounts: { notes: count, total: count },
