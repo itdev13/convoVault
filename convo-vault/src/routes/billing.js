@@ -1112,7 +1112,7 @@ router.post('/tasks/search', authenticateSession, async (req, res) => {
       dueDate: filters.dueDate,
       sortKey: filters.sortKey,
       sortDirection: filters.sortDirection,
-      businessId: filter?.businessId,
+      businessId: filters?.businessId,
       searchAfter: searchAfter || [],
       skip: 0,
       limit
