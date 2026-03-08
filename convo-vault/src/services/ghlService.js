@@ -4,6 +4,9 @@ const { logError, logWarning } = require('../utils/errorLogger');
 const OAuthToken = require('../models/OAuthToken');
 const CompanyLocation = require('../models/CompanyLocation');
 
+const nonNullValue=(val)=>{
+  return val != null && val != undefined && val != "";
+}
 /**
  * Simple GHL API Service
  */
@@ -985,10 +988,6 @@ class GHLService {
     }
   }
 
-  
-  nonNullValue(val){
-    return val != null && val != undefined && val != "";
-  }
 
   /**
    * Search tasks for a location
