@@ -62,8 +62,8 @@ const exportJobSchema = new mongoose.Schema({
     assignedTo: { type: [String], default: null },
     monetaryValueMin: { type: Number, default: null },
     monetaryValueMax: { type: Number, default: null },
-    sortKey: { type: Number, default: null },
-    sortDirection: { type: String, default: null },
+    sortKey: { type: String, default: null },
+    sortDirection: { type: Number, default: null },
     contactName: { type: String, default: null },
     // Form submission-specific filters
     formId: { type: String, default: null },
