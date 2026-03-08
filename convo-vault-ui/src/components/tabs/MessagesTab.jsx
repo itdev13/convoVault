@@ -455,6 +455,16 @@ export default function MessagesTab() {
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Contact ID</label>
+            <Input
+              value={filters.contactId}
+              onChange={(e) => setFilters({ ...filters, contactId: e.target.value })}
+              placeholder="Paste contact ID..."
+              size="large"
+            />
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Conversation ID</label>
             <Input
               value={filters.conversationId}

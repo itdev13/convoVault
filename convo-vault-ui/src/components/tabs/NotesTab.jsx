@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
 import { contactsAPI } from '../../api/contacts';
-import { Button, Select, message as antMessage, Spin } from 'antd';
+import { Button, Select, Input, message as antMessage, Spin } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 
@@ -457,6 +457,27 @@ export default function NotesTab() {
               </button>
             </div>
           )}
+
+          {/* Contact ID (text) */}
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Contact ID</label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Paste contact ID and press Enter to add..."
+                size="large"
+                onPressEnter={(e) => {
+                  const id = e.target.value.trim();
+                  if (!id) return;
+                  if (selectedContacts.find(c => c.id === id)) {
+                    antMessage.warning('Contact already added');
+                    return;
+                  }
+                  setSelectedContacts(prev => [...prev, { id, name: id, email: '', phone: '' }]);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+          </div>
         </div>
 
         {!hasSelected && (

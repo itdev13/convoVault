@@ -427,6 +427,16 @@ export default function ConversationsTab({ onSelectConversation }) {
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Contact ID</label>
+            <Input
+              value={filters.contactId}
+              onChange={(e) => setFilters({ ...filters, contactId: e.target.value })}
+              placeholder="Paste contact ID..."
+              size="large"
+            />
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
             <DatePicker
               value={filters.startDate ? dayjs(filters.startDate) : null}

@@ -470,6 +470,22 @@ export default function TasksTab() {
             />
           </div>
 
+          {/* Contact ID (text) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Contact ID</label>
+            <Input
+              placeholder="Paste ID + Enter to add..."
+              size="large"
+              onPressEnter={(e) => {
+                const id = e.target.value.trim();
+                if (!id) return;
+                if (selectedContacts.find(c => c.id === id)) return;
+                setSelectedContacts(prev => [...prev, { id, name: id, email: '', phone: '' }]);
+                e.target.value = '';
+              }}
+            />
+          </div>
+
           {/* Assigned To (Users) */}
           <div className="md:col-span-1">
             <MultiSelectDropdown
@@ -489,6 +505,22 @@ export default function TasksTab() {
               chipColor="blue"
               getItemName={getUserName}
               getItemSub={(u) => u.email || u.phone}
+            />
+          </div>
+
+          {/* Assigned To ID (text) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Assigned To ID</label>
+            <Input
+              placeholder="Paste ID + Enter to add..."
+              size="large"
+              onPressEnter={(e) => {
+                const id = e.target.value.trim();
+                if (!id) return;
+                if (selectedUsers.find(u => u.id === id)) return;
+                setSelectedUsers(prev => [...prev, { id, name: id, email: '', phone: '' }]);
+                e.target.value = '';
+              }}
             />
           </div>
 

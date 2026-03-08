@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
 import { contactsAPI } from '../../api/contacts';
-import { Button, Select, DatePicker, message as antMessage } from 'antd';
+import { Button, Select, DatePicker, Input, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 import dayjs from 'dayjs';
@@ -377,6 +377,18 @@ export default function CallLogsTab() {
                 </Select.Option>
               ))}
             </Select>
+          </div>
+
+          {/* Contact ID (text) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Contact ID</label>
+            <Input
+              value={contactId}
+              onChange={(e) => { setContactId(e.target.value); }}
+              placeholder="Paste contact ID..."
+              size="large"
+              onPressEnter={handleNewSearch}
+            />
           </div>
 
           {/* Action Type */}

@@ -406,6 +406,17 @@ export default function OpportunitiesTab() {
             </Select>
           </div>
 
+          {/* Assigned To ID (text) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Assigned To ID</label>
+            <Input
+              value={assignedTo}
+              onChange={(e) => setAssignedTo(e.target.value)}
+              placeholder="Paste user ID..."
+              size="large"
+            />
+          </div>
+
           {/* Contact */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Contact</label>
@@ -433,6 +444,18 @@ export default function OpportunitiesTab() {
                 </Select.Option>
               ))}
             </Select>
+          </div>
+
+          {/* Contact ID (text) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Contact ID</label>
+            <Input
+              value={contactId}
+              onChange={(e) => setContactId(e.target.value)}
+              placeholder="Paste contact ID..."
+              size="large"
+              allowClear
+            />
           </div>
 
           {/* Monetary Value Min */}
