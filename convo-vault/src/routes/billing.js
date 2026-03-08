@@ -245,8 +245,12 @@ router.post('/estimate', authenticateSession, async (req, res) => {
     const accessToken = tokenData.accessToken || tokenData;
 
     // Calculate estimate with actual GHL meter prices
-    const estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
-
+    let estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
+    estimate = {
+      ...estimate,
+      discountTiers: billingService.getDiscountTiers(),
+      unitPrices: billingService.getUnitPrices()
+    }
     res.json({
       success: true,
       data: {
