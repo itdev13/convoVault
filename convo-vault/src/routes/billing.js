@@ -647,6 +647,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       userId
     });
 
+    console.log("jobfilters: ", jobFilters)
     // Update transaction with job reference
     transaction.exportJobId = exportJob._id;
     await transaction.save();
