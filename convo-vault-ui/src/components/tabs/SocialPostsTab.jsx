@@ -216,7 +216,7 @@ export default function SocialPostsTab() {
                   size="large"
                   type="primary"
                   className="bg-white text-purple-700 hover:bg-gray-100 border-white font-bold"
-                  style={{ borderRadius: '8px', background: 'white', color: '#7c3aed', borderColor: 'white', fontWeight: 700 }}
+                  style={{ borderRadius: '8px', background: 'white', color: 'white', borderColor: 'white', fontWeight: 700 }}
                 >
                   Notify Me
                 </Button>

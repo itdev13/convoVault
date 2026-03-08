@@ -66,7 +66,7 @@ const analyticsSchema = new mongoose.Schema({
 
 // Indexes for analytics queries
 analyticsSchema.index({ locationId: 1, eventType: 1, createdAt: -1 });
-analyticsSchema.index({ createdAt: 1 }); // TTL index
+// Note: createdAt already has a TTL index via `expires` in the schema field definition
 
 // Static methods for analytics
 
