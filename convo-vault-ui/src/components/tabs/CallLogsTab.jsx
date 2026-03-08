@@ -532,20 +532,6 @@ export default function CallLogsTab() {
         </>
       )}
 
-      {/* Pricing */}
-      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
-        <div className="flex flex-wrap items-center gap-6 text-sm text-gray-700">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-            <span><strong>$0.002</strong> per call log (0.2 cents)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-violet-500 rounded-full"></span>
-            <span>Volume discounts: 1K-2K: 20% off | 2K-5K: 40% off | 5K-30K: 50% off | 30K+: 70% off</span>
-          </div>
-        </div>
-      </div>
-
       {/* Export Columns */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>

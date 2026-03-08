@@ -1,10 +1,12 @@
-const AWS = require('aws-sdk');
+const { S3Client, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const axios = require('axios');
 const { MongoClient, ObjectId } = require('mongodb');
 
 // Initialize AWS services
-const s3 = new AWS.S3();
-const lambda = new AWS.Lambda();
+const s3 = new S3Client();
+const lambda = new LambdaClient();
 
 // Environment variables
 const S3_BUCKET = process.env.S3_BUCKET || 'convo-vault-exports';
@@ -1229,12 +1231,12 @@ exports.handler = async (event, context) => {
     if (!uploadId) {
       // Start new multipart upload
       log('Starting S3 multipart upload...');
-      const multipart = await s3.createMultipartUpload({
+      const multipart = await s3.send(new CreateMultipartUploadCommand({
         Bucket: S3_BUCKET,
         Key: s3Key,
         ContentType: job.format === 'json' ? 'application/json' : 'text/csv',
         ContentDisposition: `attachment; filename="${exportFilename}"`
-      }).promise();
+      }));
 
       uploadId = multipart.UploadId;
       log('Multipart upload started', { uploadId });
@@ -1748,11 +1750,11 @@ exports.handler = async (event, context) => {
         // Abort the multipart upload we started (if any)
         if (uploadId) {
           try {
-            await s3.abortMultipartUpload({
+            await s3.send(new AbortMultipartUploadCommand({
               Bucket: S3_BUCKET,
               Key: s3Key,
               UploadId: uploadId
-            }).promise();
+            }));
             log('Aborted unused multipart upload');
           } catch (abortErr) {
             // Ignore abort errors
@@ -1761,13 +1763,13 @@ exports.handler = async (event, context) => {
         }
 
         // Upload directly with putObject
-        await s3.putObject({
+        await s3.send(new PutObjectCommand({
           Bucket: S3_BUCKET,
           Key: s3Key,
           Body: content,
           ContentType: job.format === 'json' ? 'application/json' : 'text/csv',
           ContentDisposition: `attachment; filename="${exportFilename}"`
-        }).promise();
+        }));
 
         log('File uploaded with putObject');
         useSimpleUpload = true;
@@ -1776,13 +1778,13 @@ exports.handler = async (event, context) => {
         // Multi-batch: use multipart upload
         const partNumber = parts.length + 1;
 
-        const uploadResult = await s3.uploadPart({
+        const uploadResult = await s3.send(new UploadPartCommand({
           Bucket: S3_BUCKET,
           Key: s3Key,
           UploadId: uploadId,
           PartNumber: partNumber,
           Body: content
-        }).promise();
+        }));
 
         parts.push({
           partNumber,
@@ -1816,12 +1818,12 @@ exports.handler = async (event, context) => {
       // More data - invoke next Lambda
       log('Invoking next Lambda', { processedItems, totalItems, cursor, hasMoreData });
 
-      await lambda.invoke({
+      await lambda.send(new InvokeCommand({
         FunctionName: context.functionName,
         InvocationType: 'Event',  // Async
         Qualifier: '$LATEST',     // Required for durable functions
         Payload: JSON.stringify({ exportJobId })
-      }).promise();
+      }));
 
       return {
         statusCode: 200,
@@ -1839,7 +1841,7 @@ exports.handler = async (event, context) => {
 
       // Complete multipart upload (only if we didn't use simple putObject)
       if (!useSimpleUpload && parts.length > 0) {
-        await s3.completeMultipartUpload({
+        await s3.send(new CompleteMultipartUploadCommand({
           Bucket: S3_BUCKET,
           Key: s3Key,
           UploadId: uploadId,
@@ -1849,7 +1851,7 @@ exports.handler = async (event, context) => {
               ETag: p.etag
             }))
           }
-        }).promise();
+        }));
 
         log('Multipart upload completed');
       } else if (useSimpleUpload) {
@@ -1857,11 +1859,10 @@ exports.handler = async (event, context) => {
       }
 
       // Generate signed download URL (7 days)
-      const downloadUrl = s3.getSignedUrl('getObject', {
+      const downloadUrl = await getSignedUrl(s3, new GetObjectCommand({
         Bucket: S3_BUCKET,
-        Key: s3Key,
-        Expires: 7 * 24 * 60 * 60
-      });
+        Key: s3Key
+      }), { expiresIn: 7 * 24 * 60 * 60 });
 
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -1928,12 +1929,12 @@ exports.handler = async (event, context) => {
       // Wait a bit before retry
       await sleep(5000);
 
-      await lambda.invoke({
+      await lambda.send(new InvokeCommand({
         FunctionName: context.functionName,
         InvocationType: 'Event',
         Qualifier: '$LATEST',
         Payload: JSON.stringify({ exportJobId })
-      }).promise();
+      }));
 
       return {
         statusCode: 200,
@@ -1952,11 +1953,11 @@ exports.handler = async (event, context) => {
       // Try to abort multipart upload
       if (job.s3Upload?.uploadId) {
         try {
-          await s3.abortMultipartUpload({
+          await s3.send(new AbortMultipartUploadCommand({
             Bucket: S3_BUCKET,
             Key: job.s3Upload.key,
             UploadId: job.s3Upload.uploadId
-          }).promise();
+          }));
           log('Multipart upload aborted');
         } catch (abortError) {
           logError('Failed to abort multipart upload', { error: abortError.message });
