@@ -837,14 +837,31 @@ function callLogsToCSV(callLogs, includeHeader = true) {
     : '';
 
   const rows = callLogs.map(log => {
+    // Flatten extractedData into readable key=value pairs
+    let extractedData = '';
+    if (log.extractedData && typeof log.extractedData === 'object') {
+      extractedData = Object.entries(log.extractedData)
+        .map(([key, val]) => `${key}=${val}`)
+        .join('; ');
+    }
+
+    // Full action details: actionType | actionName | executedAt | key params
     const actions = Array.isArray(log.executedCallActions)
       ? log.executedCallActions.map(a => {
-          const parts = [a.actionType || ''];
-          if (a.actionName) parts.push(a.actionName);
-          return parts.join(':');
-        }).join('; ')
+          const parts = [`[${a.actionType || 'UNKNOWN'}] ${a.actionName || ''}`];
+          if (a.executedAt) parts.push(`executed: ${formatDate(a.executedAt)}`);
+          // Include key action parameters
+          const params = a.actionParameters || {};
+          if (params.transferToValue) parts.push(`transferTo: ${params.transferToValue}`);
+          if (params.messageBody) parts.push(`message: ${params.messageBody}`);
+          if (params.workflowId) parts.push(`workflowId: ${params.workflowId}`);
+          if (params.calendarId) parts.push(`calendarId: ${params.calendarId}`);
+          if (params.description) parts.push(`desc: ${params.description}`);
+          if (params.apiDetails?.url) parts.push(`url: ${params.apiDetails.url}`);
+          return parts.join(' | ');
+        }).join(' ;; ')
       : '';
-    const extractedData = log.extractedData ? JSON.stringify(log.extractedData) : '';
+
     const translation = log.translation?.transcript || '';
     return [
       escapeCsv(log.id || log._id),
@@ -853,7 +870,7 @@ function callLogsToCSV(callLogs, includeHeader = true) {
       escapeCsv(log.fromNumber || ''),
       escapeCsv(log.callType || ''),
       escapeCsv(log.callStatus || ''),
-      escapeCsv(log.duration + " sec" || ''),
+      escapeCsv(log.duration != null ? log.duration + ' sec' : ''),
       escapeCsv(log.summary || ''),
       escapeCsv(formatDate(log.createdAt)),
       escapeCsv(log.trialCall ? 'Yes' : 'No'),

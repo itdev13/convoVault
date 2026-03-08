@@ -545,12 +545,32 @@ export default function CallLogsTab() {
                     {log.summary && (
                       <p className="text-xs text-gray-600 mt-1 line-clamp-2">{log.summary}</p>
                     )}
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mt-1">
+
+                    {/* Extracted Data */}
+                    {log.extractedData && Object.keys(log.extractedData).length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {Object.entries(log.extractedData).map(([key, val]) => (
+                          <span key={key} className="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">
+                            {key}: {val}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Executed Actions */}
+                    {log.executedCallActions?.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {log.executedCallActions.map((a, idx) => (
+                          <span key={a.actionId || idx} className="text-xs px-2 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded">
+                            {a.actionType}{a.actionName ? `: ${a.actionName}` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mt-2">
                       {log.contactId && <span>Contact: {log.contactId}</span>}
                       {log.agentId && <span>Agent: {agentOptions.find(a => a.id === log.agentId)?.name || log.agentId}</span>}
-                      {log.executedCallActions?.length > 0 && (
-                        <span className="text-violet-600">{log.executedCallActions.length} action{log.executedCallActions.length !== 1 ? 's' : ''}</span>
-                      )}
                       {log.createdAt && <span className="ml-auto">{formatDate(log.createdAt)}</span>}
                     </div>
                   </div>
