@@ -152,12 +152,14 @@ export default function Header({ onExportsClick, onSupportClick }) {
             </div>
             
             {/* Sub-Account Name */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg px-6 py-3 border border-white/20 flex items-baseline gap-2">
-              <div className="text-lg text-blue-100 font-medium mb-1">Account -</div>
-              <div className="text-white font-bold text-lg">
-                {location?.name || 'Loading...'}
+            {location?.name && (
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-6 py-3 border border-white/20 flex items-baseline gap-2">
+                <div className="text-lg text-blue-100 font-medium mb-1">Account -</div>
+                <div className="text-white font-bold text-lg">
+                  {location.name}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
