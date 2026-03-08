@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const AWS = require('aws-sdk');
+const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const billingService = require('../services/billingService');
 const ghlService = require('../services/ghlService');
 const BillingTransaction = require('../models/BillingTransaction');
@@ -12,7 +12,7 @@ const { logError, getUserFriendlyMessage } = require('../utils/errorLogger');
 const { authenticateSession } = require('../middleware/auth');
 
 // Initialize AWS Lambda client
-const lambda = new AWS.Lambda({
+const lambda = new LambdaClient({
   region: process.env.AWS_REGION || 'us-east-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -405,13 +405,13 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
         const lambdaParams = {
           FunctionName: LAMBDA_FUNCTION_NAME, InvocationType: 'Event', Qualifier: '$LATEST',
-          Payload: JSON.stringify({ exportJobId: exportJob._id.toString() })
+          Payload: Buffer.from(JSON.stringify({ exportJobId: exportJob._id.toString() }))
         };
-        const lambdaResult = await lambda.invoke(lambdaParams).promise();
+        const lambdaResult = await lambda.send(new InvokeCommand(lambdaParams));
 
         exportJob.status = 'processing';
         exportJob.startedAt = new Date();
-        exportJob.lambdaRequestId = lambdaResult.$response?.requestId || null;
+        exportJob.lambdaRequestId = lambdaResult.$metadata?.requestId || null;
         await exportJob.save();
 
         return res.json({
@@ -671,22 +671,22 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         FunctionName: LAMBDA_FUNCTION_NAME,
         InvocationType: 'Event',  // Async invocation
         Qualifier: '$LATEST',     // Required for durable functions
-        Payload: JSON.stringify({
+        Payload: Buffer.from(JSON.stringify({
           exportJobId: exportJob._id.toString()
-        })
+        }))
       };
 
-      const lambdaResult = await lambda.invoke(lambdaParams).promise();
+      const lambdaResult = await lambda.send(new InvokeCommand(lambdaParams));
 
       // Update job status
       exportJob.status = 'processing';
       exportJob.startedAt = new Date();
-      exportJob.lambdaRequestId = lambdaResult.$response?.requestId || null;
+      exportJob.lambdaRequestId = lambdaResult.$metadata?.requestId || null;
       await exportJob.save();
 
       logger.info('Lambda triggered successfully', {
         jobId: exportJob._id,
-        requestId: lambdaResult.$response?.requestId
+        requestId: lambdaResult.$metadata?.requestId
       });
 
     } catch (lambdaError) {
