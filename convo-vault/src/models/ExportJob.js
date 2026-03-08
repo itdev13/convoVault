@@ -59,10 +59,10 @@ const exportJobSchema = new mongoose.Schema({
     // Opportunity-specific filters
     pipelineId: { type: String, default: null },
     pipelineStageId: { type: String, default: null },
-    assignedTo: { type: String, default: null },
+    assignedTo: { type: String | [String], default: null },
     monetaryValueMin: { type: Number, default: null },
     monetaryValueMax: { type: Number, default: null },
-    sortKey: { type: String | [String], default: null },
+    sortKey: { type: String, default: null },
     sortDirection: { type: String, default: null },
     contactName: { type: String, default: null },
     // Form submission-specific filters
