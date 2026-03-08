@@ -1292,6 +1292,7 @@ class GHLService {
       if (options.agentId) params.agentId = options.agentId;
       if (options.contactId) params.contactId = options.contactId;
       if (options.callType) params.callType = options.callType;
+      if (options.direction) params.direction = options.direction;
       if (options.startDate) params.startDate = options.startDate;
       if (options.endDate) params.endDate = options.endDate;
       if (options.actionType) params.actionType = options.actionType;

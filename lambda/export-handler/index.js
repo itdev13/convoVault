@@ -440,8 +440,9 @@ async function fetchCallLogsPage(locationId, accessToken, page = 1, filters = {}
   if (filters.contactId) params.contactId = filters.contactId;
   if (filters.callType) params.callType = filters.callType;
   if (filters.actionType) params.actionType = filters.actionType;
-  if (filters.sortBy) params.sortBy = filters.sortBy;
-  if (filters.sort) params.sort = filters.sort;
+  if (filters.direction) params.direction = filters.direction;
+  if (filters.callSortBy) params.sortBy = filters.callSortBy;
+  if (filters.callSort) params.sort = filters.callSort;
 
   // Convert date filters
   if (filters.startDate) {
@@ -829,25 +830,36 @@ function socialPostsToCSV(posts, includeHeader = true) {
  */
 function callLogsToCSV(callLogs, includeHeader = true) {
   const header = includeHeader
-    ? 'CallID,ContactID,AgentID,FromNumber,CallType,Duration,Summary,CreatedAt,TrialCall,CallActions,Transcript\n'
+    ? 'CallID,ContactID,AgentID,FromNumber,CallType,CallStatus,Duration,Summary,CreatedAt,TrialCall,WorkflowID,MessageID,ExtractedData,CallActions,Transcript,Translation\n'
     : '';
 
   const rows = callLogs.map(log => {
     const actions = Array.isArray(log.executedCallActions)
-      ? log.executedCallActions.map(a => a.actionType || a).join('; ')
+      ? log.executedCallActions.map(a => {
+          const parts = [a.actionType || ''];
+          if (a.actionName) parts.push(a.actionName);
+          return parts.join(':');
+        }).join('; ')
       : '';
+    const extractedData = log.extractedData ? JSON.stringify(log.extractedData) : '';
+    const translation = log.translation?.transcript || '';
     return [
       escapeCsv(log.id || log._id),
       escapeCsv(log.contactId || ''),
       escapeCsv(log.agentId || ''),
       escapeCsv(log.fromNumber || ''),
       escapeCsv(log.callType || ''),
+      escapeCsv(log.callStatus || ''),
       escapeCsv(log.duration || ''),
       escapeCsv(log.summary || ''),
       escapeCsv(formatDate(log.createdAt)),
       escapeCsv(log.trialCall ? 'Yes' : 'No'),
+      escapeCsv(log.workflowId || ''),
+      escapeCsv(log.messageId || ''),
+      escapeCsv(extractedData),
       escapeCsv(actions),
-      escapeCsv(log.transcript || '')
+      escapeCsv(log.transcript || ''),
+      escapeCsv(translation)
     ].join(',');
   }).join('\n');
 

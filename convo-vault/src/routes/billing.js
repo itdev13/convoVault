@@ -634,6 +634,9 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       agentId: filters?.agentId || null,
       callType: filters?.callType || null,
       actionType: filters?.actionType || null,
+      direction: filters?.direction || null,
+      callSortBy: filters?.sortBy || null,
+      callSort: filters?.sort || null,
       // Notes/Tasks contact name map { contactId: "Name" }
       contactNames: filters?.contactNames || null,
       // Task-specific filters

@@ -1,18 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
-import { Button, Select, DatePicker, Tooltip, message as antMessage } from 'antd';
+import { contactsAPI } from '../../api/contacts';
+import { Button, Select, DatePicker, Input, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 import dayjs from 'dayjs';
 
+const ACTION_TYPES = [
+  { value: 'CALL_TRANSFER', label: 'Call Transfer' },
+  { value: 'DATA_EXTRACTION', label: 'Data Extraction' },
+  { value: 'IN_CALL_DATA_EXTRACTION', label: 'In-Call Data Extraction' },
+  { value: 'WORKFLOW_TRIGGER', label: 'Workflow Trigger' },
+  { value: 'SMS', label: 'SMS' },
+  { value: 'APPOINTMENT_BOOKING', label: 'Appointment Booking' },
+  { value: 'CUSTOM_ACTION', label: 'Custom Action' },
+  { value: 'KNOWLEDGE_BASE', label: 'Knowledge Base' },
+];
+
 export default function CallLogsTab() {
   const { location } = useAuth();
-  const [filters, setFilters] = useState({
-    callType: '',
-    startDate: '',
-    endDate: ''
-  });
+
+  // Export state
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [estimate, setEstimate] = useState(null);
@@ -20,10 +29,53 @@ export default function CallLogsTab() {
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
 
+  // Contacts (for Contact filter)
+  const [contactOptions, setContactOptions] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const contactSearchTimer = useRef(null);
+
+  // Filters
+  const [callType, setCallType] = useState('');
+  const [direction, setDirection] = useState('');
+  const [agentId, setAgentId] = useState('');
+  const [contactId, setContactId] = useState('');
+  const [actionType, setActionType] = useState([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [sortBy, setSortBy] = useState('');
+
+  const handleContactSearch = useCallback((searchText) => {
+    if (contactSearchTimer.current) clearTimeout(contactSearchTimer.current);
+    contactSearchTimer.current = setTimeout(async () => {
+      if (!location?.id) return;
+      setContactsLoading(true);
+      try {
+        const res = await contactsAPI.search(location.id, searchText || '', 100);
+        if (res.success) {
+          setContactOptions((res.data?.contacts || res.contacts || []).map(c => ({
+            id: c.id,
+            name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || '',
+            email: c.email || '',
+            phone: c.phone || '',
+          })));
+        }
+      } catch (err) {
+        console.error('Contact search failed:', err);
+      } finally {
+        setContactsLoading(false);
+      }
+    }, 300);
+  }, [location?.id]);
+
+  // Load initial contacts on mount
+  useEffect(() => {
+    if (!location?.id) return;
+    handleContactSearch('');
+  }, [location?.id]);
+
   // Poll active job status
   useEffect(() => {
     if (!activeJob || !['pending', 'processing'].includes(activeJob.status)) return;
-
     const pollInterval = setInterval(async () => {
       try {
         const response = await billingAPI.getExportStatus(activeJob.jobId, location?.id);
@@ -37,34 +89,35 @@ export default function CallLogsTab() {
         console.error('Failed to poll job status:', err);
       }
     }, 5000);
-
     return () => clearInterval(pollInterval);
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
-  // Build export filters
   const buildExportFilters = () => {
-    const exportFilters = {};
-    if (filters.callType) exportFilters.callType = filters.callType;
-    if (filters.startDate) exportFilters.startDate = dayjs(filters.startDate).startOf('day').valueOf();
-    if (filters.endDate) exportFilters.endDate = dayjs(filters.endDate).endOf('day').valueOf();
-    return exportFilters;
+    const f = {};
+    if (callType) f.callType = callType;
+    if (direction) f.direction = direction;
+    if (agentId) f.agentId = agentId;
+    if (contactId) f.contactId = contactId;
+    if (actionType.length > 0) f.actionType = actionType.join(',');
+    if (startDate) f.startDate = dayjs(startDate).startOf('day').valueOf();
+    if (endDate) f.endDate = dayjs(endDate).endOf('day').valueOf();
+    if (sortBy) {
+      const [field, order] = sortBy.split('_');
+      f.sortBy = field;
+      f.sort = order;
+    }
+    return f;
   };
 
-  // Handle get estimate
   const handleGetEstimate = async () => {
     setExportModalVisible(true);
     setEstimating(true);
     setEstimate(null);
     setEstimateError(null);
-
     try {
-      const exportFilters = buildExportFilters();
-      const response = await billingAPI.getEstimate(location.id, 'callLogs', exportFilters);
-      if (response.success) {
-        setEstimate(response.data.estimate);
-      } else {
-        setEstimateError(response.error || 'Failed to calculate estimate');
-      }
+      const response = await billingAPI.getEstimate(location.id, 'callLogs', buildExportFilters());
+      if (response.success) setEstimate(response.data.estimate);
+      else setEstimateError(response.error || 'Failed to calculate estimate');
     } catch (err) {
       setEstimateError(err.message || 'Failed to calculate estimate');
     } finally {
@@ -72,21 +125,11 @@ export default function CallLogsTab() {
     }
   };
 
-  // Handle pay and export
   const handlePayAndExport = async (notificationEmail, format = 'csv') => {
     setProcessing(true);
     setEstimateError(null);
-
     try {
-      const exportFilters = buildExportFilters();
-      const response = await billingAPI.chargeAndExport(
-        location.id,
-        'callLogs',
-        format,
-        exportFilters,
-        notificationEmail
-      );
-
+      const response = await billingAPI.chargeAndExport(location.id, 'callLogs', format, buildExportFilters(), notificationEmail);
       if (response.success) {
         setActiveJob({
           jobId: response.data.jobId,
@@ -96,7 +139,7 @@ export default function CallLogsTab() {
         });
         setExportModalVisible(false);
         setEstimate(null);
-        antMessage.success('Export started! We\'ll process it in the background.');
+        antMessage.success("Export started! We'll notify you by email when it's ready.");
       } else {
         setEstimateError(response.error || 'Export failed');
       }
@@ -108,16 +151,13 @@ export default function CallLogsTab() {
   };
 
   const handleModalClose = () => {
-    if (!processing) {
-      setExportModalVisible(false);
-      setEstimate(null);
-      setEstimateError(null);
-    }
+    if (!processing) { setExportModalVisible(false); setEstimate(null); setEstimateError(null); }
   };
+
+  const isExporting = activeJob && ['pending', 'processing'].includes(activeJob.status);
 
   return (
     <div className="space-y-6">
-      {/* Export Estimate Modal */}
       <ExportEstimateModal
         visible={exportModalVisible}
         onCancel={handleModalClose}
@@ -135,87 +175,23 @@ export default function CallLogsTab() {
           <h2 className="text-2xl font-bold text-gray-900">Voice AI Call Logs</h2>
           <p className="text-sm text-gray-500 mt-1">Export voice AI call logs from this sub-account</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleGetEstimate}
-            disabled={activeJob && ['pending', 'processing'].includes(activeJob.status)}
-            size="large"
-            type="primary"
-            className="bg-green-600 hover:bg-green-700 border-green-600"
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            }
-          >
-            Export Call Logs
-          </Button>
-          <Tooltip
-            title={
-              <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                <strong>Pay-per-use export</strong>
-                <br />
-                $0.002 per call log. Volume discounts apply.
-              </div>
-            }
-            placement="left"
-          >
-            <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center cursor-help">
-              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </Tooltip>
-        </div>
+        <Button
+          onClick={handleGetEstimate}
+          disabled={isExporting}
+          size="large"
+          type="primary"
+          className="bg-violet-600 hover:bg-violet-700 border-violet-600"
+          icon={
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          }
+        >
+          Export Call Logs
+        </Button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Call Type */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Call Type</label>
-            <Select
-              value={filters.callType || undefined}
-              onChange={(value) => setFilters(prev => ({ ...prev, callType: value || '' }))}
-              placeholder="All Types"
-              allowClear
-              className="w-full"
-              size="middle"
-            >
-              <Select.Option value="inbound">Inbound</Select.Option>
-              <Select.Option value="outbound">Outbound</Select.Option>
-            </Select>
-          </div>
-
-          {/* Start Date */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
-            <DatePicker
-              value={filters.startDate ? dayjs(filters.startDate) : null}
-              onChange={(date) => setFilters(prev => ({ ...prev, startDate: date ? date.format('YYYY-MM-DD') : '' }))}
-              className="w-full"
-              size="middle"
-              placeholder="From date"
-            />
-          </div>
-
-          {/* End Date */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
-            <DatePicker
-              value={filters.endDate ? dayjs(filters.endDate) : null}
-              onChange={(date) => setFilters(prev => ({ ...prev, endDate: date ? date.format('YYYY-MM-DD') : '' }))}
-              className="w-full"
-              size="middle"
-              placeholder="To date"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Active Export Job Progress */}
+      {/* Active Export Progress */}
       {activeJob && (
         <ExportProgress
           job={activeJob}
@@ -227,61 +203,170 @@ export default function CallLogsTab() {
         />
       )}
 
-      {/* Info Card */}
-      <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200 rounded-xl p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 bg-violet-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-2xl">📞</span>
-          </div>
+      {/* Filters */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          Filter Call Logs
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Call Type */}
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">How Call Logs Export Works</h3>
-            <ul className="space-y-2 text-sm text-gray-700">
-              <li className="flex items-start gap-2">
-                <span className="text-violet-500 mt-0.5">1.</span>
-                <span>We fetch all voice AI call logs from your sub-account matching your filters</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-violet-500 mt-0.5">2.</span>
-                <span>Each call log is exported with contact, agent, duration, summary, transcript, and action details</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-violet-500 mt-0.5">3.</span>
-                <span>Data is exported into a CSV or JSON file</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-violet-500 mt-0.5">4.</span>
-                <span>You receive an email with a download link when ready</span>
-              </li>
-            </ul>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Call Type</label>
+            <Select
+              value={callType || undefined}
+              onChange={(val) => setCallType(val || '')}
+              placeholder="All Types"
+              allowClear
+              style={{ width: '100%' }}
+              size="large"
+            >
+              <Select.Option value="LIVE">Live</Select.Option>
+              <Select.Option value="TRIAL">Trial</Select.Option>
+            </Select>
           </div>
-        </div>
 
-        <div className="mt-4 bg-white/60 rounded-lg p-4 border border-violet-100">
-          <h4 className="text-sm font-semibold text-gray-800 mb-2">Pricing</h4>
-          <div className="flex items-center gap-6 text-sm text-gray-700">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span><strong>$0.002</strong> per call log (0.2 cents)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-violet-500 rounded-full"></span>
-              <span>Volume discounts apply</span>
-            </div>
+          {/* Direction */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Direction</label>
+            <Select
+              value={direction || undefined}
+              onChange={(val) => setDirection(val || '')}
+              placeholder="All Directions"
+              allowClear
+              style={{ width: '100%' }}
+              size="large"
+            >
+              <Select.Option value="INBOUND">Inbound</Select.Option>
+              <Select.Option value="OUTBOUND">Outbound</Select.Option>
+            </Select>
           </div>
-        </div>
 
-        <div className="mt-3 bg-violet-50 border border-violet-200 rounded-lg p-3">
-          <p className="text-xs text-violet-800">
-            <strong>Volume Discounts:</strong> 1,000-2,000: 20% off | 2,000-5,000: 40% off | 5,000-30,000: 50% off | 30,000+: 70% off
-          </p>
+          {/* Agent ID */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Agent ID</label>
+            <Input
+              value={agentId}
+              onChange={(e) => setAgentId(e.target.value)}
+              placeholder="Filter by agent ID..."
+              size="large"
+            />
+          </div>
+
+          {/* Contact */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Contact</label>
+            <Select
+              showSearch
+              value={contactId || undefined}
+              onChange={(val) => setContactId(val || '')}
+              onSearch={handleContactSearch}
+              placeholder="Search contacts..."
+              allowClear
+              loading={contactsLoading}
+              filterOption={false}
+              notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
+              style={{ width: '100%' }}
+              size="large"
+            >
+              {contactOptions.map(c => (
+                <Select.Option key={c.id} value={c.id}>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-sm">{c.name || '(No name)'}</span>
+                    {(c.email || c.phone) && (
+                      <span className="text-xs text-gray-400">{c.email || c.phone}</span>
+                    )}
+                  </div>
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+
+          {/* Action Type */}
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Action Type</label>
+            <Select
+              mode="multiple"
+              value={actionType}
+              onChange={(val) => setActionType(val || [])}
+              placeholder="All Action Types"
+              allowClear
+              style={{ width: '100%' }}
+              size="large"
+              maxTagCount="responsive"
+            >
+              {ACTION_TYPES.map(a => (
+                <Select.Option key={a.value} value={a.value}>{a.label}</Select.Option>
+              ))}
+            </Select>
+          </div>
+
+          {/* Start Date */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+            <DatePicker
+              value={startDate ? dayjs(startDate) : null}
+              onChange={(date) => setStartDate(date ? date.format('YYYY-MM-DD') : '')}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="From"
+            />
+          </div>
+
+          {/* End Date */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+            <DatePicker
+              value={endDate ? dayjs(endDate) : null}
+              onChange={(date) => setEndDate(date ? date.format('YYYY-MM-DD') : '')}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="To"
+            />
+          </div>
+
+          {/* Sort By */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Sort By</label>
+            <Select
+              value={sortBy || undefined}
+              onChange={(val) => setSortBy(val || '')}
+              placeholder="Default (Newest)"
+              allowClear
+              style={{ width: '100%' }}
+              size="large"
+            >
+              <Select.Option value="createdAt_descend">Date (Newest)</Select.Option>
+              <Select.Option value="createdAt_ascend">Date (Oldest)</Select.Option>
+              <Select.Option value="duration_descend">Duration (Longest)</Select.Option>
+              <Select.Option value="duration_ascend">Duration (Shortest)</Select.Option>
+            </Select>
+          </div>
         </div>
       </div>
 
-      {/* CSV Columns Info */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
+      {/* Pricing */}
+      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+        <div className="flex flex-wrap items-center gap-6 text-sm text-gray-700">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+            <span><strong>$0.002</strong> per call log (0.2 cents)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-violet-500 rounded-full"></span>
+            <span>Volume discounts: 1K-2K: 20% off | 2K-5K: 40% off | 5K-30K: 50% off | 30K+: 70% off</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Export Columns */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
         <div className="flex flex-wrap gap-2">
-          {['CallID', 'ContactID', 'AgentID', 'FromNumber', 'CallType', 'Duration', 'Summary', 'CreatedAt', 'TrialCall', 'CallActions', 'Transcript'].map((col) => (
+          {['CallID', 'ContactID', 'AgentID', 'FromNumber', 'CallType', 'CallStatus', 'Duration', 'Summary', 'CreatedAt', 'TrialCall', 'WorkflowID', 'MessageID', 'ExtractedData', 'CallActions', 'Transcript', 'Translation'].map((col) => (
             <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">
               {col}
             </span>

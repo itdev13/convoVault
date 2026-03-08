@@ -73,6 +73,9 @@ const exportJobSchema = new mongoose.Schema({
     agentId: { type: String, default: null },
     callType: { type: String, default: null },
     actionType: { type: String, default: null },
+    direction: { type: String, default: null },
+    callSortBy: { type: String, default: null },
+    callSort: { type: String, default: null },
     // Notes/Tasks contact name lookup map { contactId: "Name" }
     contactNames: { type: mongoose.Schema.Types.Mixed, default: null },
     // Task-specific filters
