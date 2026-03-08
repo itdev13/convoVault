@@ -1212,6 +1212,24 @@ router.post('/callLogs/search', authenticateSession, async (req, res) => {
 });
 
 /**
+ * @route GET /api/billing/voice-ai-agents
+ * @desc Get voice AI agents for a location (for filter dropdowns)
+ */
+router.get('/voice-ai-agents', authenticateSession, async (req, res) => {
+  try {
+    const { locationId } = req.query;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const result = await ghlService.getVoiceAIAgents(locationId);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    logError('Get voice AI agents error', error, { locationId: req.query?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to get voice AI agents' });
+  }
+});
+
+/**
  * @route GET /api/billing/users
  * @desc Search users for a location's company (for filter dropdowns)
  */

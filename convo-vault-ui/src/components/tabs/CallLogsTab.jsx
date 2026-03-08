@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
 import { contactsAPI } from '../../api/contacts';
-import { Button, Select, DatePicker, Input, message as antMessage } from 'antd';
+import { Button, Select, DatePicker, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 import dayjs from 'dayjs';
@@ -35,6 +35,10 @@ export default function CallLogsTab() {
   const [contactOptions, setContactOptions] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const contactSearchTimer = useRef(null);
+
+  // Agents (for Agent filter)
+  const [agentOptions, setAgentOptions] = useState([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
 
   // Filters
   const [callType, setCallType] = useState('');
@@ -77,10 +81,29 @@ export default function CallLogsTab() {
     }, 300);
   }, [location?.id]);
 
+  const loadAgents = useCallback(async () => {
+    if (!location?.id) return;
+    setAgentsLoading(true);
+    try {
+      const res = await billingAPI.getVoiceAIAgents(location.id);
+      if (res.success) {
+        setAgentOptions((res.data?.agents || []).map(a => ({
+          id: a.id || a._id,
+          name: a.name || a.agentName || '(Unnamed Agent)',
+        })));
+      }
+    } catch (err) {
+      console.error('Failed to load agents:', err);
+    } finally {
+      setAgentsLoading(false);
+    }
+  }, [location?.id]);
+
   // Load on mount
   useEffect(() => {
     if (!location?.id) return;
     handleContactSearch('');
+    loadAgents();
     handleSearch(1);
   }, [location?.id]);
 
@@ -302,16 +325,29 @@ export default function CallLogsTab() {
             </Select>
           </div>
 
-          {/* Agent ID */}
+          {/* Agent */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Agent ID</label>
-            <Input
-              value={agentId}
-              onChange={(e) => setAgentId(e.target.value)}
-              placeholder="Filter by agent ID..."
+            <label className="block text-xs font-medium text-gray-600 mb-1">Agent</label>
+            <Select
+              showSearch
+              value={agentId || undefined}
+              onChange={(val) => setAgentId(val || '')}
+              placeholder="Search agents..."
+              allowClear
+              loading={agentsLoading}
+              filterOption={(input, option) =>
+                (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              notFoundContent={agentsLoading ? 'Loading...' : 'No agents found'}
+              style={{ width: '100%' }}
               size="large"
-              onPressEnter={handleNewSearch}
-            />
+            >
+              {agentOptions.map(a => (
+                <Select.Option key={a.id} value={a.id}>
+                  {a.name}
+                </Select.Option>
+              ))}
+            </Select>
           </div>
 
           {/* Contact */}
@@ -511,7 +547,7 @@ export default function CallLogsTab() {
                     )}
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mt-1">
                       {log.contactId && <span>Contact: {log.contactId}</span>}
-                      {log.agentId && <span>Agent: {log.agentId}</span>}
+                      {log.agentId && <span>Agent: {agentOptions.find(a => a.id === log.agentId)?.name || log.agentId}</span>}
                       {log.executedCallActions?.length > 0 && (
                         <span className="text-violet-600">{log.executedCallActions.length} action{log.executedCallActions.length !== 1 ? 's' : ''}</span>
                       )}

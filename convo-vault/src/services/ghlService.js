@@ -1323,6 +1323,32 @@ class GHLService {
       throw error;
     }
   }
+  /**
+   * Get voice AI agents for a location
+   * GET /voice-ai/agents
+   */
+  async getVoiceAIAgents(locationId) {
+    try {
+      const accessToken = await this.getValidToken(locationId);
+      const response = await axios({
+        method: 'GET',
+        url: `${this.baseURL}/voice-ai/agents`,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Version': '2021-04-15'
+        },
+        params: { locationId }
+      });
+
+      return {
+        agents: response.data?.agents || response.data?.data || [],
+      };
+    } catch (error) {
+      logger.error('Get voice AI agents failed:', error.message);
+      throw error;
+    }
+  }
 }
 
 module.exports = new GHLService();

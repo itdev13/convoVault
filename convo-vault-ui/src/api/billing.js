@@ -167,6 +167,16 @@ export const billingAPI = {
   },
 
   /**
+   * Get voice AI agents for a location
+   */
+  getVoiceAIAgents: async (locationId) => {
+    const response = await apiClient.get('/billing/voice-ai-agents', {
+      params: { locationId }
+    });
+    return response;
+  },
+
+  /**
    * Search users for a location's company
    */
   searchUsers: async (locationId, query = '') => {

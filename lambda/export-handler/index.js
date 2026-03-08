@@ -853,7 +853,7 @@ function callLogsToCSV(callLogs, includeHeader = true) {
       escapeCsv(log.fromNumber || ''),
       escapeCsv(log.callType || ''),
       escapeCsv(log.callStatus || ''),
-      escapeCsv(log.duration || ''),
+      escapeCsv(log.duration + " sec" || ''),
       escapeCsv(log.summary || ''),
       escapeCsv(formatDate(log.createdAt)),
       escapeCsv(log.trialCall ? 'Yes' : 'No'),
