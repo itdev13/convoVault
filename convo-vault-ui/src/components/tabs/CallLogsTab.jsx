@@ -18,6 +18,8 @@ const ACTION_TYPES = [
   { value: 'KNOWLEDGE_BASE', label: 'Knowledge Base' },
 ];
 
+const PAGE_SIZE = 50;
+
 export default function CallLogsTab() {
   const { location } = useAuth();
 
@@ -44,6 +46,14 @@ export default function CallLogsTab() {
   const [endDate, setEndDate] = useState('');
   const [sortBy, setSortBy] = useState('');
 
+  // Preview results
+  const [callLogs, setCallLogs] = useState([]);
+  const [callLogsTotal, setCallLogsTotal] = useState(0);
+  const [callLogsLoading, setCallLogsLoading] = useState(false);
+  const [callLogsError, setCallLogsError] = useState(null);
+  const [searched, setSearched] = useState(false);
+  const [page, setPage] = useState(1);
+
   const handleContactSearch = useCallback((searchText) => {
     if (contactSearchTimer.current) clearTimeout(contactSearchTimer.current);
     contactSearchTimer.current = setTimeout(async () => {
@@ -67,10 +77,11 @@ export default function CallLogsTab() {
     }, 300);
   }, [location?.id]);
 
-  // Load initial contacts on mount
+  // Load on mount
   useEffect(() => {
     if (!location?.id) return;
     handleContactSearch('');
+    handleSearch(1);
   }, [location?.id]);
 
   // Poll active job status
@@ -108,6 +119,32 @@ export default function CallLogsTab() {
     }
     return f;
   };
+
+  const handleSearch = async (targetPage = 1) => {
+    setCallLogsLoading(true);
+    setCallLogsError(null);
+    setSearched(true);
+    setPage(targetPage);
+    try {
+      const res = await billingAPI.searchCallLogs(location.id, buildExportFilters(), targetPage, PAGE_SIZE);
+      if (res.success) {
+        setCallLogs(res.data.callLogs || []);
+        setCallLogsTotal(res.data.total || 0);
+      } else {
+        setCallLogsError(res.error || 'Failed to load call logs');
+        setCallLogs([]);
+        setCallLogsTotal(0);
+      }
+    } catch (err) {
+      setCallLogsError(err.message || 'Failed to load call logs');
+      setCallLogs([]);
+      setCallLogsTotal(0);
+    } finally {
+      setCallLogsLoading(false);
+    }
+  };
+
+  const handleNewSearch = () => handleSearch(1);
 
   const handleGetEstimate = async () => {
     setExportModalVisible(true);
@@ -154,7 +191,23 @@ export default function CallLogsTab() {
     if (!processing) { setExportModalVisible(false); setEstimate(null); setEstimateError(null); }
   };
 
+  const formatDuration = (seconds) => {
+    if (!seconds) return '-';
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  };
+
+  const formatDate = (val) => {
+    if (!val) return null;
+    try { return new Date(val).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    catch { return null; }
+  };
+
   const isExporting = activeJob && ['pending', 'processing'].includes(activeJob.status);
+  const totalPages = Math.ceil(callLogsTotal / PAGE_SIZE);
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
 
   return (
     <div className="space-y-6">
@@ -173,7 +226,11 @@ export default function CallLogsTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Voice AI Call Logs</h2>
-          <p className="text-sm text-gray-500 mt-1">Export voice AI call logs from this sub-account</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {searched && callLogsTotal > 0
+              ? `${callLogsTotal.toLocaleString()} call log${callLogsTotal !== 1 ? 's' : ''} found`
+              : 'Export voice AI call logs from this sub-account'}
+          </p>
         </div>
         <Button
           onClick={handleGetEstimate}
@@ -253,6 +310,7 @@ export default function CallLogsTab() {
               onChange={(e) => setAgentId(e.target.value)}
               placeholder="Filter by agent ID..."
               size="large"
+              onPressEnter={handleNewSearch}
             />
           </div>
 
@@ -345,8 +403,134 @@ export default function CallLogsTab() {
               <Select.Option value="duration_ascend">Duration (Shortest)</Select.Option>
             </Select>
           </div>
+
+          {/* Search Button */}
+          <div className="flex items-end">
+            <Button
+              onClick={handleNewSearch}
+              loading={callLogsLoading}
+              size="large"
+              type="primary"
+              className="px-8"
+              icon={!callLogsLoading && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              )}
+            >
+              Search
+            </Button>
+          </div>
         </div>
       </div>
+
+      {/* Loading */}
+      {callLogsLoading && (
+        <div className="text-center py-14">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-violet-600 border-t-transparent mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">Loading call logs...</p>
+        </div>
+      )}
+
+      {/* Error */}
+      {callLogsError && !callLogsLoading && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p className="font-medium text-red-800 text-sm">Error loading call logs</p>
+            <p className="text-red-600 text-xs mt-1">{callLogsError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* No results */}
+      {searched && !callLogsLoading && !callLogsError && callLogs.length === 0 && (
+        <div className="text-center py-16 bg-gradient-to-br from-violet-50 to-purple-50 rounded-xl border-2 border-dashed border-violet-300">
+          <div className="text-4xl mb-3">📞</div>
+          <h3 className="text-base font-semibold text-gray-900 mb-1">No Call Logs Found</h3>
+          <p className="text-gray-500 text-sm mb-4">Try adjusting your filters and search again</p>
+          {hasPrev && (
+            <Button size="small" onClick={() => handleSearch(page - 1)}>Previous Page</Button>
+          )}
+        </div>
+      )}
+
+      {/* Results */}
+      {!callLogsLoading && !callLogsError && callLogs.length > 0 && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500">
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, callLogsTotal)} of {callLogsTotal.toLocaleString()} call logs
+            </span>
+            <div className="flex gap-2">
+              <Button size="small" disabled={!hasPrev} onClick={() => handleSearch(page - 1)}>Previous</Button>
+              <Button size="small" disabled={!hasNext} type="primary" onClick={() => handleSearch(page + 1)}>Next</Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {callLogs.map((log, i) => (
+              <div key={log.id || i} className="bg-white border border-gray-200 rounded-lg p-4 hover:border-violet-300 hover:shadow-sm transition-all">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-violet-50 border border-violet-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg className="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <p className="font-medium text-sm text-gray-900">
+                        {log.fromNumber || '(No number)'}
+                      </p>
+                      {log.callType && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 border ${
+                          log.callType === 'TRIAL'
+                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                            : 'bg-green-50 text-green-700 border-green-200'
+                        }`}>
+                          {log.callType}
+                        </span>
+                      )}
+                      {log.callStatus && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 border ${
+                          log.callStatus === 'completed'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-gray-50 text-gray-600 border-gray-200'
+                        }`}>
+                          {log.callStatus}
+                        </span>
+                      )}
+                      {log.duration != null && (
+                        <span className="text-xs text-gray-500 font-medium">{formatDuration(log.duration)}</span>
+                      )}
+                    </div>
+                    {log.summary && (
+                      <p className="text-xs text-gray-600 mt-1 line-clamp-2">{log.summary}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 mt-1">
+                      {log.contactId && <span>Contact: {log.contactId}</span>}
+                      {log.agentId && <span>Agent: {log.agentId}</span>}
+                      {log.executedCallActions?.length > 0 && (
+                        <span className="text-violet-600">{log.executedCallActions.length} action{log.executedCallActions.length !== 1 ? 's' : ''}</span>
+                      )}
+                      {log.createdAt && <span className="ml-auto">{formatDate(log.createdAt)}</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {(hasPrev || hasNext) && (
+            <div className="flex justify-center gap-2 pt-2">
+              <Button disabled={!hasPrev} onClick={() => handleSearch(page - 1)}>Previous</Button>
+              <Button disabled={!hasNext} type="primary" onClick={() => handleSearch(page + 1)}>Next</Button>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Pricing */}
       <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">

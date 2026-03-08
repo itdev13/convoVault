@@ -30,6 +30,7 @@ const EMAIL_FROM_ADDRESS = 'support@vaultsuite.store';
 const BATCH_SIZE = 10000;           // Records per Lambda invocation
 const API_PAGE_SIZE = 100;          // Records per GHL API call
 const API_MESSAGES_PAGE_SIZE = 500;
+const API_CALL_LOGS_PAGE_SIZE = 50; // Max pageSize for Voice AI call logs API
 const TIMEOUT_BUFFER_MS = 13 * 60 * 1000;  // 14 min buffer before timeout
 
 // MongoDB client (reused across warm invocations)
@@ -433,7 +434,7 @@ async function fetchCallLogsPage(locationId, accessToken, page = 1, filters = {}
   const params = {
     locationId,
     page,
-    pageSize: API_PAGE_SIZE
+    pageSize: API_CALL_LOGS_PAGE_SIZE
   };
 
   if (filters.agentId) params.agentId = filters.agentId;
@@ -471,7 +472,7 @@ async function fetchCallLogsPage(locationId, accessToken, page = 1, filters = {}
   return {
     data: callLogs,
     total,
-    hasMore: callLogs.length === API_PAGE_SIZE
+    hasMore: callLogs.length === API_CALL_LOGS_PAGE_SIZE
   };
 }
 
@@ -1575,7 +1576,7 @@ exports.handler = async (event, context) => {
 
         log('Fetched call logs page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, page });
 
-        if (pageResult.data.length < API_PAGE_SIZE) {
+        if (pageResult.data.length < API_CALL_LOGS_PAGE_SIZE) {
           hasMoreData = false;
         }
 

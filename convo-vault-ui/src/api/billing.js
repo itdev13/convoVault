@@ -156,6 +156,16 @@ export const billingAPI = {
     return response;
   },
 
+  searchCallLogs: async (locationId, filters = {}, page = 1, pageSize = 10) => {
+    const response = await apiClient.post('/billing/callLogs/search', {
+      locationId,
+      filters,
+      page,
+      pageSize
+    });
+    return response;
+  },
+
   /**
    * Search users for a location's company
    */

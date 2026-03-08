@@ -1175,6 +1175,43 @@ router.post('/templates/search', authenticateSession, async (req, res) => {
 });
 
 /**
+ * @route POST /api/billing/callLogs/search
+ * @desc Search call logs for a location (for preview in UI)
+ */
+router.post('/callLogs/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, page = 1, pageSize = 50 } = req.body;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const options = { page, pageSize };
+    if (filters.agentId) options.agentId = filters.agentId;
+    if (filters.contactId) options.contactId = filters.contactId;
+    if (filters.callType) options.callType = filters.callType;
+    if (filters.direction) options.direction = filters.direction;
+    if (filters.actionType) options.actionType = filters.actionType;
+    if (filters.startDate) options.startDate = filters.startDate;
+    if (filters.endDate) options.endDate = filters.endDate;
+    if (filters.sortBy) options.sortBy = filters.sortBy;
+    if (filters.sort) options.sort = filters.sort;
+
+    const result = await ghlService.getCallLogs(locationId, options);
+    res.json({
+      success: true,
+      data: {
+        callLogs: result.callLogs || [],
+        total: result.total || 0,
+        page,
+        pageSize
+      }
+    });
+  } catch (error) {
+    logError('Search call logs error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search call logs' });
+  }
+});
+
+/**
  * @route GET /api/billing/users
  * @desc Search users for a location's company (for filter dropdowns)
  */

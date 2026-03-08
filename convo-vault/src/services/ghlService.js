@@ -1286,7 +1286,7 @@ class GHLService {
       const params = {
         locationId,
         page: options.page || 1,
-        pageSize: options.pageSize || 100
+        pageSize: options.pageSize || 50
       };
 
       if (options.agentId) params.agentId = options.agentId;
