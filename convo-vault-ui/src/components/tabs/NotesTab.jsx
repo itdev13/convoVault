@@ -461,7 +461,7 @@ export default function NotesTab() {
 
         {!hasSelected && (
           <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2 mt-3">
-            <strong>Export All:</strong> No contact selected — will export notes for all contacts. You'll be charged <strong>$0.002 per note</strong> after the export completes.
+            <strong>Export All:</strong> No contact selected — will export notes for all contacts.
           </p>
         )}
       </div>
