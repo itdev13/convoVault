@@ -188,6 +188,10 @@ async function fetchNotesForContact(contactId, accessToken) {
   return response.data.notes || [];
 }
 
+function nonNullValue(val){
+  return val != null && val != undefined && val != "";
+}
+
 /**
  * Fetch all tasks for a specific contact
  */
@@ -203,15 +207,15 @@ async function fetchTasksPage(locationId, accessToken, skip, filters = {}) {
     body.contactId = filters.contactIds;
   }
   if (filters.assignedTo) body.assignedTo = filters.assignedTo;
-  if (filters.completed !== undefined && filters.completed !== '') body.completed = filters.completed;
-  if (filters.overdue !== undefined) body.overdue = filters.overdue;
+  if (nonNullValue(filters.completed)) body.completed = filters.completed;
+  if (nonNullValue(filters.overdue)) body.overdue = filters.overdue;
   if (filters.query) body.query = filters.query;
   // dueDate filter: { gt, lte }
   if (filters.dueDate) body.dueDate = filters.dueDate;
   if (filters.sortKey) body.sortKey = filters.sortKey;
-  if (filters.sortDirection !== undefined) body.sortDirection = filters.sortDirection;
-  if (filters.businessId != undefined) body.businessId = filters.businessId;
-  if (filters.unAssigned != undefined) body.unAssigned = filters.unAssigned;
+  if (nonNullValue(filters.sortDirection)) body.sortDirection = filters.sortDirection;
+  if (nonNullValue(filters.businessId)) body.businessId = filters.businessId;
+  if (nonNullValue(filters.unAssigned)) body.unAssigned = filters.unAssigned;
 
   const response = await axios.post(`${GHL_API_URL}/locations/${locationId}/tasks/search`, body, {
     headers: {
@@ -642,7 +646,7 @@ function tasksToCSV(tasks, includeHeader = true) {
       escapeCsv(task.title || ''),
       escapeCsv(task.bodyText || task.body || ''),
       escapeCsv(task.dueDate ? formatDate(task.dueDate) : ''),
-      escapeCsv(task.completed != null ? (task.completed ? 'Yes' : 'No') : ''),
+      escapeCsv(nonNullValue(task.completed)  ? (task.completed ? 'Yes' : 'No') : ''),
       escapeCsv(task.assignedTo || ''),
     ].join(',');
   }).join('\n');
