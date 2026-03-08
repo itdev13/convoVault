@@ -5,25 +5,25 @@
 
 export const APP_UPDATES = [
   {
-    title: 'Universal Search',
-    description: 'Search across contact name, email, company, tags, and message content',
+    title: 'New Export Tabs',
+    description: 'Export Notes, Tasks, Opportunities, Forms, Links, Templates, and Voice AI data',
     badge: 'live',
     icon: '✓',
     color: 'green'
   },
   {
-    title: 'Date Range Filters',
-    description: 'Filter conversations by Start Date and End Date for better reporting',
+    title: 'Contact & User Search Filters',
+    description: 'Easily search and filter by contactId and userId across all export types',
     badge: 'live',
     icon: '✓',
     color: 'green'
   },
   {
-    title: 'Enhanced Email Exports',
-    description: 'Subject, From, To, CC, BCC now included in separate email CSV files',
-    badge: 'live',
-    icon: '✓',
-    color: 'green'
+    title: 'Social Posts Export',
+    description: 'Export your social media posts and analytics data',
+    badge: 'upcoming',
+    icon: '🔜',
+    color: 'blue'
   }
 ];
 
