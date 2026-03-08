@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
+import { contactsAPI } from '../../api/contacts';
 import { Button, Select, DatePicker, Input, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
@@ -33,13 +34,18 @@ export default function OpportunitiesTab() {
   const [allUsers, setAllUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
 
+  // Contacts (for Contact filter)
+  const [contactOptions, setContactOptions] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const contactSearchTimer = useRef(null);
+
   // Filters
   const [pipelineId, setPipelineId] = useState('');
   const [pipelineStageId, setPipelineStageId] = useState('');
   const [status, setStatus] = useState('');
   const [query, setQuery] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
-  const [contactName, setContactName] = useState('');
+  const [contactId, setContactId] = useState('');
   const [monetaryValueMin, setMonetaryValueMin] = useState('');
   const [monetaryValueMax, setMonetaryValueMax] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -58,6 +64,29 @@ export default function OpportunitiesTab() {
   const OPP_LIMIT = 20;
 
   const getUserName = (u) => `${u?.firstName || ''} ${u?.lastName || ''}`.trim() || u?.name || u?.email || 'Unknown';
+
+  const handleContactSearch = useCallback((searchText) => {
+    if (contactSearchTimer.current) clearTimeout(contactSearchTimer.current);
+    contactSearchTimer.current = setTimeout(async () => {
+      if (!location?.id) return;
+      setContactsLoading(true);
+      try {
+        const res = await contactsAPI.search(location.id, searchText || '', 100);
+        if (res.success) {
+          setContactOptions((res.data?.contacts || res.contacts || []).map(c => ({
+            id: c.id,
+            name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || '',
+            email: c.email || '',
+            phone: c.phone || '',
+          })));
+        }
+      } catch (err) {
+        console.error('Contact search failed:', err);
+      } finally {
+        setContactsLoading(false);
+      }
+    }, 300);
+  }, [location?.id]);
 
   // Lookup maps for pipeline/stage names
   const pipelineMap = Object.fromEntries(pipelines.map(p => [p.id, p.name]));
@@ -78,6 +107,9 @@ export default function OpportunitiesTab() {
       .then(res => { if (res.success) setAllUsers(res.data.users || []); })
       .catch(console.error)
       .finally(() => setUsersLoading(false));
+
+    // Load initial contacts
+    handleContactSearch('');
 
     handleSearch(null, []);
   }, [location?.id]);
@@ -115,7 +147,7 @@ export default function OpportunitiesTab() {
     if (status) f.status = status;
     if (query) f.query = query;
     if (assignedTo) f.assignedTo = assignedTo;
-    if (contactName) f.contactName = contactName;
+    if (contactId) f.contactId = contactId;
     if (monetaryValueMin !== '') f.monetaryValueMin = parseFloat(monetaryValueMin);
     if (monetaryValueMax !== '') f.monetaryValueMax = parseFloat(monetaryValueMax);
     if (startDate) f.startDate = dayjs(startDate).startOf('day').valueOf();
@@ -374,16 +406,33 @@ export default function OpportunitiesTab() {
             </Select>
           </div>
 
-          {/* Contact Name */}
+          {/* Contact */}
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Contact Name</label>
-            <Input
-              value={contactName}
-              onChange={(e) => setContactName(e.target.value)}
-              placeholder="Filter by contact..."
+            <label className="block text-xs font-medium text-gray-600 mb-1">Contact</label>
+            <Select
+              showSearch
+              value={contactId || undefined}
+              onChange={(val) => setContactId(val || '')}
+              onSearch={handleContactSearch}
+              placeholder="Search contacts..."
+              allowClear
+              loading={contactsLoading}
+              filterOption={false}
+              notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
+              style={{ width: '100%' }}
               size="large"
-              onPressEnter={handleNewSearch}
-            />
+            >
+              {contactOptions.map(c => (
+                <Select.Option key={c.id} value={c.id}>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-sm">{c.name || '(No name)'}</span>
+                    {(c.email || c.phone) && (
+                      <span className="text-xs text-gray-400">{c.email || c.phone}</span>
+                    )}
+                  </div>
+                </Select.Option>
+              ))}
+            </Select>
           </div>
 
           {/* Monetary Value Min */}
