@@ -509,7 +509,7 @@ export default function TasksTab() {
             <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
             <Select value={completed || undefined} onChange={(val) => setCompleted(val || '')} placeholder="All Tasks" allowClear style={{ width: '100%' }} size="large">
               <Select.Option value="true">Completed</Select.Option>
-              <Select.Option value="false">Incomplete</Select.Option>
+              <Select.Option value="false">Pending</Select.Option>
             </Select>
           </div>
 
