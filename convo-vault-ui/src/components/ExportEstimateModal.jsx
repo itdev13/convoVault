@@ -142,7 +142,7 @@ export default function ExportEstimateModal({
           <div className="bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
             <div className="flex justify-between items-center text-sm">
               <span className="text-gray-700">Price per {exportType === 'notes' ? 'note' : 'task'}</span>
-              <span className="font-semibold text-gray-800">$0.0020</span>
+              <span className="font-semibold text-gray-800">$0.015</span>
             </div>
             <div className="flex justify-between items-center text-sm mt-2">
               <span className="text-gray-700">Billing</span>
@@ -424,7 +424,7 @@ export default function ExportEstimateModal({
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Price per Credit</span>
-                    <span className="font-medium">$0.0020</span>
+                    <span className="font-medium">$0.015</span>
                   </div>
                 </>
               )}
