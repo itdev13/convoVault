@@ -45,6 +45,8 @@ const exportJobSchema = new mongoose.Schema({
     startDate: { type: Date, default: null },
     endDate: { type: Date, default: null },
     contactId: { type: String, default: null },
+    // Notes/Tasks multi-contact export
+    contactIds: { type: [String], default: [] },
     // Conversation-specific filters
     query: { type: String, default: null },
     id: { type: String, default: null },
@@ -57,17 +59,24 @@ const exportJobSchema = new mongoose.Schema({
     // Opportunity-specific filters
     pipelineId: { type: String, default: null },
     pipelineStageId: { type: String, default: null },
+    assignedTo: { type: String, default: null },
+    monetaryValueMin: { type: Number, default: null },
+    monetaryValueMax: { type: Number, default: null },
+    sortKey: { type: String, default: null },
+    sortDirection: { type: String, default: null },
+    contactName: { type: String, default: null },
     // Form submission-specific filters
     formId: { type: String, default: null },
+    // Template-specific filters
+    templateType: { type: String, default: null },
     // Call log-specific filters
     agentId: { type: String, default: null },
     callType: { type: String, default: null },
     actionType: { type: String, default: null },
-    // Notes/Tasks multi-contact export
-    contactIds: { type: [String], default: [] },
     // Notes/Tasks contact name lookup map { contactId: "Name" }
     contactNames: { type: mongoose.Schema.Types.Mixed, default: null },
-    templateType: { type: String, default:null}
+    // Tasks unassigned filter
+    unAssigned: { type: Boolean, default: null }
   },
 
   // Progress tracking

@@ -619,7 +619,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       assignedTo: filters?.assignedTo || null,
       monetaryValueMin: filters?.monetaryValueMin ?? null,
       monetaryValueMax: filters?.monetaryValueMax ?? null,
-      sortField: filters?.sortField || null,
+      sortKey: filters?.sortKey || null,
       sortDirection: filters?.sortDirection || null,
       contactName: filters?.contactName || null,
       // Form submission-specific filters
@@ -631,7 +631,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       callType: filters?.callType || null,
       actionType: filters?.actionType || null,
       // Notes/Tasks contact name map { contactId: "Name" }
-      contactNames: filters?.contactNames || null
+      contactNames: filters?.contactNames || null,
+      unAssigned: filters?.unAssigned != null ? filters?.unAssigned : null,
     };
 
     const exportJob = await ExportJob.create({
