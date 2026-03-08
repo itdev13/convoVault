@@ -234,41 +234,56 @@ async function fetchTasksPage(locationId, accessToken, skip, filters = {}) {
  * Fetch a page of opportunities for a location
  */
 async function fetchOpportunitiesPage(locationId, accessToken, page, filters = {}) {
-  const params = {
-    location_id: locationId,
+  const body = {
+    locationId,
     limit: API_PAGE_SIZE,
     page
   };
 
-  if (filters.pipelineId) params.pipeline_id = filters.pipelineId;
-  if (filters.pipelineStageId) params.pipeline_stage_id = filters.pipelineStageId;
-  if (filters.status) params.status = filters.status;
-  if (filters.query) params.q = filters.query;
-  if (filters.contactId) params.contact_id = filters.contactId;
+  if (filters.query) body.query = filters.query;
 
-  // Convert date filters
-  if (filters.startDate) {
-    const date = new Date(filters.startDate);
-    date.setHours(0, 0, 0, 0);
-    params.date = date.getTime();
-  }
-  if (filters.endDate) {
-    const date = new Date(filters.endDate);
-    date.setHours(23, 59, 59, 999);
-    params.endDate = date.getTime();
+  // Build filters array from named options
+  const filterArr = [];
+  if (filters.pipelineId) filterArr.push({ field: 'pipeline_id', operator: 'eq', value: filters.pipelineId });
+  if (filters.pipelineStageId) filterArr.push({ field: 'pipeline_stage_id', operator: 'eq', value: filters.pipelineStageId });
+  if (filters.status) filterArr.push({ field: 'status', operator: 'eq', value: filters.status });
+  if (filters.assignedTo) filterArr.push({ field: 'assigned_to', operator: 'eq', value: filters.assignedTo });
+  if (filters.contactId) filterArr.push({ field: 'contact_id', operator: 'eq', value: filters.contactId });
+  if (filters.contactName) filterArr.push({ field: 'contact_name', operator: 'contains', value: filters.contactName });
+
+  // Monetary value range
+  if (filters.monetaryValueMin != null || filters.monetaryValueMax != null) {
+    const range = {};
+    if (filters.monetaryValueMin != null) range.gte = Number(filters.monetaryValueMin);
+    if (filters.monetaryValueMax != null) range.lte = Number(filters.monetaryValueMax);
+    if (Object.keys(range).length > 0) filterArr.push({ field: 'monetary_value', operator: 'range', value: range });
   }
 
-  const response = await axios.get(`${GHL_API_URL}/opportunities/search`, {
+  // Date added range
+  if (filters.startDate || filters.endDate) {
+    const range = {};
+    if (filters.startDate) range.gte = new Date(filters.startDate).getTime();
+    if (filters.endDate) range.lte = new Date(filters.endDate).getTime();
+    filterArr.push({ field: 'date_added', operator: 'range', value: range });
+  }
+
+  if (filterArr.length > 0) body.filters = filterArr;
+
+  // Sort
+  if (filters.sortField) {
+    body.sort = [{ field: filters.sortField, direction: filters.sortDirection || 'desc' }];
+  }
+
+  const response = await axios.post(`${GHL_API_URL}/opportunities/search`, body, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'Version': '2021-07-28'
-    },
-    params
+    }
   });
 
   const opportunities = response.data.opportunities || [];
-  const total = response.data.meta?.total || response.data.total || 0;
+  const total = response.data.total || 0;
 
   return {
     data: opportunities,
