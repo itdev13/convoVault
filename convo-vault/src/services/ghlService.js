@@ -985,6 +985,11 @@ class GHLService {
     }
   }
 
+  
+  nonNullValue(val){
+    return val != null && val != undefined && val != "";
+  }
+
   /**
    * Search tasks for a location
    * GET /locations/:locationId/tasks
@@ -1002,16 +1007,19 @@ class GHLService {
         body.contactId = options.contactIds;
       }
       if (options.assignedTo && options.assignedTo.length > 0) body.assignedTo = options.assignedTo;
-      if (options.unAssigned !== undefined) body.unAssigned = options.unAssigned;
-      if (options.completed !== undefined && options.completed !== '') body.completed = options.completed;
-      if (options.overdue !== undefined) body.overdue = options.overdue;
+      if (nonNullValue(options.unAssigned)) body.unAssigned = options.unAssigned;
+      if (nonNullValue(options.completed)) body.completed = options.completed;
+      if (nonNullValue(options.overdue)) body.overdue = options.overdue;
       if (options.query) body.query = options.query;
       // dueDate filter: { gt, lte }
       if (options.dueDate) body.dueDate = options.dueDate;
       if (options.sortKey) body.sortKey = options.sortKey;
-      if (options.sortDirection !== undefined) body.sortDirection = options.sortDirection;
+      if (nonNullValue(options.sortDirection)) body.sortDirection = options.sortDirection;
       // cursor-based pagination
       if (options.searchAfter && options.searchAfter.length > 0) body.searchAfter = options.searchAfter;
+      if(options.businessId){
+        body.businessId = options.businessId;
+      }
       const response = await this.apiRequest(
         'POST',
         `/locations/${locationId}/tasks/search`,
@@ -1059,10 +1067,10 @@ class GHLService {
       if (options.contactName) filters.push({ field: 'contact_name', operator: 'contains', value: options.contactName });
 
       // Monetary value range
-      if (options.monetaryValueMin !== undefined || options.monetaryValueMax !== undefined) {
+      if (nonNullValue(options.monetaryValueMin) || nonNullValue(options.monetaryValueMax)) {
         const range = {};
-        if (options.monetaryValueMin !== undefined && options.monetaryValueMin !== '') range.gte = Number(options.monetaryValueMin);
-        if (options.monetaryValueMax !== undefined && options.monetaryValueMax !== '') range.lte = Number(options.monetaryValueMax);
+        if (nonNullValue(options.monetaryValueMin)) range.gte = Number(options.monetaryValueMin);
+        if (nonNullValue(options.monetaryValueMax)) range.lte = Number(options.monetaryValueMax);
         if (Object.keys(range).length > 0) filters.push({ field: 'monetary_value', operator: 'range', value: range });
       }
 
