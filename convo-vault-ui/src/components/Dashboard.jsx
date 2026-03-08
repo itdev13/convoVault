@@ -41,7 +41,7 @@ export default function Dashboard() {
     { id: 'formSubmissions', label: 'Forms', icon: '📋' },
     { id: 'links', label: 'Links', icon: '🔗' },
     { id: 'socialPosts', label: 'Social Posts', icon: '📱' },
-    { id: 'callLogs', label: 'Call Logs', icon: '📞' },
+    { id: 'callLogs', label: 'Voice AI', icon: '📞' },
   ];
 
   const handleConversationSelect = (conversation) => {
