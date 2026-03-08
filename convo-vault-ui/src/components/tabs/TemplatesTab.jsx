@@ -201,7 +201,7 @@ export default function TemplatesTab() {
         <div className="flex flex-wrap items-end gap-4">
           {/* Channel/Type */}
           <div className="min-w-[200px]">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Channel</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Channel-All, SMS, Email, WhatsApp</label>
             <Select
               value={type || undefined}
               onChange={(val) => setType(val || '')}
