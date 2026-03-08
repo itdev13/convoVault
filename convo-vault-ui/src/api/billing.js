@@ -88,5 +88,101 @@ export const billingAPI = {
       params: { locationId }
     });
     return response;
+  },
+
+  /**
+   * Search form submissions for a location (preview) — page-based pagination
+   */
+  searchFormSubmissions: async (locationId, filters = {}, page = 1, limit = 25) => {
+    const response = await apiClient.post('/billing/formSubmissions/search', {
+      locationId,
+      filters,
+      page,
+      limit
+    });
+    return response;
+  },
+
+  /**
+   * Search trigger links for a location (preview) — page-based pagination
+   */
+  searchLinks: async (locationId, query = '', page = 1, limit = 25) => {
+    const response = await apiClient.post('/billing/links/search', {
+      locationId,
+      query,
+      page,
+      limit
+    });
+    return response;
+  },
+
+  /**
+   * Search opportunities for a location (preview) — cursor-based pagination via searchAfter
+   */
+  searchOpportunities: async (locationId, filters = {}, searchAfter = null, limit = 20) => {
+    const response = await apiClient.post('/billing/opportunities/search', {
+      locationId,
+      filters,
+      searchAfter,
+      limit
+    });
+    return response;
+  },
+
+  /**
+   * Search tasks for a location (preview) — cursor-based pagination via searchAfter
+   */
+  searchTasks: async (locationId, filters = {}, searchAfter = null, limit = 25) => {
+    const response = await apiClient.post('/billing/tasks/search', {
+      locationId,
+      filters,
+      searchAfter,
+      limit
+    });
+    console.log("response tasks", response);
+    return response;
+  },
+
+  /**
+   * Search templates for a location (preview) — page-based pagination
+   */
+  searchTemplates: async (locationId, filters = {}, page = 1, limit = 25) => {
+    const response = await apiClient.post('/billing/templates/search', {
+      locationId,
+      filters,
+      page,
+      limit
+    });
+    return response;
+  },
+
+  searchCallLogs: async (locationId, filters = {}, page = 1, pageSize = 10) => {
+    const response = await apiClient.post('/billing/callLogs/search', {
+      locationId,
+      filters,
+      page,
+      pageSize
+    });
+    return response;
+  },
+
+  /**
+   * Get voice AI agents for a location
+   */
+  getVoiceAIAgents: async (locationId) => {
+    const response = await apiClient.get('/billing/voice-ai-agents', {
+      params: { locationId }
+    });
+    return response;
+  },
+
+  /**
+   * Search users for a location's company
+   */
+  searchUsers: async (locationId, query = '') => {
+    const response = await apiClient.get('/billing/users', {
+      params: { locationId, query }
+    });
+    return response;
   }
 };

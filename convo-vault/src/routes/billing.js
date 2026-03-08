@@ -6,6 +6,7 @@ const ghlService = require('../services/ghlService');
 const BillingTransaction = require('../models/BillingTransaction');
 const ExportJob = require('../models/ExportJob');
 const OAuthToken = require('../models/OAuthToken');
+const CompanyLocation = require('../models/CompanyLocation');
 const logger = require('../utils/logger');
 const { logError, getUserFriendlyMessage } = require('../utils/errorLogger');
 const { authenticateSession } = require('../middleware/auth');
@@ -67,7 +68,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -75,8 +76,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date range (not applicable for notes/tasks/links)
-    if (!['notes', 'tasks', 'links'].includes(exportType)) {
+    // Validate date range (not applicable for notes/links/templates)
+    if (!['notes', 'links', 'templates'].includes(exportType)) {
       const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
       if (!dateValidation.valid) {
         return res.status(400).json({
@@ -98,7 +99,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       formSubmissions: 0,
       links: 0,
       socialPosts: 0,
-      callLogs: 0
+      callLogs: 0,
+      templates: 0
     };
 
     if (exportType === 'conversations') {
@@ -144,41 +146,51 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         counts.emailMessages = emailCount;
       }
 
-    } else if (exportType === 'notes' || exportType === 'tasks') {
-      // Notes/Tasks: per-contact APIs - sample contacts to estimate count
-      const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
-      const totalContacts = contactResult.total || 0;
-
-      if (totalContacts > 0) {
-        // Sample up to 10 contacts to estimate average items per contact
-        const SAMPLE_SIZE = Math.min(10, totalContacts);
-        const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
-        const sampleContacts = sampleResult.contacts || [];
-
-        let totalItemsInSample = 0;
-        for (const contact of sampleContacts) {
+    } else if (exportType === 'notes') {
+      if (filters?.contactId) {
+        const result = await ghlService.getContactNotes(locationId, filters.contactId);
+        counts.notes = result.total;
+      } else if (filters?.contactIds?.length > 0) {
+        let total = 0;
+        for (const cId of filters.contactIds) {
           try {
-            if (exportType === 'notes') {
-              const result = await ghlService.getContactNotes(locationId, contact.id);
-              totalItemsInSample += result.total;
-            } else {
-              const result = await ghlService.getContactTasks(locationId, contact.id);
-              totalItemsInSample += result.total;
-            }
+            const result = await ghlService.getContactNotes(locationId, cId);
+            total += result.total;
           } catch (err) {
-            logger.warn('Failed to fetch for contact during estimation:', { contactId: contact.id });
+            logger.warn('Failed to count notes for contact during estimation:', { contactId: cId });
           }
         }
-
-        const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
-        const estimatedTotal = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
-
-        if (exportType === 'notes') {
-          counts.notes = estimatedTotal;
-        } else {
-          counts.tasks = estimatedTotal;
-        }
+        counts.notes = total;
+      } else {
+        // Notes: all contacts — use post-export billing
+        return res.json({
+          success: true,
+          data: {
+            estimate: null,
+            postExportBilling: true,
+            unitPrice: 0.002,
+            exportType,
+            filters
+          }
+        });
       }
+
+    } else if (exportType === 'tasks') {
+      // Tasks: location-level search API — always upfront billing
+      const result = await ghlService.getLocationTasks(locationId, {
+        contactIds: filters?.contactIds || [],
+        assignedTo: filters?.assignedTo,
+        completed: filters?.completed,
+        overdue: filters?.overdue,
+        query: filters?.query,
+        dueDate: filters?.dueDate,
+        sortKey: filters?.sortKey,
+        sortDirection: filters?.sortDirection,
+        unAssigned: filters.unAssigned,
+        businessId: filters.businessId,
+        limit: 1
+      });
+      counts.tasks = result.total || 0;
 
     } else if (exportType === 'opportunities') {
       // Opportunities: location-level search API returns total directly
@@ -191,15 +203,17 @@ router.post('/estimate', authenticateSession, async (req, res) => {
     } else if (exportType === 'formSubmissions') {
       // Form Submissions: page-based API returns total in meta
       const result = await ghlService.getFormSubmissions(locationId, {
-        ...filters,
+        formId: filters?.formId,
+        q: filters?.query,
+        startAt: filters?.startDate,
+        endAt: filters?.endDate,
         limit: 1
       });
       counts.formSubmissions = result.total || 0;
 
     } else if (exportType === 'links') {
-      // Links: returns all links at once (no pagination)
-      const result = await ghlService.getLinks(locationId);
-      counts.links = result.links?.length || 0;
+      const result = await ghlService.getLinks(locationId, { query: filters?.query, limit: 1000 });
+      counts.links = result.total || result.links?.length || 0;
 
     } else if (exportType === 'socialPosts') {
       // Social Posts: list endpoint returns total
@@ -216,6 +230,14 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         pageSize: 1
       });
       counts.callLogs = result.total || 0;
+
+    } else if (exportType === 'templates') {
+      // Templates: returns totalCount directly
+      const result = await ghlService.getTemplates(locationId, {
+        type: filters?.type,
+        limit: '1'
+      });
+      counts.templates = result.total || 0;
     }
 
     // Get access token to fetch actual prices from GHL
@@ -223,8 +245,12 @@ router.post('/estimate', authenticateSession, async (req, res) => {
     const accessToken = tokenData.accessToken || tokenData;
 
     // Calculate estimate with actual GHL meter prices
-    const estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
-
+    let estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
+    estimate = {
+      ...estimate,
+      discountTiers: billingService.getDiscountTiers(),
+      unitPrices: billingService.getUnitPrices()
+    }
     res.json({
       success: true,
       data: {
@@ -266,7 +292,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -291,8 +317,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date range (not applicable for notes/tasks/links)
-    if (!['notes', 'tasks', 'links'].includes(exportType)) {
+    // Validate date range (not applicable for notes/links/templates)
+    if (!['notes', 'links', 'templates'].includes(exportType)) {
       const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
       if (!dateValidation.valid) {
         return res.status(400).json({
@@ -315,7 +341,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       formSubmissions: 0,
       links: 0,
       socialPosts: 0,
-      callLogs: 0
+      callLogs: 0,
+      templates: 0
     };
     let totalItems = 0;
 
@@ -326,37 +353,92 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
       totalItems = result.total || result.conversations?.length || 0;
       counts.conversations = totalItems;
-    } else if (exportType === 'notes' || exportType === 'tasks') {
-      // Notes/Tasks: sample contacts to estimate
-      const contactResult = await ghlService.searchContacts(locationId, { limit: 1 });
-      const totalContacts = contactResult.total || 0;
-
-      if (totalContacts > 0) {
-        const SAMPLE_SIZE = Math.min(10, totalContacts);
-        const sampleResult = await ghlService.searchContacts(locationId, { limit: SAMPLE_SIZE });
-        const sampleContacts = sampleResult.contacts || [];
-
-        let totalItemsInSample = 0;
-        for (const contact of sampleContacts) {
+    } else if (exportType === 'notes') {
+      if (filters?.contactId) {
+        const result = await ghlService.getContactNotes(locationId, filters.contactId);
+        totalItems = result.total;
+        counts.notes = totalItems;
+      } else if (filters?.contactIds?.length > 0) {
+        let total = 0;
+        for (const cId of filters.contactIds) {
           try {
-            if (exportType === 'notes') {
-              const result = await ghlService.getContactNotes(locationId, contact.id);
-              totalItemsInSample += result.total;
-            } else {
-              const result = await ghlService.getContactTasks(locationId, contact.id);
-              totalItemsInSample += result.total;
-            }
+            const result = await ghlService.getContactNotes(locationId, cId);
+            total += result.total;
           } catch (err) {
-            logger.warn('Sample contact fetch failed:', { contactId: contact.id });
+            logger.warn('Sample contact notes fetch failed:', { contactId: cId });
           }
         }
+        totalItems = total;
+        counts.notes = totalItems;
+      } else {
+        // Notes: all contacts — post-export billing
+        const oauthTokenCheck = await OAuthToken.findActiveToken(locationId);
+        if (!oauthTokenCheck || !oauthTokenCheck.refreshToken) {
+          return res.status(400).json({ success: false, error: 'No valid OAuth token found for this location' });
+        }
 
-        const avgPerContact = sampleContacts.length > 0 ? totalItemsInSample / sampleContacts.length : 0;
-        totalItems = Math.max(totalItemsInSample, Math.round(avgPerContact * totalContacts));
+        const transaction = await BillingTransaction.create({
+          locationId, companyId, type: 'export_notes',
+          itemCounts: { notes: 0, total: 0 },
+          pricing: { baseAmount: 0, discountPercent: 0, discountAmount: 0, finalAmount: 0 },
+          meterCharges: [], status: 'deferred', userId
+        });
 
-        if (exportType === 'notes') counts.notes = totalItems;
-        else counts.tasks = totalItems;
+        const jobFiltersDeferred = {
+          channel: null, startDate: null, endDate: null,
+          contactId: null, contactIds: [], query: null, id: null,
+          conversationId: null, lastMessageType: null, lastMessageDirection: null,
+          status: null, lastMessageAction: null, sortBy: null,
+          pipelineId: null, pipelineStageId: null, formId: null,
+          agentId: null, callType: null, actionType: null, contactNames: null
+        };
+
+        const exportJob = await ExportJob.create({
+          locationId, companyId, billingTransactionId: transaction._id,
+          exportType: 'notes', format: format || 'csv', filters: jobFiltersDeferred,
+          totalItems: 0, postExportBilling: true, status: 'pending',
+          notificationEmail: notificationEmail || null, userId
+        });
+
+        transaction.exportJobId = exportJob._id;
+        await transaction.save();
+
+        const lambdaParams = {
+          FunctionName: LAMBDA_FUNCTION_NAME, InvocationType: 'Event', Qualifier: '$LATEST',
+          Payload: JSON.stringify({ exportJobId: exportJob._id.toString() })
+        };
+        const lambdaResult = await lambda.invoke(lambdaParams).promise();
+
+        exportJob.status = 'processing';
+        exportJob.startedAt = new Date();
+        exportJob.lambdaRequestId = lambdaResult.$response?.requestId || null;
+        await exportJob.save();
+
+        return res.json({
+          success: true,
+          data: {
+            jobId: exportJob._id.toString(), status: 'processing', totalItems: 0,
+            message: 'Export started. You will be charged $0.002 per note after export completes.'
+          }
+        });
       }
+
+    } else if (exportType === 'tasks') {
+      // Tasks: location-level search API — always upfront billing
+      const result = await ghlService.getLocationTasks(locationId, {
+        contactIds: filters?.contactIds || [],
+        assignedTo: filters?.assignedTo,
+        completed: filters?.completed,
+        overdue: filters?.overdue,
+        query: filters?.query,
+        dueDate: filters?.dueDate,
+        sortKey: filters?.sortKey,
+        sortDirection: filters?.sortDirection,
+        limit: 1
+      });
+      totalItems = result.total || 0;
+      counts.tasks = totalItems;
+
     } else if (exportType === 'opportunities') {
       // Opportunities: location-level search API returns total directly
       const result = await ghlService.searchOpportunities(locationId, {
@@ -368,15 +450,18 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     } else if (exportType === 'formSubmissions') {
       const result = await ghlService.getFormSubmissions(locationId, {
-        ...filters,
+        formId: filters?.formId,
+        q: filters?.query,
+        startAt: filters?.startDate,
+        endAt: filters?.endDate,
         limit: 1
       });
       totalItems = result.total || 0;
       counts.formSubmissions = totalItems;
 
     } else if (exportType === 'links') {
-      const result = await ghlService.getLinks(locationId);
-      totalItems = result.links?.length || 0;
+      const result = await ghlService.getLinks(locationId, { query: filters?.query, limit: 1000 });
+      totalItems = result.total || result.links?.length || 0;
       counts.links = totalItems;
 
     } else if (exportType === 'socialPosts') {
@@ -394,6 +479,14 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
       totalItems = result.total || 0;
       counts.callLogs = totalItems;
+
+    } else if (exportType === 'templates') {
+      const result = await ghlService.getTemplates(locationId, {
+        type: filters?.type,
+        limit: '1'
+      });
+      totalItems = result.total || 0;
+      counts.templates = totalItems;
 
     } else {
       const result = await ghlService.exportMessages(locationId, {
@@ -514,6 +607,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       startDate: filters?.startDate ? new Date(filters.startDate) : null,
       endDate: filters?.endDate ? new Date(filters.endDate) : null,
       contactId: filters?.contactId || null,
+      contactIds: filters?.contactIds?.length > 0 ? filters.contactIds : [],
       // Conversation-specific filters
       query: filters?.query || null,
       id: filters?.id || null,
@@ -526,12 +620,31 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       // Opportunity-specific filters
       pipelineId: filters?.pipelineId || null,
       pipelineStageId: filters?.pipelineStageId || null,
+      assignedTo: filters?.assignedTo || null,
+      monetaryValueMin: filters?.monetaryValueMin ?? null,
+      monetaryValueMax: filters?.monetaryValueMax ?? null,
+      sortKey: filters?.sortKey || null,
+      sortDirection: filters?.sortDirection || null,
+      contactName: filters?.contactName || null,
       // Form submission-specific filters
       formId: filters?.formId || null,
+      // Template-specific filters
+      templateType: filters?.type || null,
       // Call log-specific filters
       agentId: filters?.agentId || null,
       callType: filters?.callType || null,
-      actionType: filters?.actionType || null
+      actionType: filters?.actionType || null,
+      direction: filters?.direction || null,
+      callSortBy: filters?.sortBy || null,
+      callSort: filters?.sort || null,
+      // Notes/Tasks contact name map { contactId: "Name" }
+      contactNames: filters?.contactNames || null,
+      // Task-specific filters
+      dueDate: filters?.dueDate ? { gt: filters.dueDate.gt || null, lte: filters.dueDate.lte || null } : null,
+      businessId: filters?.businessId || null,
+      completed: filters?.completed ?? null,
+      overdue: filters?.overdue ?? null,
+      unAssigned: filters?.unAssigned != null ? filters?.unAssigned : null,
     };
 
     const exportJob = await ExportJob.create({
@@ -547,6 +660,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       userId
     });
 
+    console.log("jobfilters: ", jobFilters)
     // Update transaction with job reference
     transaction.exportJobId = exportJob._id;
     await transaction.save();
@@ -830,6 +944,341 @@ router.get('/forms', authenticateSession, async (req, res) => {
       success: false,
       error: 'Failed to get forms'
     });
+  }
+});
+
+/**
+ * @route GET /api/billing/contacts/:contactId/notes
+ * @desc Get notes for a specific contact (for preview)
+ */
+router.get('/contacts/:contactId/notes', authenticateSession, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { locationId } = req.query;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    const result = await ghlService.getContactNotes(locationId, contactId);
+
+    res.json({
+      success: true,
+      data: {
+        notes: result.notes || [],
+        total: result.total || 0
+      }
+    });
+
+  } catch (error) {
+    logError('Get contact notes error', error, { contactId: req.params?.contactId });
+    res.status(500).json({ success: false, error: 'Failed to fetch notes' });
+  }
+});
+
+/**
+ * @route GET /api/billing/contacts/:contactId/tasks
+ * @desc Get tasks for a specific contact (for preview)
+ */
+router.get('/contacts/:contactId/tasks', authenticateSession, async (req, res) => {
+  try {
+    const { contactId } = req.params;
+    const { locationId } = req.query;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    const result = await ghlService.getContactTasks(locationId, contactId);
+
+    res.json({
+      success: true,
+      data: {
+        tasks: result.tasks || [],
+        total: result.total || 0
+      }
+    });
+
+  } catch (error) {
+    logError('Get contact tasks error', error, { contactId: req.params?.contactId });
+    res.status(500).json({ success: false, error: 'Failed to fetch tasks' });
+  }
+});
+
+/**
+ * @route POST /api/billing/formSubmissions/search
+ * @desc Search form submissions for a location (for preview in UI)
+ */
+router.post('/formSubmissions/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, page = 1, limit = 25 } = req.body;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const result = await ghlService.getFormSubmissions(locationId, {
+      formId: filters.formId,
+      q: filters.query,
+      startAt: filters.startDate,
+      endAt: filters.endDate,
+      page,
+      limit
+    });
+    res.json({
+      success: true,
+      data: {
+        submissions: result.submissions || [],
+        total: result.total || 0,
+        page,
+        limit
+      }
+    });
+  } catch (error) {
+    logError('Search form submissions error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search form submissions' });
+  }
+});
+
+/**
+ * @route POST /api/billing/links/search
+ * @desc Search trigger links for a location (for preview in UI)
+ */
+router.post('/links/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, query = '', page = 1, limit = 25 } = req.body;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const skip = (page - 1) * limit;
+    const result = await ghlService.getLinks(locationId, { query, limit, skip });
+    res.json({
+      success: true,
+      data: {
+        links: result.links || [],
+        total: result.total || 0,
+        page,
+        limit
+      }
+    });
+  } catch (error) {
+    logError('Search links error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search links' });
+  }
+});
+
+/**
+ * @route POST /api/billing/opportunities/search
+ * @desc Search opportunities for a location (for preview in UI)
+ */
+router.post('/opportunities/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, searchAfter = null, limit = 20 } = req.body;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    const result = await ghlService.searchOpportunities(locationId, {
+      ...filters,
+      searchAfter: searchAfter || [],
+      limit
+    });
+
+    res.json({
+      success: true,
+      data: {
+        opportunities: result.opportunities || [],
+        total: result.total || 0,
+        nextSearchAfter: result.searchAfter || null
+      }
+    });
+  } catch (error) {
+    logError('Search opportunities error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search opportunities' });
+  }
+});
+
+/**
+ * @route POST /api/billing/tasks/search
+ * @desc Search tasks for a location (for preview in UI)
+ */
+router.post('/tasks/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, searchAfter = null, limit = 25 } = req.body;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    const result = await ghlService.getLocationTasks(locationId, {
+      contactIds: filters.contactIds || [],
+      assignedTo: filters.assignedTo,
+      unAssigned: filters.unAssigned,
+      completed: filters.completed,
+      overdue: filters.overdue,
+      query: filters.query,
+      dueDate: filters.dueDate,
+      sortKey: filters.sortKey,
+      sortDirection: filters.sortDirection,
+      businessId: filters?.businessId,
+      searchAfter: searchAfter || [],
+      skip: 0,
+      limit
+    });
+
+    // Return last task's searchAfter for cursor pagination
+    const tasks = result.tasks || [];
+    const nextSearchAfter = tasks.length > 0 ? (tasks[tasks.length - 1].searchAfter || null) : null;
+
+    res.json({
+      success: true,
+      data: {
+        tasks,
+        total: result.total || 0,
+        nextSearchAfter
+      }
+    });
+  } catch (error) {
+    logError('Search tasks error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search tasks' });
+  }
+});
+
+/**
+ * @route POST /api/billing/templates/search
+ * @desc Search templates for a location (for preview in UI)
+ */
+router.post('/templates/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, page = 1, limit = 25 } = req.body;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const skip = (page - 1) * limit;
+    const result = await ghlService.getTemplates(locationId, {
+      type: filters.type,
+      limit: String(limit),
+      skip: String(skip)
+    });
+    res.json({
+      success: true,
+      data: {
+        templates: result.templates || [],
+        total: result.total || 0,
+        page,
+        limit
+      }
+    });
+  } catch (error) {
+    logError('Search templates error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search templates' });
+  }
+});
+
+/**
+ * @route POST /api/billing/callLogs/search
+ * @desc Search call logs for a location (for preview in UI)
+ */
+router.post('/callLogs/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, filters = {}, page = 1, pageSize = 50 } = req.body;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const options = { page, pageSize };
+    if (filters.agentId) options.agentId = filters.agentId;
+    if (filters.contactId) options.contactId = filters.contactId;
+    if (filters.callType) options.callType = filters.callType;
+    if (filters.direction) options.direction = filters.direction;
+    if (filters.actionType) options.actionType = filters.actionType;
+    if (filters.startDate) options.startDate = filters.startDate;
+    if (filters.endDate) options.endDate = filters.endDate;
+    if (filters.sortBy) options.sortBy = filters.sortBy;
+    if (filters.sort) options.sort = filters.sort;
+
+    const result = await ghlService.getCallLogs(locationId, options);
+    res.json({
+      success: true,
+      data: {
+        callLogs: result.callLogs || [],
+        total: result.total || 0,
+        page,
+        pageSize
+      }
+    });
+  } catch (error) {
+    logError('Search call logs error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search call logs' });
+  }
+});
+
+/**
+ * @route GET /api/billing/voice-ai-agents
+ * @desc Get voice AI agents for a location (for filter dropdowns)
+ */
+router.get('/voice-ai-agents', authenticateSession, async (req, res) => {
+  try {
+    const { locationId } = req.query;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const result = await ghlService.getVoiceAIAgents(locationId);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    logError('Get voice AI agents error', error, { locationId: req.query?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to get voice AI agents' });
+  }
+});
+
+/**
+ * @route GET /api/billing/users
+ * @desc Search users for a location's company (for filter dropdowns)
+ */
+router.get('/users', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, query = '' } = req.query;
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    const companyLocation = await CompanyLocation.findCompanyByLocation(locationId);
+    if (!companyLocation) {
+      return res.status(404).json({ success: false, error: 'Company not found for this location' });
+    }
+    const users = await ghlService.searchUsers(locationId, { companyId: companyLocation.companyId, query });
+    res.json({ success: true, data: { users } });
+  } catch (error) {
+    logError('Search users error', error, { locationId: req.query?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search users' });
+  }
+});
+
+/**
+ * @route GET /api/billing/contacts/search
+ * @desc Search contacts for a location (for filter dropdowns)
+ */
+router.get('/contacts/search', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, query, limit } = req.query;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    const result = await ghlService.searchContacts(locationId, {
+      query: query || '',
+      limit: parseInt(limit) || 20
+    });
+
+    res.json({
+      success: true,
+      data: {
+        contacts: result.contacts || [],
+        total: result.total || 0
+      }
+    });
+
+  } catch (error) {
+    logError('Search contacts error', error, { locationId: req.query?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to search contacts' });
   }
 });
 

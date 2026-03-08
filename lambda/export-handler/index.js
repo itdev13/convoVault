@@ -1,10 +1,12 @@
-const AWS = require('aws-sdk');
+const { S3Client, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const axios = require('axios');
 const { MongoClient, ObjectId } = require('mongodb');
 
 // Initialize AWS services
-const s3 = new AWS.S3();
-const lambda = new AWS.Lambda();
+const s3 = new S3Client();
+const lambda = new LambdaClient();
 
 // Environment variables
 const S3_BUCKET = process.env.S3_BUCKET || 'convo-vault-exports';
@@ -13,6 +15,12 @@ const GHL_API_URL = process.env.GHL_API_URL || 'https://services.leadconnectorhq
 const GHL_OAUTH_URL = process.env.GHL_OAUTH_URL || 'https://services.leadconnectorhq.com/oauth';
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
+
+// Post-export billing constants (notes/tasks all-contacts)
+const GHL_APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
+const NOTES_TASKS_METER_ID = '69864aed1265653fdd7c0620';
+const NOTES_TASKS_UNIT_PRICE = 0.002;
+const INTERNAL_TESTING_COMPANY_IDS = ['PG9VJ27QFRumQrOGB2Ee', '7IlT9P1bafOCnq2JV00t'];
 
 // Brevo Email configuration
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
@@ -24,7 +32,8 @@ const EMAIL_FROM_ADDRESS = 'support@vaultsuite.store';
 const BATCH_SIZE = 10000;           // Records per Lambda invocation
 const API_PAGE_SIZE = 100;          // Records per GHL API call
 const API_MESSAGES_PAGE_SIZE = 500;
-const TIMEOUT_BUFFER_MS = 14 * 60 * 1000;  // 14 min buffer before timeout
+const API_CALL_LOGS_PAGE_SIZE = 50; // Max pageSize for Voice AI call logs API
+const TIMEOUT_BUFFER_MS = 13 * 60 * 1000;  // 14 min buffer before timeout
 
 // MongoDB client (reused across warm invocations)
 let dbClient = null;
@@ -182,49 +191,123 @@ async function fetchNotesForContact(contactId, accessToken) {
   return response.data.notes || [];
 }
 
+function nonNullValue(val){
+  return val != null && val != undefined && val != "";
+}
+
 /**
  * Fetch all tasks for a specific contact
  */
-async function fetchTasksForContact(contactId, accessToken) {
-  const response = await axios.get(`${GHL_API_URL}/contacts/${contactId}/tasks`, {
+/**
+ * Fetch a page of tasks for a location via location-level search API
+ */
+async function fetchTasksPage(locationId, accessToken, skip, filters = {}) {
+  const LIMIT = 1000;
+  const body = { limit: LIMIT, skip, count: true };
+
+  // contactId is always an array in the API
+  if (filters.contactIds && filters.contactIds.length > 0) {
+    body.contactId = filters.contactIds;
+  }
+  if (filters.assignedTo) body.assignedTo = filters.assignedTo;
+  if (nonNullValue(filters.completed)) body.completed = filters.completed;
+  if (nonNullValue(filters.overdue)) body.overdue = filters.overdue;
+  if (filters.query) body.query = filters.query;
+  // dueDate filter: { gt, lte }
+  if (filters.dueDate) body.dueDate = filters.dueDate;
+  if (filters.sortKey) body.sortKey = filters.sortKey;
+  if (nonNullValue(filters.sortDirection)) body.sortDirection = filters.sortDirection;
+  if (nonNullValue(filters.businessId)) body.businessId = filters.businessId;
+  if (nonNullValue(filters.unAssigned)) body.unAssigned = filters.unAssigned;
+
+  const response = await axios.post(`${GHL_API_URL}/locations/${locationId}/tasks/search`, body, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'Version': '2021-07-28'
     }
   });
-  return response.data.tasks || [];
+
+  const tasks = response.data.tasks || [];
+  const total = response.data.count || response.data.total || 0;
+  return { data: tasks, total, hasMore: tasks.length >= LIMIT };
 }
 
 /**
  * Fetch a page of opportunities for a location
  */
 async function fetchOpportunitiesPage(locationId, accessToken, page, filters = {}) {
-  const params = {
-    location_id: locationId,
+  const body = {
+    locationId,
     limit: API_PAGE_SIZE,
     page
   };
 
-  if (filters.pipelineId) params.pipeline_id = filters.pipelineId;
-  if (filters.pipelineStageId) params.pipeline_stage_id = filters.pipelineStageId;
-  if (filters.status) params.status = filters.status;
-  if (filters.query) params.q = filters.query;
-  if (filters.contactId) params.contact_id = filters.contactId;
+  if (filters.query) body.query = filters.query;
 
-  // Convert date filters
-  if (filters.startDate) {
-    const date = new Date(filters.startDate);
-    date.setHours(0, 0, 0, 0);
-    params.date = date.getTime();
-  }
-  if (filters.endDate) {
-    const date = new Date(filters.endDate);
-    date.setHours(23, 59, 59, 999);
-    params.endDate = date.getTime();
+  // Build filters array from named options
+  const filterArr = [];
+  if (filters.pipelineId) filterArr.push({ field: 'pipeline_id', operator: 'eq', value: filters.pipelineId });
+  if (filters.pipelineStageId) filterArr.push({ field: 'pipeline_stage_id', operator: 'eq', value: filters.pipelineStageId });
+  if (filters.status) filterArr.push({ field: 'status', operator: 'eq', value: filters.status });
+  if (filters.assignedTo) filterArr.push({ field: 'assigned_to', operator: 'eq', value: filters.assignedTo });
+  if (filters.contactId) filterArr.push({ field: 'contact_id', operator: 'eq', value: filters.contactId });
+  if (filters.contactName) filterArr.push({ field: 'contact_name', operator: 'contains', value: filters.contactName });
+
+  // Monetary value range
+  if (filters.monetaryValueMin != null || filters.monetaryValueMax != null) {
+    const range = {};
+    if (filters.monetaryValueMin != null) range.gte = Number(filters.monetaryValueMin);
+    if (filters.monetaryValueMax != null) range.lte = Number(filters.monetaryValueMax);
+    if (Object.keys(range).length > 0) filterArr.push({ field: 'monetary_value', operator: 'range', value: range });
   }
 
-  const response = await axios.get(`${GHL_API_URL}/opportunities/search`, {
+  // Date added range
+  if (filters.startDate || filters.endDate) {
+    const range = {};
+    if (filters.startDate) range.gte = new Date(filters.startDate).getTime();
+    if (filters.endDate) range.lte = new Date(filters.endDate).getTime();
+    filterArr.push({ field: 'date_added', operator: 'range', value: range });
+  }
+
+  if (filterArr.length > 0) body.filters = filterArr;
+
+  // Sort
+  if (filters.sortField) {
+    body.sort = [{ field: filters.sortField, direction: filters.sortDirection || 'desc' }];
+  }
+
+  const response = await axios.post(`${GHL_API_URL}/opportunities/search`, body, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    }
+  });
+
+  const opportunities = response.data.opportunities || [];
+  const total = response.data.total || 0;
+
+  return {
+    data: opportunities,
+    total,
+    hasMore: opportunities.length === API_PAGE_SIZE
+  };
+}
+
+/**
+ * Fetch a page of templates for a location
+ * GET /locations/{locationId}/templates
+ */
+async function fetchTemplatesPage(locationId, accessToken, skip, filters = {}) {
+  const params = {
+    limit: '100',
+    skip: String(skip || 0),
+    deleted: false
+  };
+  if (filters.templateType) params.type = filters.templateType;
+
+  const response = await axios.get(`${GHL_API_URL}/locations/${locationId}/templates`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
@@ -233,13 +316,13 @@ async function fetchOpportunitiesPage(locationId, accessToken, page, filters = {
     params
   });
 
-  const opportunities = response.data.opportunities || [];
-  const total = response.data.meta?.total || response.data.total || 0;
+  const templates = response.data.templates || [];
+  const total = response.data.totalCount || 0;
 
   return {
-    data: opportunities,
+    data: templates,
     total,
-    hasMore: opportunities.length === API_PAGE_SIZE
+    hasMore: templates.length === 100
   };
 }
 
@@ -286,20 +369,32 @@ async function fetchFormSubmissionsPage(locationId, accessToken, page, filters =
 }
 
 /**
- * Fetch all trigger links for a location (no pagination)
+ * Fetch a page of trigger links for a location via /links/search
  */
-async function fetchAllLinks(locationId, accessToken) {
-  const response = await axios.get(`${GHL_API_URL}/links/`, {
+async function fetchLinksPage(locationId, accessToken, skip, filters = {}) {
+  const params = {
+    locationId,
+    limit: 1000,
+    skip: skip || 0
+  };
+  if (filters.query) params.query = filters.query;
+
+  const response = await axios.get(`${GHL_API_URL}/links/search`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'Version': '2021-07-28'
     },
-    params: { locationId }
+    params
   });
 
+  const links = response.data.links || [];
+  const total = response.data.totalCount || links.length;
+
   return {
-    data: response.data.links || []
+    data: links,
+    total,
+    hasMore: links.length === 1000
   };
 }
 
@@ -341,15 +436,16 @@ async function fetchCallLogsPage(locationId, accessToken, page = 1, filters = {}
   const params = {
     locationId,
     page,
-    pageSize: API_PAGE_SIZE
+    pageSize: API_CALL_LOGS_PAGE_SIZE
   };
 
   if (filters.agentId) params.agentId = filters.agentId;
   if (filters.contactId) params.contactId = filters.contactId;
   if (filters.callType) params.callType = filters.callType;
   if (filters.actionType) params.actionType = filters.actionType;
-  if (filters.sortBy) params.sortBy = filters.sortBy;
-  if (filters.sort) params.sort = filters.sort;
+  if (filters.direction) params.direction = filters.direction;
+  if (filters.callSortBy) params.sortBy = filters.callSortBy;
+  if (filters.callSort) params.sort = filters.callSort;
 
   // Convert date filters
   if (filters.startDate) {
@@ -378,7 +474,7 @@ async function fetchCallLogsPage(locationId, accessToken, page = 1, filters = {}
   return {
     data: callLogs,
     total,
-    hasMore: callLogs.length === API_PAGE_SIZE
+    hasMore: callLogs.length === API_CALL_LOGS_PAGE_SIZE
   };
 }
 
@@ -529,17 +625,24 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
  */
 function notesToCSV(notes, includeHeader = true) {
   const header = includeHeader
-    ? 'NoteID,ContactID,ContactName,Body,DateAdded,CreatedBy\n'
+    ? 'NoteID,ContactID,ContactName,Body,BodyText,UserID,DateAdded,Relations\n'
     : '';
+
+  const serializeRelations = (relations) => {
+    if (!Array.isArray(relations) || relations.length === 0) return '';
+    return relations.map(r => `${r.objectKey}:${r.recordId}`).join('|');
+  };
 
   const rows = notes.map(note => {
     return [
       escapeCsv(note.id),
       escapeCsv(note.contactId),
-      escapeCsv(note.contactName),
-      escapeCsv(note.body),
+      escapeCsv(note.contactName || ''),
+      escapeCsv(note.body || ''),
+      escapeCsv(note.bodyText || ''),
+      escapeCsv(note.userId || ''),
       escapeCsv(formatDate(note.dateAdded)),
-      escapeCsv(note.userId || note.createdBy || '')
+      escapeCsv(serializeRelations(note.relations))
     ].join(',');
   }).join('\n');
 
@@ -551,21 +654,19 @@ function notesToCSV(notes, includeHeader = true) {
  */
 function tasksToCSV(tasks, includeHeader = true) {
   const header = includeHeader
-    ? 'TaskID,ContactID,ContactName,Title,Body,DueDate,Status,Completed,AssignedTo,DateAdded\n'
+    ? 'TaskID,ContactID,ContactName,Title,Body,DueDate,Completed,AssignedTo\n'
     : '';
 
   const rows = tasks.map(task => {
     return [
-      escapeCsv(task.id),
+      escapeCsv(task._id),
       escapeCsv(task.contactId),
-      escapeCsv(task.contactName),
-      escapeCsv(task.title),
-      escapeCsv(task.body),
-      escapeCsv(formatDate(task.dueDate)),
-      escapeCsv(task.status || ''),
-      escapeCsv(task.completed ? 'Yes' : 'No'),
+      escapeCsv(task.contactName || ''),
+      escapeCsv(task.title || ''),
+      escapeCsv(task.bodyText || task.body || ''),
+      escapeCsv(task.dueDate ? formatDate(task.dueDate) : ''),
+      escapeCsv(nonNullValue(task.completed)  ? (task.completed ? 'Yes' : 'No') : ''),
       escapeCsv(task.assignedTo || ''),
-      escapeCsv(formatDate(task.dateAdded))
     ].join(',');
   }).join('\n');
 
@@ -643,16 +744,58 @@ function formSubmissionsToCSV(submissions, includeHeader = true) {
  */
 function linksToCSV(links, includeHeader = true) {
   const header = includeHeader
-    ? 'LinkID,Name,RedirectTo,FieldKey,LocationID\n'
+    ? 'LinkID,Name,RedirectTo,FieldKey,dateAdded,dateUpdated\n'
     : '';
 
   const rows = links.map(link => {
     return [
-      escapeCsv(link.id),
+      escapeCsv(link._id),
       escapeCsv(link.name),
       escapeCsv(link.redirectTo || ''),
-      escapeCsv(link.fieldKey || ''),
-      escapeCsv(link.locationId || '')
+      escapeCsv("{{trigger_link."+link._id+"}}"),
+      escapeCsv(formatDate(link.dateAdded)),
+      escapeCsv(formatDate(link.dateUpdated))
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert templates to CSV format
+ */
+function templatesToCSV(templates, includeHeader = true) {
+  const header = includeHeader
+    ? 'TemplateID,Name,Type,Subject,Body,HTML,Attachments,LocationID,OriginID,DateAdded,DateUpdated\n'
+    : '';
+
+  const rows = templates.map(t => {
+    const tpl = t.template || {};
+    // Email: subject, html, attachments; SMS/WhatsApp: body
+    const subject = tpl.subject || '';
+    const body = tpl.body || '';
+    const html = tpl.html || '';
+
+    // Attachments: prefer template.attachments (emails), fallback to urlAttachments
+    const attachments = Array.isArray(tpl.attachments) && tpl.attachments.length > 0
+      ? tpl.attachments
+      : Array.isArray(t.urlAttachments) && t.urlAttachments.length > 0
+        ? t.urlAttachments
+        : [];
+    const attachmentList = attachments.join('; ');
+
+    return [
+      escapeCsv(t._id || t.id || ''),
+      escapeCsv(t.name || ''),
+      escapeCsv(t.type || ''),
+      escapeCsv(subject),
+      escapeCsv(body),
+      escapeCsv(html),
+      escapeCsv(attachmentList),
+      escapeCsv(t.locationId || ''),
+      escapeCsv(t.originId || ''),
+      escapeCsv(formatDate(t.dateAdded)),
+      escapeCsv(formatDate(t.dateUpdated))
     ].join(',');
   }).join('\n');
 
@@ -690,25 +833,53 @@ function socialPostsToCSV(posts, includeHeader = true) {
  */
 function callLogsToCSV(callLogs, includeHeader = true) {
   const header = includeHeader
-    ? 'CallID,ContactID,AgentID,FromNumber,CallType,Duration,Summary,CreatedAt,TrialCall,CallActions,Transcript\n'
+    ? 'CallID,ContactID,AgentID,FromNumber,CallType,CallStatus,Duration,Summary,CreatedAt,TrialCall,WorkflowID,MessageID,ExtractedData,CallActions,Transcript,Translation\n'
     : '';
 
   const rows = callLogs.map(log => {
+    // Flatten extractedData into readable key=value pairs
+    let extractedData = '';
+    if (log.extractedData && typeof log.extractedData === 'object') {
+      extractedData = Object.entries(log.extractedData)
+        .map(([key, val]) => `${key}=${val}`)
+        .join('; ');
+    }
+
+    // Full action details: actionType | actionName | executedAt | key params
     const actions = Array.isArray(log.executedCallActions)
-      ? log.executedCallActions.map(a => a.actionType || a).join('; ')
+      ? log.executedCallActions.map(a => {
+          const parts = [`[${a.actionType || 'UNKNOWN'}] ${a.actionName || ''}`];
+          if (a.executedAt) parts.push(`executed: ${formatDate(a.executedAt)}`);
+          // Include key action parameters
+          const params = a.actionParameters || {};
+          if (params.transferToValue) parts.push(`transferTo: ${params.transferToValue}`);
+          if (params.messageBody) parts.push(`message: ${params.messageBody}`);
+          if (params.workflowId) parts.push(`workflowId: ${params.workflowId}`);
+          if (params.calendarId) parts.push(`calendarId: ${params.calendarId}`);
+          if (params.description) parts.push(`desc: ${params.description}`);
+          if (params.apiDetails?.url) parts.push(`url: ${params.apiDetails.url}`);
+          return parts.join(' | ');
+        }).join(' ;; ')
       : '';
+
+    const translation = log.translation?.transcript || '';
     return [
       escapeCsv(log.id || log._id),
       escapeCsv(log.contactId || ''),
       escapeCsv(log.agentId || ''),
       escapeCsv(log.fromNumber || ''),
       escapeCsv(log.callType || ''),
-      escapeCsv(log.duration || ''),
+      escapeCsv(log.callStatus || ''),
+      escapeCsv(log.duration != null ? log.duration + ' sec' : ''),
       escapeCsv(log.summary || ''),
       escapeCsv(formatDate(log.createdAt)),
       escapeCsv(log.trialCall ? 'Yes' : 'No'),
+      escapeCsv(log.workflowId || ''),
+      escapeCsv(log.messageId || ''),
+      escapeCsv(extractedData),
       escapeCsv(actions),
-      escapeCsv(log.transcript || '')
+      escapeCsv(log.transcript || ''),
+      escapeCsv(translation)
     ].join(',');
   }).join('\n');
 
@@ -778,7 +949,8 @@ async function sendEmail(email, downloadUrl, jobDetails) {
         jobDetails.exportType === 'formSubmissions' ? 'Form Submissions' :
         jobDetails.exportType === 'links' ? 'Links' :
         jobDetails.exportType === 'socialPosts' ? 'Social Posts' :
-        jobDetails.exportType === 'callLogs' ? 'Call Logs' : 'Messages'
+        jobDetails.exportType === 'callLogs' ? 'Call Logs' :
+        jobDetails.exportType === 'templates' ? 'Templates' : 'Messages'
       } Export is Ready`,
       htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -829,6 +1001,65 @@ async function sendEmail(email, downloadUrl, jobDetails) {
     console.error('Failed to send email:', error.response?.data || error.message);
     return false;
   }
+}
+
+/**
+ * Charge GHL wallet after export completes (post-export billing for notes/tasks all-contacts)
+ */
+async function chargePostExport(db, job, actualCount, accessToken) {
+  if (INTERNAL_TESTING_COMPANY_IDS.includes(job.companyId)) {
+    console.log('[PostExportBilling] Internal testing company - skipping charge', { companyId: job.companyId });
+    await db.collection('billingtransactions').updateOne(
+      { _id: new ObjectId(job.billingTransactionId.toString()) },
+      { $set: {
+        status: 'tested',
+        internalTesting: true,
+        paymentIgnored: true,
+        [`itemCounts.${job.exportType}`]: actualCount,
+        'itemCounts.total': actualCount,
+        'pricing.finalAmount': actualCount * NOTES_TASKS_UNIT_PRICE,
+        'pricing.baseAmount': actualCount * NOTES_TASKS_UNIT_PRICE
+      }}
+    );
+    return;
+  }
+
+  const finalAmount = actualCount * NOTES_TASKS_UNIT_PRICE;
+  const transactionId = job.billingTransactionId.toString();
+
+
+  const response = await axios.post(
+    `${GHL_API_URL}/marketplace/billing/charges`,
+    {
+      companyId: job.companyId,
+      meterId: NOTES_TASKS_METER_ID,
+      units: actualCount,
+      price: NOTES_TASKS_UNIT_PRICE,
+      appId: GHL_APP_ID,
+      eventId: transactionId,
+      locationId: job.locationId,
+      description: 'Exported Data ' + '_' + new Date().toDateString()
+    },
+    {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Version': '2021-07-28'
+      }
+    }
+  );
+
+  await db.collection('billingtransactions').updateOne(
+    { _id: new ObjectId(transactionId) },
+    { $set: {
+      status: 'charged',
+      ghlChargeId: response.data?.chargeId || response.data?.id || null,
+      [`itemCounts.${job.exportType}`]: actualCount,
+      'itemCounts.total': actualCount,
+      'pricing.finalAmount': finalAmount,
+      'pricing.baseAmount': finalAmount
+    }}
+  );
 }
 
 /**
@@ -1017,12 +1248,12 @@ exports.handler = async (event, context) => {
     if (!uploadId) {
       // Start new multipart upload
       log('Starting S3 multipart upload...');
-      const multipart = await s3.createMultipartUpload({
+      const multipart = await s3.send(new CreateMultipartUploadCommand({
         Bucket: S3_BUCKET,
         Key: s3Key,
         ContentType: job.format === 'json' ? 'application/json' : 'text/csv',
         ContentDisposition: `attachment; filename="${exportFilename}"`
-      }).promise();
+      }));
 
       uploadId = multipart.UploadId;
       log('Multipart upload started', { uploadId });
@@ -1047,109 +1278,124 @@ exports.handler = async (event, context) => {
 
     log('Starting batch', { cursor, skip, alreadyProcessed: job.processedItems || 0 });
 
-    if (job.exportType === 'notes' || job.exportType === 'tasks') {
-      // === NOTES/TASKS: Per-contact iteration ===
-      // cursor = last processed contact ID (used as startAfterId)
-      let contactStartAfter = cursor;
-
-      while (recordsFetched < BATCH_SIZE && hasMoreData) {
-        const remaining = context.getRemainingTimeInMillis();
-        if (remaining < TIMEOUT_BUFFER_MS) {
-          log('Approaching timeout, saving progress', { remainingMs: remaining });
-          break;
-        }
-
-        // Fetch a page of contacts
-        let contactsResult;
+    if (job.exportType === 'notes') {
+      if (job.filters?.contactId) {
+        // === NOTES: Single contact ===
+        let items;
         try {
-          contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
+          items = await fetchNotesForContact(job.filters.contactId, accessToken);
         } catch (fetchError) {
           if (fetchError.response?.status === 401) {
-            log('Got 401 on contacts fetch, refreshing token...');
             await refreshAndUpdateToken();
-            contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
-          } else {
-            throw fetchError;
-          }
+            items = await fetchNotesForContact(job.filters.contactId, accessToken);
+          } else { throw fetchError; }
         }
-
-        const contacts = contactsResult.contacts;
-        if (contacts.length === 0) {
-          hasMoreData = false;
-          break;
-        }
-
-        log('Fetched contacts page', { count: contacts.length, startAfter: contactStartAfter });
-
-        // Process each contact on this page
-        let stoppedEarly = false;
-        for (const contact of contacts) {
-          const remaining = context.getRemainingTimeInMillis();
-          if (remaining < TIMEOUT_BUFFER_MS) {
-            log('Approaching timeout mid-contact iteration');
-            stoppedEarly = true;
-            break;
-          }
-          if (recordsFetched >= BATCH_SIZE) {
-            stoppedEarly = true;
-            break;
-          }
-
-          // Fetch notes or tasks for this contact, with 401/429 retry
+        const singleName = (job.filters.contactNames || {})[job.filters.contactId] || '';
+        items.forEach(item => { item.contactId = job.filters.contactId; item.contactName = singleName; });
+        records.push(...items);
+        hasMoreData = false;
+        cursor = null;
+      } else if (job.filters?.contactIds?.length > 0) {
+        // === NOTES: Multiple specific contacts ===
+        for (const cId of job.filters.contactIds) {
+          if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) { hasMoreData = true; break; }
           let items;
           try {
-            if (job.exportType === 'notes') {
-              items = await fetchNotesForContact(contact.id, accessToken);
-            } else {
-              items = await fetchTasksForContact(contact.id, accessToken);
-            }
+            items = await fetchNotesForContact(cId, accessToken);
           } catch (fetchError) {
             if (fetchError.response?.status === 401) {
-              log('Got 401, refreshing token...');
               await refreshAndUpdateToken();
-              items = job.exportType === 'notes'
-                ? await fetchNotesForContact(contact.id, accessToken)
-                : await fetchTasksForContact(contact.id, accessToken);
-            } else if (fetchError.response?.status === 429) {
-              log('Rate limited, waiting 2s before retry...');
-              await sleep(2000);
-              items = job.exportType === 'notes'
-                ? await fetchNotesForContact(contact.id, accessToken)
-                : await fetchTasksForContact(contact.id, accessToken);
-            } else {
-              throw fetchError;
-            }
+              items = await fetchNotesForContact(cId, accessToken);
+            } else { throw fetchError; }
           }
-
-          // Enrich items with contact info
-          const contactName = contact.contactName || contact.name ||
-            `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Unknown';
-          items.forEach(item => {
-            item.contactId = contact.id;
-            item.contactName = contactName;
-          });
-
+          const cName = (job.filters.contactNames || {})[cId] || '';
+          items.forEach(item => { item.contactId = cId; item.contactName = cName; });
           records.push(...items);
-          recordsFetched += items.length;
-          contactStartAfter = contact.id;
-
-          // Rate limiting between contacts (GHL: 100 req/10 sec)
           await sleep(150);
         }
-
-        // If we stopped early (timeout/batch full), keep hasMoreData=true
-        if (stoppedEarly) {
-          break;
+        hasMoreData = false;
+        cursor = null;
+      } else {
+        // === NOTES: All contacts — per-contact iteration ===
+        let contactStartAfter = cursor;
+        while (recordsFetched < BATCH_SIZE && hasMoreData) {
+          if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) { break; }
+          let contactsResult;
+          try {
+            contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
+          } catch (fetchError) {
+            if (fetchError.response?.status === 401) {
+              await refreshAndUpdateToken();
+              contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
+            } else { throw fetchError; }
+          }
+          const contacts = contactsResult.contacts;
+          if (contacts.length === 0) { hasMoreData = false; break; }
+          let stoppedEarly = false;
+          for (const contact of contacts) {
+            if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS || recordsFetched >= BATCH_SIZE) { stoppedEarly = true; break; }
+            let items;
+            try {
+              items = await fetchNotesForContact(contact.id, accessToken);
+            } catch (fetchError) {
+              if (fetchError.response?.status === 401) {
+                await refreshAndUpdateToken();
+                items = await fetchNotesForContact(contact.id, accessToken);
+              } else if (fetchError.response?.status === 429) {
+                await sleep(2000);
+                items = await fetchNotesForContact(contact.id, accessToken);
+              } else { throw fetchError; }
+            }
+            const contactName = contact.contactName || contact.name ||
+              `${contact.firstName || ''} ${contact.lastName || ''}`.trim() || 'Unknown';
+            items.forEach(item => { item.contactId = contact.id; item.contactName = contactName; });
+            records.push(...items);
+            recordsFetched += items.length;
+            contactStartAfter = contact.id;
+            await sleep(150);
+          }
+          if (stoppedEarly) break;
+          if (contacts.length < 100) { hasMoreData = false; }
         }
-
-        // Check if this was the last page of contacts
-        if (contacts.length < 100) {
-          hasMoreData = false;
-        }
+        cursor = hasMoreData ? contactStartAfter : null;
       }
 
-      // Set cursor for next Lambda invocation (or null if done)
-      cursor = hasMoreData ? contactStartAfter : null;
+    } else if (job.exportType === 'tasks') {
+      // === TASKS: Location-level skip-based API (limit 1000 per page) ===
+      let skip = cursor ? parseInt(cursor) : 0;
+
+      while (recordsFetched < BATCH_SIZE && hasMoreData) {
+        if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) { break; }
+
+        let pageResult;
+        try {
+          pageResult = await fetchTasksPage(job.locationId, accessToken, skip, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            await refreshAndUpdateToken();
+            pageResult = await fetchTasksPage(job.locationId, accessToken, skip, job.filters || {});
+          } else { throw fetchError; }
+        }
+
+        // Enrich tasks with contactName from contactNames map if available
+        const contactNamesMap = job.filters?.contactNames || {};
+        pageResult.data.forEach(task => {
+          if (!task.contactName && task.contactId) {
+            task.contactName = contactNamesMap[task.contactId] || '';
+          }
+        });
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        skip += pageResult.data.length;
+
+        log('Fetched tasks batch', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, skip, hasMore: pageResult.hasMore });
+
+        if (!pageResult.hasMore) { hasMoreData = false; }
+        if (hasMoreData && recordsFetched < BATCH_SIZE) { await sleep(100); }
+      }
+
+      cursor = hasMoreData ? String(skip) : null;
 
     } else if (job.exportType === 'opportunities') {
       // === OPPORTUNITIES: Page-based pagination ===
@@ -1235,26 +1481,48 @@ exports.handler = async (event, context) => {
       cursor = hasMoreData ? String(page) : null;
 
     } else if (job.exportType === 'links') {
-      // === LINKS: Single fetch, no pagination ===
-      let linksResult;
-      try {
-        linksResult = await fetchAllLinks(job.locationId, accessToken);
-      } catch (fetchError) {
-        if (fetchError.response?.status === 401) {
-          log('Got 401, refreshing token and retrying...');
-          await refreshAndUpdateToken();
-          linksResult = await fetchAllLinks(job.locationId, accessToken);
-        } else {
-          throw fetchError;
+      // === LINKS: Page-based pagination via /links/search (limit 1000) ===
+      let currentSkip = cursor ? parseInt(cursor) : 0;
+      let hasMoreData_inner = true;
+
+      while (hasMoreData_inner && records.length < BATCH_SIZE) {
+        if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) {
+          hasMoreData = true;
+          break;
+        }
+
+        let pageResult;
+        try {
+          pageResult = await fetchLinksPage(job.locationId, accessToken, currentSkip, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401, refreshing token and retrying...');
+            await refreshAndUpdateToken();
+            pageResult = await fetchLinksPage(job.locationId, accessToken, currentSkip, job.filters || {});
+          } else {
+            throw fetchError;
+          }
+        }
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        currentSkip += pageResult.data.length;
+
+        if (!pageResult.hasMore) {
+          hasMoreData_inner = false;
+          hasMoreData = false;
+        } else if (records.length >= BATCH_SIZE) {
+          hasMoreData = true;
+        }
+
+        if (hasMoreData_inner && records.length < BATCH_SIZE) {
+          await sleep(100);
         }
       }
 
-      records = linksResult.data;
-      recordsFetched = records.length;
-      hasMoreData = false;
-      cursor = null;
+      cursor = hasMoreData ? String(currentSkip) : null;
 
-      log('Fetched all links', { total: records.length });
+      log('Fetched links batch', { fetched: records.length, skip: currentSkip });
 
     } else if (job.exportType === 'socialPosts') {
       // === SOCIAL POSTS: Skip-based pagination ===
@@ -1327,7 +1595,7 @@ exports.handler = async (event, context) => {
 
         log('Fetched call logs page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, page });
 
-        if (pageResult.data.length < API_PAGE_SIZE) {
+        if (pageResult.data.length < API_CALL_LOGS_PAGE_SIZE) {
           hasMoreData = false;
         }
 
@@ -1337,6 +1605,50 @@ exports.handler = async (event, context) => {
       }
 
       cursor = hasMoreData ? String(page) : null;
+
+    } else if (job.exportType === 'templates') {
+      // === TEMPLATES: Skip-based pagination (limit 100) ===
+      let currentSkip = cursor ? parseInt(cursor) : 0;
+      let hasMoreData_inner = true;
+
+      while (hasMoreData_inner && records.length < BATCH_SIZE) {
+        if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) {
+          hasMoreData = true;
+          break;
+        }
+
+        let pageResult;
+        try {
+          pageResult = await fetchTemplatesPage(job.locationId, accessToken, currentSkip, job.filters || {});
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401, refreshing token and retrying...');
+            await refreshAndUpdateToken();
+            pageResult = await fetchTemplatesPage(job.locationId, accessToken, currentSkip, job.filters || {});
+          } else {
+            throw fetchError;
+          }
+        }
+
+        records.push(...pageResult.data);
+        recordsFetched += pageResult.data.length;
+        currentSkip += pageResult.data.length;
+
+        log('Fetched templates page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, skip: currentSkip });
+
+        if (!pageResult.hasMore) {
+          hasMoreData_inner = false;
+          hasMoreData = false;
+        } else if (records.length >= BATCH_SIZE) {
+          hasMoreData = true;
+        }
+
+        if (hasMoreData_inner && records.length < BATCH_SIZE) {
+          await sleep(100);
+        }
+      }
+
+      cursor = hasMoreData ? String(currentSkip) : null;
 
     } else {
       // === CONVERSATIONS/MESSAGES: Standard pagination ===
@@ -1439,6 +1751,8 @@ exports.handler = async (event, context) => {
         content = socialPostsToCSV(records, isFirstPart);
       } else if (job.exportType === 'callLogs') {
         content = callLogsToCSV(records, isFirstPart);
+      } else if (job.exportType === 'templates') {
+        content = templatesToCSV(records, isFirstPart);
       } else {
         content = messagesToCSV(records, isFirstPart, job.filters?.channel || '');
       }
@@ -1453,11 +1767,11 @@ exports.handler = async (event, context) => {
         // Abort the multipart upload we started (if any)
         if (uploadId) {
           try {
-            await s3.abortMultipartUpload({
+            await s3.send(new AbortMultipartUploadCommand({
               Bucket: S3_BUCKET,
               Key: s3Key,
               UploadId: uploadId
-            }).promise();
+            }));
             log('Aborted unused multipart upload');
           } catch (abortErr) {
             // Ignore abort errors
@@ -1466,13 +1780,13 @@ exports.handler = async (event, context) => {
         }
 
         // Upload directly with putObject
-        await s3.putObject({
+        await s3.send(new PutObjectCommand({
           Bucket: S3_BUCKET,
           Key: s3Key,
           Body: content,
           ContentType: job.format === 'json' ? 'application/json' : 'text/csv',
           ContentDisposition: `attachment; filename="${exportFilename}"`
-        }).promise();
+        }));
 
         log('File uploaded with putObject');
         useSimpleUpload = true;
@@ -1481,13 +1795,13 @@ exports.handler = async (event, context) => {
         // Multi-batch: use multipart upload
         const partNumber = parts.length + 1;
 
-        const uploadResult = await s3.uploadPart({
+        const uploadResult = await s3.send(new UploadPartCommand({
           Bucket: S3_BUCKET,
           Key: s3Key,
           UploadId: uploadId,
           PartNumber: partNumber,
           Body: content
-        }).promise();
+        }));
 
         parts.push({
           partNumber,
@@ -1521,12 +1835,12 @@ exports.handler = async (event, context) => {
       // More data - invoke next Lambda
       log('Invoking next Lambda', { processedItems, totalItems, cursor, hasMoreData });
 
-      await lambda.invoke({
+      await lambda.send(new InvokeCommand({
         FunctionName: context.functionName,
         InvocationType: 'Event',  // Async
         Qualifier: '$LATEST',     // Required for durable functions
         Payload: JSON.stringify({ exportJobId })
-      }).promise();
+      }));
 
       return {
         statusCode: 200,
@@ -1544,7 +1858,7 @@ exports.handler = async (event, context) => {
 
       // Complete multipart upload (only if we didn't use simple putObject)
       if (!useSimpleUpload && parts.length > 0) {
-        await s3.completeMultipartUpload({
+        await s3.send(new CompleteMultipartUploadCommand({
           Bucket: S3_BUCKET,
           Key: s3Key,
           UploadId: uploadId,
@@ -1554,7 +1868,7 @@ exports.handler = async (event, context) => {
               ETag: p.etag
             }))
           }
-        }).promise();
+        }));
 
         log('Multipart upload completed');
       } else if (useSimpleUpload) {
@@ -1562,11 +1876,10 @@ exports.handler = async (event, context) => {
       }
 
       // Generate signed download URL (7 days)
-      const downloadUrl = s3.getSignedUrl('getObject', {
+      const downloadUrl = await getSignedUrl(s3, new GetObjectCommand({
         Bucket: S3_BUCKET,
-        Key: s3Key,
-        Expires: 7 * 24 * 60 * 60
-      });
+        Key: s3Key
+      }), { expiresIn: 7 * 24 * 60 * 60 });
 
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -1580,6 +1893,16 @@ exports.handler = async (event, context) => {
         completedAt: new Date(),
         totalBatches: currentBatch
       });
+
+      // Post-export billing: charge actual count for notes/tasks all-contacts exports
+      if (job.postExportBilling && processedItems > 0) {
+        try {
+          await chargePostExport(db, job, processedItems, accessToken);
+          log('Post-export billing completed', { qty: processedItems, amount: processedItems * NOTES_TASKS_UNIT_PRICE });
+        } catch (billingError) {
+          log('Post-export billing failed (export still successful)', { error: billingError.message });
+        }
+      }
 
       // Send email notification
       let emailSent = false;
@@ -1623,12 +1946,12 @@ exports.handler = async (event, context) => {
       // Wait a bit before retry
       await sleep(5000);
 
-      await lambda.invoke({
+      await lambda.send(new InvokeCommand({
         FunctionName: context.functionName,
         InvocationType: 'Event',
         Qualifier: '$LATEST',
         Payload: JSON.stringify({ exportJobId })
-      }).promise();
+      }));
 
       return {
         statusCode: 200,
@@ -1647,11 +1970,11 @@ exports.handler = async (event, context) => {
       // Try to abort multipart upload
       if (job.s3Upload?.uploadId) {
         try {
-          await s3.abortMultipartUpload({
+          await s3.send(new AbortMultipartUploadCommand({
             Bucket: S3_BUCKET,
             Key: job.s3Upload.key,
             UploadId: job.s3Upload.uploadId
-          }).promise();
+          }));
           log('Multipart upload aborted');
         } catch (abortError) {
           logError('Failed to abort multipart upload', { error: abortError.message });

@@ -27,7 +27,7 @@ const exportJobSchema = new mongoose.Schema({
   // Export type: conversations, messages, notes, or tasks
   exportType: {
     type: String,
-    enum: ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs'],
+    enum: ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'],
     required: true
   },
 
@@ -45,6 +45,8 @@ const exportJobSchema = new mongoose.Schema({
     startDate: { type: Date, default: null },
     endDate: { type: Date, default: null },
     contactId: { type: String, default: null },
+    // Notes/Tasks multi-contact export
+    contactIds: { type: [String], default: [] },
     // Conversation-specific filters
     query: { type: String, default: null },
     id: { type: String, default: null },
@@ -57,12 +59,34 @@ const exportJobSchema = new mongoose.Schema({
     // Opportunity-specific filters
     pipelineId: { type: String, default: null },
     pipelineStageId: { type: String, default: null },
+    assignedTo: { type: [String], default: null },
+    monetaryValueMin: { type: Number, default: null },
+    monetaryValueMax: { type: Number, default: null },
+    sortKey: { type: String, default: null },
+    sortDirection: { type: Number, default: null },
+    contactName: { type: String, default: null },
     // Form submission-specific filters
     formId: { type: String, default: null },
+    // Template-specific filters
+    templateType: { type: String, default: null },
     // Call log-specific filters
     agentId: { type: String, default: null },
     callType: { type: String, default: null },
-    actionType: { type: String, default: null }
+    actionType: { type: String, default: null },
+    direction: { type: String, default: null },
+    callSortBy: { type: String, default: null },
+    callSort: { type: String, default: null },
+    // Notes/Tasks contact name lookup map { contactId: "Name" }
+    contactNames: { type: mongoose.Schema.Types.Mixed, default: null },
+    // Task-specific filters
+    dueDate: {
+      gt: { type: String, default: null },
+      lte: { type: String, default: null }
+    },
+    businessId: { type: String, default: null },
+    completed: { type: Boolean, default: null },
+    overdue: { type: Boolean, default: null },
+    unAssigned: { type: Boolean, default: null }
   },
 
   // Progress tracking
@@ -196,6 +220,12 @@ const exportJobSchema = new mongoose.Schema({
   completedAt: {
     type: Date,
     default: null
+  },
+
+  // Post-export billing: charge after Lambda based on actual count (notes/tasks all-contacts)
+  postExportBilling: {
+    type: Boolean,
+    default: false
   },
 
   // User who initiated

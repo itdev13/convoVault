@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
 import { conversationsAPI } from '../../api/conversations';
 import { billingAPI } from '../../api/billing';
+import { contactsAPI } from '../../api/contacts';
 import { DatePicker, Select, Button, Tooltip, message, Input } from 'antd';
 import { useErrorModal } from '../ErrorModal';
 import { useInfoModal } from '../InfoModal';
@@ -55,6 +56,39 @@ export default function ConversationsTab({ onSelectConversation }) {
   const [estimateError, setEstimateError] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
+  // Contacts (for Contact filter)
+  const [contactOptions, setContactOptions] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const contactSearchTimer = useRef(null);
+
+  const handleContactSearch = useCallback((searchText) => {
+    if (contactSearchTimer.current) clearTimeout(contactSearchTimer.current);
+    contactSearchTimer.current = setTimeout(async () => {
+      if (!location?.id) return;
+      setContactsLoading(true);
+      try {
+        const res = await contactsAPI.search(location.id, searchText || '', 100);
+        if (res.success) {
+          setContactOptions((res.data?.contacts || res.contacts || []).map(c => ({
+            id: c.id,
+            name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.name || '',
+            email: c.email || '',
+            phone: c.phone || '',
+          })));
+        }
+      } catch (err) {
+        console.error('Contact search failed:', err);
+      } finally {
+        setContactsLoading(false);
+      }
+    }, 300);
+  }, [location?.id]);
+
+  // Load contacts on mount
+  useEffect(() => {
+    if (location?.id) handleContactSearch('');
+  }, [location?.id]);
+
   const { showError, ErrorModalComponent } = useErrorModal();
   const { showInfo, InfoModalComponent } = useInfoModal();
 
@@ -365,11 +399,39 @@ export default function ConversationsTab({ onSelectConversation }) {
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Contact</label>
+            <Select
+              showSearch
+              value={filters.contactId || undefined}
+              onChange={(val) => setFilters({ ...filters, contactId: val || '' })}
+              onSearch={handleContactSearch}
+              placeholder="Search contacts..."
+              allowClear
+              loading={contactsLoading}
+              filterOption={false}
+              notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
+              className="w-full"
+              size="large"
+            >
+              {contactOptions.map(c => (
+                <Select.Option key={c.id} value={c.id}>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-sm">{c.name || '(No name)'}</span>
+                    {(c.email || c.phone) && (
+                      <span className="text-xs text-gray-400">{c.email || c.phone}</span>
+                    )}
+                  </div>
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Contact ID</label>
             <Input
               value={filters.contactId}
               onChange={(e) => setFilters({ ...filters, contactId: e.target.value })}
-              placeholder="Filter by contact ID"
+              placeholder="Paste contact ID..."
               size="large"
             />
           </div>

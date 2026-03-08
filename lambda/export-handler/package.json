@@ -8,7 +8,9 @@
     "deploy": "aws lambda update-function-code --function-name convo-vault-export --zip-file fileb://function.zip"
   },
   "dependencies": {
-    "aws-sdk": "^2.1692.0",
+    "@aws-sdk/client-lambda": "^3.1004.0",
+    "@aws-sdk/client-s3": "^3.1004.0",
+    "@aws-sdk/s3-request-presigner": "^3.1004.0",
     "axios": "^1.7.7",
     "mongodb": "^6.10.0"
   },

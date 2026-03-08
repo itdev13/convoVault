@@ -4,6 +4,9 @@ const { logError, logWarning } = require('../utils/errorLogger');
 const OAuthToken = require('../models/OAuthToken');
 const CompanyLocation = require('../models/CompanyLocation');
 
+const nonNullValue=(val)=>{
+  return val != null && val != undefined && val != "";
+}
 /**
  * Simple GHL API Service
  */
@@ -966,38 +969,131 @@ class GHLService {
     }
   }
   /**
-   * Search opportunities for a location
-   * GET /opportunities/search
+   * Search users for a company
+   * GET /users/search
    */
-  async searchOpportunities(locationId, options = {}) {
+  async searchUsers(locationId, options = {}) {
     try {
-      const params = {
-        location_id: locationId,
-        limit: options.limit || 100,
-        page: options.page || 1
-      };
-
-      if (options.pipelineId) params.pipeline_id = options.pipelineId;
-      if (options.pipelineStageId) params.pipeline_stage_id = options.pipelineStageId;
-      if (options.status) params.status = options.status;
-      if (options.query) params.q = options.query;
-      if (options.startDate) params.date = options.startDate;
-      if (options.endDate) params.endDate = options.endDate;
-      if (options.order) params.order = options.order;
-      if (options.contactId) params.contact_id = options.contactId;
-
       const response = await this.apiRequest(
         'GET',
-        '/opportunities/search',
+        '/users/search',
         locationId,
         null,
-        params
+        { companyId: options.companyId, locationId:locationId, query: options.query || '' }
+      );
+      return response.users || [];
+    } catch (error) {
+      logger.error('Search users failed:', { locationId, error: error.message });
+      throw error;
+    }
+  }
+
+
+  /**
+   * Search tasks for a location
+   * GET /locations/:locationId/tasks
+   */
+  async getLocationTasks(locationId, options = {}) {
+    try {
+      const body = {
+        limit: options.limit || 20,
+        skip: options.skip || 0,
+        count: true,
+      };
+
+      // contactId is always an array in the API
+      if (options.contactIds && options.contactIds.length > 0) {
+        body.contactId = options.contactIds;
+      }
+      if (options.assignedTo && options.assignedTo.length > 0) body.assignedTo = options.assignedTo;
+      if (nonNullValue(options.unAssigned)) body.unAssigned = options.unAssigned;
+      if (nonNullValue(options.completed)) body.completed = options.completed;
+      if (nonNullValue(options.overdue)) body.overdue = options.overdue;
+      if (options.query) body.query = options.query;
+      // dueDate filter: { gt, lte }
+      if (options.dueDate) body.dueDate = options.dueDate;
+      if (options.sortKey) body.sortKey = options.sortKey;
+      if (nonNullValue(options.sortDirection)) body.sortDirection = options.sortDirection;
+      // cursor-based pagination
+      if (options.searchAfter && options.searchAfter.length > 0) body.searchAfter = options.searchAfter;
+      if(options.businessId){
+        body.businessId = options.businessId;
+      }
+      const response = await this.apiRequest(
+        'POST',
+        `/locations/${locationId}/tasks/search`,
+        locationId,
+        body
       );
 
       return {
+        tasks: response.tasks || [],
+        total: response.count || response.total || 0
+      };
+    } catch (error) {
+      logger.error('Get location tasks failed:', { locationId, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Search opportunities for a location
+   * POST /opportunities/search — supports filters array, sort, searchAfter cursor pagination
+   */
+  async searchOpportunities(locationId, options = {}) {
+    try {
+      const body = {
+        locationId,
+        limit: options.limit || 20
+      };
+
+      // Pagination: cursor-based (searchAfter) or page-based
+      if (options.searchAfter && options.searchAfter.length > 0) {
+        body.searchAfter = options.searchAfter;
+      } else if (options.page) {
+        body.page = options.page;
+      }
+
+      if (options.query) body.query = options.query;
+
+      // Build filters array from named options
+      const filters = [];
+      if (options.pipelineId) filters.push({ field: 'pipeline_id', operator: 'eq', value: options.pipelineId });
+      if (options.pipelineStageId) filters.push({ field: 'pipeline_stage_id', operator: 'eq', value: options.pipelineStageId });
+      if (options.status) filters.push({ field: 'status', operator: 'eq', value: options.status });
+      if (options.assignedTo) filters.push({ field: 'assigned_to', operator: 'eq', value: options.assignedTo });
+      if (options.contactId) filters.push({ field: 'contact_id', operator: 'eq', value: options.contactId });
+      if (options.contactName) filters.push({ field: 'contact_name', operator: 'contains', value: options.contactName });
+
+      // Monetary value range
+      if (nonNullValue(options.monetaryValueMin) || nonNullValue(options.monetaryValueMax)) {
+        const range = {};
+        if (nonNullValue(options.monetaryValueMin)) range.gte = Number(options.monetaryValueMin);
+        if (nonNullValue(options.monetaryValueMax)) range.lte = Number(options.monetaryValueMax);
+        if (Object.keys(range).length > 0) filters.push({ field: 'monetary_value', operator: 'range', value: range });
+      }
+
+      // Date added range — accepts ms timestamp or ISO string
+      if (options.startDate || options.endDate) {
+        const range = {};
+        if (options.startDate) range.gte = new Date(options.startDate).getTime();
+        if (options.endDate) range.lte = new Date(options.endDate).getTime();
+        filters.push({ field: 'date_added', operator: 'range', value: range });
+      }
+
+      if (filters.length > 0) body.filters = filters;
+
+      // Sort
+      if (options.sortField) {
+        body.sort = [{ field: options.sortField, direction: options.sortDirection || 'desc' }];
+      }
+
+      const response = await this.apiRequest('POST', '/opportunities/search', locationId, body);
+
+      return {
         opportunities: response.opportunities || [],
-        meta: response.meta || {},
-        total: response.meta?.total || response.total || 0
+        total: response.total || 0,
+        searchAfter: response.searchAfter || null
       };
     } catch (error) {
       logger.error('Search opportunities failed:', error.message);
@@ -1094,25 +1190,23 @@ class GHLService {
   }
 
   /**
-   * Get all trigger links for a location
-   * GET /links/
+   * Search trigger links for a location
+   * GET /links/search — supports query, limit, skip
    */
-  async getLinks(locationId) {
+  async getLinks(locationId, options = {}) {
     try {
       const params = {
-        locationId
-      };
-
-      const response = await this.apiRequest(
-        'GET',
-        '/links/',
         locationId,
-        null,
-        params
-      );
+        limit: options.limit || 25,
+        skip: options.skip || 0
+      };
+      if (options.query) params.query = options.query;
+
+      const response = await this.apiRequest('GET', '/links/search', locationId, null, params);
 
       return {
-        links: response.links || []
+        links: response.links || [],
+        total: response.totalCount || response.links?.length || 0
       };
     } catch (error) {
       logger.error('Get links failed:', error.message);
@@ -1152,6 +1246,37 @@ class GHLService {
     }
   }
   /**
+   * Get templates for a location
+   * GET /locations/{locationId}/templates
+   */
+  async getTemplates(locationId, options = {}) {
+    try {
+      const params = {
+        limit: String(options.limit || 25),
+        skip: String(options.skip || 0),
+        deleted: false
+      };
+      if (options.type) params.type = options.type;
+
+      const response = await this.apiRequest(
+        'GET',
+        `/locations/${locationId}/templates`,
+        locationId,
+        null,
+        params
+      );
+
+      return {
+        templates: response.templates || [],
+        total: response.totalCount || 0
+      };
+    } catch (error) {
+      logger.error('Get templates failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Get voice AI call logs for a location
    * GET /voice-ai/dashboard/call-logs
    * Note: Uses Version header 2021-04-15
@@ -1161,12 +1286,13 @@ class GHLService {
       const params = {
         locationId,
         page: options.page || 1,
-        pageSize: options.pageSize || 100
+        pageSize: options.pageSize || 50
       };
 
       if (options.agentId) params.agentId = options.agentId;
       if (options.contactId) params.contactId = options.contactId;
       if (options.callType) params.callType = options.callType;
+      if (options.direction) params.direction = options.direction;
       if (options.startDate) params.startDate = options.startDate;
       if (options.endDate) params.endDate = options.endDate;
       if (options.actionType) params.actionType = options.actionType;
@@ -1194,6 +1320,32 @@ class GHLService {
       };
     } catch (error) {
       logger.error('Get call logs failed:', error.message);
+      throw error;
+    }
+  }
+  /**
+   * Get voice AI agents for a location
+   * GET /voice-ai/agents
+   */
+  async getVoiceAIAgents(locationId) {
+    try {
+      const accessToken = await this.getValidToken(locationId);
+      const response = await axios({
+        method: 'GET',
+        url: `${this.baseURL}/voice-ai/agents`,
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Version': '2021-04-15'
+        },
+        params: { locationId }
+      });
+
+      return {
+        agents: response.data?.agents || response.data?.data || [],
+      };
+    } catch (error) {
+      logger.error('Get voice AI agents failed:', error.message);
       throw error;
     }
   }

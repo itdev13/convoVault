@@ -12,14 +12,17 @@ export default function ExportEstimateModal({
   estimate = null,
   error = null,
   exportType = 'messages',
-  usingDefaultDates = false
+  usingDefaultDates = false,
+  postExportBilling = false
 }) {
+  console.log('estimate modal props', estimate, exportType, postExportBilling);
   const [email, setEmail] = useState('');
   const [exportFormat, setExportFormat] = useState('csv');
 
-  // Format currency (value is in dollars) - round to 2 decimal places
+  // Format currency (value is in dollars) - use 4 decimal places for sub-cent amounts
   const formatCurrency = (value) => {
     const num = Number(value) || 0;
+    if (num > 0 && num < 0.01) return `$${num.toFixed(4)}`;
     return `$${num.toFixed(2)}`;
   };
 
@@ -120,8 +123,82 @@ export default function ExportEstimateModal({
         />
       )}
 
+      {/* Post-Export Billing State (notes/tasks all-contacts) */}
+      {postExportBilling && !estimating && !error && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+            <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-blue-900 mb-1">All Contacts Export — Billed After Export</p>
+              <p className="text-sm text-blue-800">
+                Since no specific contacts are selected, all contacts in the location will be exported.
+                The total count is unknown upfront — you will be charged <strong>$0.002 per {exportType === 'notes' ? 'note' : 'task'}</strong> after the export completes.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-700">Price per {exportType === 'notes' ? 'note' : 'task'}</span>
+              <span className="font-semibold text-gray-800">$0.0020</span>
+            </div>
+            <div className="flex justify-between items-center text-sm mt-2">
+              <span className="text-gray-700">Billing</span>
+              <span className="font-semibold text-green-700">After export completes</span>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Email Address
+              <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="email"
+              placeholder="your@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              size="large"
+              className="rounded-lg"
+              status={email && !isValidEmail(email) ? 'error' : ''}
+              style={{ backgroundColor: 'white', borderColor: email && !isValidEmail(email) ? '#ef4444' : '#d1d5db', fontSize: '14px' }}
+            />
+            {email && !isValidEmail(email) && (
+              <p className="text-xs text-red-500 mt-1">Please enter a valid email address</p>
+            )}
+            <p className="text-xs text-gray-500 mt-2">We'll send you the download link when your export is ready.</p>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
+            <Radio.Group value={exportFormat} onChange={(e) => setExportFormat(e.target.value)}>
+              <Radio value="csv">CSV</Radio>
+              <Radio value="json">JSON</Radio>
+            </Radio.Group>
+          </div>
+
+          <div className="flex gap-3">
+            <Button onClick={onCancel} className="flex-1 h-11" disabled={loading}>Cancel</Button>
+            <Button
+              type="primary"
+              onClick={handleConfirm}
+              loading={loading}
+              disabled={!isValidEmail(email)}
+              className="flex-1 h-11 bg-green-600 hover:bg-green-700 border-green-600 hover:border-green-700"
+            >
+              {loading ? 'Starting...' : 'Start Export'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* No Data State */}
-      {estimate && !estimating && (!estimate.itemCounts?.total || estimate.itemCounts?.total === 0) && (
+      {!postExportBilling && estimate && !estimating && (!estimate.itemCounts?.total || estimate.itemCounts?.total === 0) && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
             <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -130,7 +207,9 @@ export default function ExportEstimateModal({
           </div>
           <h4 className="text-lg font-semibold text-gray-700 mb-2">No Data Available to Export</h4>
           <p className="text-sm text-gray-500 max-w-xs">
-            There are no {exportType} matching your current filters. Try adjusting your date range or filters.
+            {['notes', 'tasks'].includes(exportType)
+              ? `There are no ${exportType}.`
+              : `There are no ${exportType} matching your current filters. Try adjusting your date range or filters.`}
           </p>
           <Button onClick={onCancel} className="mt-6">
             Close
@@ -139,7 +218,7 @@ export default function ExportEstimateModal({
       )}
 
       {/* Estimate Content */}
-      {estimate && !estimating && estimate.itemCounts?.total > 0 && (
+      {!postExportBilling && estimate && !estimating && estimate.itemCounts?.total > 0 && (
         <div className="space-y-2">
           {/* Default Date Range Info Banner */}
           {usingDefaultDates && (
@@ -204,30 +283,151 @@ export default function ExportEstimateModal({
                 </div>
               )}
 
-              {/* Total Items & Credits */}
-              {/*<div className="flex justify-between items-center pt-2 border-t border-gray-200 text-gray-700">
-                <span className="font-medium">Total Items</span>
-                <span className="font-semibold">{formatNumber(estimate.itemCounts?.total)}</span>
-              </div>
-              <div className="flex justify-between items-center pt-1 text-indigo-700">
-                <span className="font-medium">Total Credits</span>
-                <span className="font-bold">{formatNumber(getTotalCredits(estimate))}</span>
-              </div>*/}
+              {/* Notes */}
+              {estimate.breakdown?.notes?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Notes</span>
+                    <div className="text-xs text-gray-500">1 credit per note</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.notes.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.notes.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tasks */}
+              {estimate.breakdown?.tasks?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Tasks</span>
+                    <div className="text-xs text-gray-500">1 credit per task</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.tasks.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.tasks.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Opportunities */}
+              {estimate.breakdown?.opportunities?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Opportunities</span>
+                    <div className="text-xs text-gray-500">1 credit per opportunity</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.opportunities.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.opportunities.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Form Submissions */}
+              {estimate.breakdown?.formSubmissions?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Form Submissions</span>
+                    <div className="text-xs text-gray-500">1 credit per submission</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.formSubmissions.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.formSubmissions.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Links */}
+              {estimate.breakdown?.links?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Links</span>
+                    <div className="text-xs text-gray-500">1 credit per link</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.links.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.links.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Social Posts */}
+              {estimate.breakdown?.socialPosts?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Social Posts</span>
+                    <div className="text-xs text-gray-500">1 credit per post</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.socialPosts.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.socialPosts.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Call Logs */}
+              {estimate.breakdown?.callLogs?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Call Logs</span>
+                    <div className="text-xs text-gray-500">1 credit per call log</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.callLogs.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.callLogs.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Templates */}
+              {estimate.breakdown?.templates?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Templates</span>
+                    <div className="text-xs text-gray-500">1 credit per template</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.templates.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.templates.count)} credits</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Pricing Breakdown */}
           <div className="bg-blue-50 rounded-lg px-4 py-2 border border-blue-200">
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Credits</span>
-                <span className="font-medium">{formatNumber(getTotalCredits(estimate))}</span>
-              </div>
+              {/* Show credits-based pricing for conversations/messages */}
+              {(exportType === 'conversations' || exportType === 'messages') && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Credits</span>
+                    <span className="font-medium">{formatNumber(getTotalCredits(estimate))}</span>
+                  </div>
 
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Price per Credit</span>
-                <span className="font-medium">{formatUnitPrice(getPricePerCredit(estimate))}</span>
-              </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Price per Credit</span>
+                    <span className="font-medium">{formatUnitPrice(getPricePerCredit(estimate))}</span>
+                  </div>
+                </>
+              )}
+
+              {/* Show credit-based pricing for notes/tasks/opportunities/formSubmissions/links/socialPosts/templates (1 item = 1 credit) */}
+              {(['notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'].includes(exportType)) && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Credits</span>
+                    <span className="font-medium">{formatNumber(estimate.itemCounts?.total)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Price per Credit</span>
+                    <span className="font-medium">$0.0020</span>
+                  </div>
+                </>
+              )}
 
               {estimate.discountPercent > 0 && (
                 <div className="flex justify-between items-center text-green-600">
@@ -271,7 +471,8 @@ export default function ExportEstimateModal({
             </div>
           )}
 
-          {/* Volume Discount Tiers - Show applied tier highlighted */}
+          {/* Volume Discount Tiers - Show for conversations/messages/opportunities (not notes/tasks) */}
+          {!['notes', 'tasks'].includes(exportType) && (
           <Collapse ghost className="bg-gray-50 rounded-lg" defaultActiveKey={estimate.discountPercent > 0 ? [] : []}>
             <Panel
               header={
@@ -314,6 +515,7 @@ export default function ExportEstimateModal({
               </div>
             </Panel>
           </Collapse>
+          )}
 
           {/* Email Notification - Required */}
           <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
