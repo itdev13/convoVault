@@ -134,7 +134,7 @@ export default function ExportEstimateModal({
               <p className="text-sm font-semibold text-blue-900 mb-1">All Contacts Export — Billed After Export</p>
               <p className="text-sm text-blue-800">
                 Since no specific contacts are selected, all contacts in the location will be exported.
-                The total count is unknown upfront — you will be charged <strong>$0.002 per {exportType === 'notes' ? 'note' : 'task'}</strong> after the export completes.
+                The total count is unknown upfront — you will be charged <strong>$0.015 per {exportType === 'notes' ? 'note' : 'task'}</strong> after the export completes.
               </p>
             </div>
           </div>
