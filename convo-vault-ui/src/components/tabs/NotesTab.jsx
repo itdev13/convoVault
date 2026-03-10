@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
 import { contactsAPI } from '../../api/contacts';
 import { Button, Select, Input, message as antMessage, Spin } from 'antd';
+import { UNIT_PRICES } from '../../constants/pricing';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 
@@ -185,7 +186,7 @@ export default function NotesTab() {
       if (selectedContacts.length > 0 && notesLoaded) {
         // Exact count already known from loaded notes — calculate cost locally
         const count = notes.length;
-        const unitPrice = 0.01;
+        const unitPrice = UNIT_PRICES.notesAndTasks;
         const finalAmount = count * unitPrice;
         setEstimate({
           itemCounts: { notes: count, total: count },

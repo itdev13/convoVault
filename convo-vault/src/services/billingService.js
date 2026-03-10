@@ -31,9 +31,9 @@ const METER_IDS = {
 
 // Default unit prices in dollars (fallback if API fails)
 const DEFAULT_UNIT_PRICES = {
-  conversations: 0.025,    // 2.5 cents per conversation (1 credit)
-  smsWhatsapp: 0.025,      // 2.5 cents per text message (1 credit)
-  email: 0.075,            // 7.5 cents per email message (3 credits)
+  conversations: 0.018,    // 1.8 cents per conversation
+  smsWhatsapp: 0.018,      // 1.8 cents per text message
+  email: 0.054,            // 5.4 cents per email message (3x base)
   notesAndTasks: 0.015,    // 0.015 cents per note/task (no discounts)
   opportunities: 0.015,    // 0.015 cents per opportunity (with volume discounts)
   formSubmissions: 0.015,  // 0.015 cents per form submission (with volume discounts)
@@ -516,6 +516,13 @@ class BillingService {
    */
   getUnitPrices() {
     return cachedPrices ? { ...cachedPrices } : { ...DEFAULT_UNIT_PRICES };
+  }
+
+  /**
+   * Get default unit prices (always returns the configured defaults, ignoring cache)
+   */
+  getDefaultUnitPrices() {
+    return { ...DEFAULT_UNIT_PRICES };
   }
 }
 

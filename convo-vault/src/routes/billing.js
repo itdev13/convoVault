@@ -168,7 +168,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           data: {
             estimate: null,
             postExportBilling: true,
-            unitPrice: 0.015,
+            unitPrice: billingService.getDefaultUnitPrices().notesAndTasks,
             exportType,
             filters
           }
@@ -418,7 +418,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
           success: true,
           data: {
             jobId: exportJob._id.toString(), status: 'processing', totalItems: 0,
-            message: 'Export started. You will be charged $0.015 per note after export completes.'
+            message: `Export started. You will be charged $${billingService.getDefaultUnitPrices().notesAndTasks} per note after export completes.`
           }
         });
       }

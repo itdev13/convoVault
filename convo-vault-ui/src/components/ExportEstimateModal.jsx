@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Button, Spin, Alert, Input, Collapse, Radio } from 'antd';
+import { UNIT_PRICES } from '../constants/pricing';
 
 const { Panel } = Collapse;
 
@@ -39,7 +40,7 @@ export default function ExportEstimateModal({
 
   // Calculate credit multipliers from unit prices (base = lowest price)
   const getCreditMultipliers = () => {
-    const unitPrices = estimate?.unitPrices || { conversations: 0.025, smsWhatsapp: 0.025, email: 0.075 };
+    const unitPrices = estimate?.unitPrices || UNIT_PRICES;
     const basePrice = Math.min(unitPrices.conversations, unitPrices.smsWhatsapp);
     return {
       conversations: Math.round(unitPrices.conversations / basePrice),
@@ -134,7 +135,7 @@ export default function ExportEstimateModal({
               <p className="text-sm font-semibold text-blue-900 mb-1">All Contacts Export — Billed After Export</p>
               <p className="text-sm text-blue-800">
                 Since no specific contacts are selected, all contacts in the location will be exported.
-                The total count is unknown upfront — you will be charged <strong>$0.015 per {exportType === 'notes' ? 'note' : 'task'}</strong> after the export completes.
+                The total count is unknown upfront — you will be charged <strong>${UNIT_PRICES.notesAndTasks} per {exportType === 'notes' ? 'note' : 'task'}</strong> after the export completes.
               </p>
             </div>
           </div>
@@ -142,7 +143,7 @@ export default function ExportEstimateModal({
           <div className="bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
             <div className="flex justify-between items-center text-sm">
               <span className="text-gray-700">Price per {exportType === 'notes' ? 'note' : 'task'}</span>
-              <span className="font-semibold text-gray-800">$0.015</span>
+              <span className="font-semibold text-gray-800">${UNIT_PRICES.notesAndTasks}</span>
             </div>
             <div className="flex justify-between items-center text-sm mt-2">
               <span className="text-gray-700">Billing</span>
@@ -424,7 +425,7 @@ export default function ExportEstimateModal({
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Price per Credit</span>
-                    <span className="font-medium">$0.015</span>
+                    <span className="font-medium">${UNIT_PRICES.notesAndTasks}</span>
                   </div>
                 </>
               )}
