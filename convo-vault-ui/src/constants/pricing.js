@@ -19,6 +19,14 @@ export const UNIT_PRICES = {
   templates: 0.015,        // 1.5 cents per template
 };
 
+// Previous prices (for strikethrough display in UI)
+export const OLD_UNIT_PRICES = {
+  conversations: 0.025,
+  smsWhatsapp: 0.025,
+  email: 0.075,
+  notesAndTasks: 0.020,
+};
+
 // Volume discount tiers
 export const DISCOUNT_TIERS = [
   { min: 0, max: 1000, discount: 0 },
