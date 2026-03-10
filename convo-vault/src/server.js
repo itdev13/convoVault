@@ -98,12 +98,15 @@ class ConversationsManagerApp {
       
       // Capture response when it's finished
       res.on('finish', () => {
+        // Skip logging health checks that return 200 (load balancer noise)
+        if (req.path === '/health' && res.statusCode === 200) return;
+
         const duration = Date.now() - startTime;
         const statusCode = res.statusCode;
-        const statusEmoji = statusCode >= 500 ? '🔴' : 
-                           statusCode >= 400 ? '🟡' : 
+        const statusEmoji = statusCode >= 500 ? '🔴' :
+                           statusCode >= 400 ? '🟡' :
                            statusCode >= 300 ? '🔵' : '🟢';
-        
+
         logger.info(`${statusEmoji} ${req.method} ${req.path} → ${statusCode} (${duration}ms)`);
       });
       

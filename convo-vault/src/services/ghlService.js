@@ -441,6 +441,15 @@ class GHLService {
     return response.data;
 
     } catch (error) {
+      // Check for HIPAA compliance error (returns 401 but is NOT an auth issue)
+      const errorMessage = error.response?.data?.message || error.response?.data?.msg || '';
+      if (error.response?.status === 401 && /hipaa/i.test(errorMessage)) {
+        const hipaaError = new Error('This account has HIPAA compliance enabled. Message data cannot be accessed via API.');
+        hipaaError.status = 403;
+        hipaaError.isHipaa = true;
+        throw hipaaError;
+      }
+
       // If 401 Unauthorized and haven't retried yet
       if (error.response?.status === 401 && retryCount === 0) {
         logger.info('🔄 Got 401, attempting token refresh and retry...');

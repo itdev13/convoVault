@@ -67,11 +67,16 @@ function logWarning(context, error, additionalInfo = {}) {
 function getUserFriendlyMessage(error) {
   const errorDetails = getErrorDetails(error);
   
+  // HIPAA compliance error
+  if (error.isHipaa) {
+    return 'This account has HIPAA compliance enabled. Message data cannot be accessed via API.';
+  }
+
   // Common error messages
   if (errorDetails.status === 401) {
     return 'Authentication failed. Please reconnect your account.';
   }
-  
+
   if (errorDetails.status === 403) {
     return 'Access denied. You don\'t have permission for this action.';
   }
