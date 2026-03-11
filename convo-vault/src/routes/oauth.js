@@ -48,7 +48,6 @@ router.get('/authorize', (req, res) => {
     "users.readonly",
     "emails/builder.readonly",
     "marketplace-installer-details.readonly",
-    "oauth.write"
   ].join(' ');
 
   // Encode referral info in state parameter if provided
