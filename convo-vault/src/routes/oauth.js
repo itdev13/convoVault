@@ -24,12 +24,31 @@ router.get('/authorize', (req, res) => {
   const { ref, campaign } = req.query;
 
   const scopes = [
-    'conversations.readonly',
-    'conversations.write',
-    'conversations/message.readonly',
-    'conversations/message.write',
-    'contacts.readonly',
-    'contacts.write'
+    "conversations.readonly",
+    "conversations.write",
+    "conversations/message.readonly",
+    "conversations/message.write",
+    "conversations/reports.readonly",
+    "locations.readonly",
+    "contacts.readonly",
+    "contacts.write",
+    "charges.readonly",
+    "charges.write",
+    "oauth.readonly",
+    "opportunities.readonly",
+    "forms.readonly",
+    "links.readonly",
+    "locations/customValues.readonly",
+    "locations/customFields.readonly",
+    "locations/tasks.readonly",
+    "voice-ai-agents.readonly",
+    "voice-ai-dashboard.readonly",
+    "locations/templates.readonly",
+    "socialplanner/post.readonly",
+    "users.readonly",
+    "emails/builder.readonly",
+    "marketplace-installer-details.readonly",
+    "oauth.write"
   ].join(' ');
 
   // Encode referral info in state parameter if provided
