@@ -35,7 +35,7 @@ router.get('/authorize', (req, res) => {
     logger.info('OAuth authorize with referral:', { ref, campaign });
   }
 
-  const authUrl = `${process.env.GHL_OAUTH_URL}/authorize?` +
+  const authUrl = `https://marketplace.gohighlevel.com/oauth/chooselocation?` +
     `response_type=code&` +
     `client_id=${process.env.GHL_CLIENT_ID}&` +
     `redirect_uri=${encodeURIComponent(process.env.GHL_REDIRECT_URI)}&` +
