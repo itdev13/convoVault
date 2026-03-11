@@ -399,6 +399,14 @@ class BillingService {
         });
       }
 
+      // Track revenue for referral (non-blocking)
+      try {
+        const Referral = require('../models/Referral');
+        await Referral.addRevenue(locationId, finalAmount);
+      } catch (refErr) {
+        // Silent fail — referral tracking should never block billing
+      }
+
       return {
         success: true,
         charges: chargeResults,

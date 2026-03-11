@@ -3,6 +3,7 @@ const router = express.Router();
 const ghlService = require('../services/ghlService');
 const OAuthToken = require('../models/OAuthToken');
 const CompanyLocation = require('../models/CompanyLocation');
+const Referral = require('../models/Referral');
 const logger = require('../utils/logger');
 const { logError } = require('../utils/errorLogger');
 
@@ -14,6 +15,8 @@ const { logError } = require('../utils/errorLogger');
  * Start OAuth flow
  */
 router.get('/authorize', (req, res) => {
+  const { ref, campaign } = req.query;
+
   const scopes = [
     'conversations.readonly',
     'conversations.write',
@@ -23,11 +26,20 @@ router.get('/authorize', (req, res) => {
     'contacts.write'
   ].join(' ');
 
-  const authUrl = `${process.env.GHL_OAUTH_URL}/authorize?` + 
+  // Encode referral info in state parameter if provided
+  let stateParam = '';
+  if (ref) {
+    const stateData = JSON.stringify({ ref, campaign: campaign || '' });
+    const stateEncoded = Buffer.from(stateData).toString('base64');
+    stateParam = `&state=${encodeURIComponent(stateEncoded)}`;
+    logger.info('OAuth authorize with referral:', { ref, campaign });
+  }
+
+  const authUrl = `${process.env.GHL_OAUTH_URL}/authorize?` +
     `response_type=code&` +
     `client_id=${process.env.GHL_CLIENT_ID}&` +
     `redirect_uri=${encodeURIComponent(process.env.GHL_REDIRECT_URI)}&` +
-    `scope=${encodeURIComponent(scopes)}`;
+    `scope=${encodeURIComponent(scopes)}${stateParam}`;
 
   res.redirect(authUrl);
 });
@@ -36,15 +48,31 @@ router.get('/authorize', (req, res) => {
  * OAuth callback
  */
 router.get('/callback', async (req, res) => {
-  const { code } = req.query;
+  const { code, state } = req.query;
 
   if (!code) {
     return res.status(400).send('Authorization code not provided');
   }
 
+  // Decode referral info from state parameter
+  let referralCode = null;
+  let referralCampaign = null;
+  if (state) {
+    try {
+      const stateData = JSON.parse(Buffer.from(state, 'base64').toString('utf-8'));
+      referralCode = stateData.ref || null;
+      referralCampaign = stateData.campaign || null;
+      if (referralCode) {
+        logger.info('Referral code detected:', { ref: referralCode, campaign: referralCampaign });
+      }
+    } catch (e) {
+      logger.warn('Failed to decode state parameter:', state);
+    }
+  }
+
   try {
     logger.info('Exchanging code for token...');
-    
+
     const tokenData = await ghlService.getAccessToken(code);
 
     // Check if this is Sub-Account-level or Company-level installation
@@ -81,9 +109,30 @@ router.get('/callback', async (req, res) => {
       );
 
       logger.info('✅ OAuth successful for sub-account:', savedToken.locationName || tokenData.locationId);
-      
-      var displayName = savedToken.locationName 
-        ? `${savedToken.locationName} (${savedToken.locationId})` 
+
+      // Save referral tracking if referral code present
+      if (referralCode) {
+        try {
+          await Referral.findOneAndUpdate(
+            { locationId: tokenData.locationId },
+            {
+              referralCode,
+              companyId: tokenData.companyId,
+              locationId: tokenData.locationId,
+              campaign: referralCampaign,
+              status: 'installed',
+              installedAt: new Date()
+            },
+            { upsert: true, new: true }
+          );
+          logger.info('✅ Referral tracked:', { ref: referralCode, locationId: tokenData.locationId });
+        } catch (refErr) {
+          logger.warn('Failed to save referral (non-blocking):', refErr.message);
+        }
+      }
+
+      var displayName = savedToken.locationName
+        ? `${savedToken.locationName} (${savedToken.locationId})`
         : `Sub-Account ID: ${savedToken.locationId}`;
       var successMessage = `Sub-Account: ${displayName}`;
       
@@ -119,7 +168,27 @@ router.get('/callback', async (req, res) => {
       logger.info(`✅ Stored ${locationIds.length} location IDs for company ${tokenData.companyId}`);
 
       logger.info('✅ OAuth successful for company:', tokenData.companyId);
-      // var displayName = `${locations.length} account(s)`;
+
+      // Save referral tracking if referral code present
+      if (referralCode) {
+        try {
+          await Referral.findOneAndUpdate(
+            { companyId: tokenData.companyId, locationId: { $exists: false } },
+            {
+              referralCode,
+              companyId: tokenData.companyId,
+              campaign: referralCampaign,
+              status: 'installed',
+              installedAt: new Date()
+            },
+            { upsert: true, new: true }
+          );
+          logger.info('✅ Referral tracked (company):', { ref: referralCode, companyId: tokenData.companyId });
+        } catch (refErr) {
+          logger.warn('Failed to save referral (non-blocking):', refErr.message);
+        }
+      }
+
       var successMessage = `Successfully connected to your account`;
     }
 

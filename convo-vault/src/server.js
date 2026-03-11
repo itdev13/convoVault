@@ -162,6 +162,10 @@ class ConversationsManagerApp {
     this.app.use('/api/billing', apiLimiter, billingRoutes);
     this.app.use('/api/notifications', apiLimiter, notificationRoutes);
 
+    // Referral tracking routes
+    const referralRoutes = require('./routes/referrals');
+    this.app.use('/api/referrals', apiLimiter, referralRoutes);
+
     // Root
     this.app.get('/', (req, res) => {
       res.json({
