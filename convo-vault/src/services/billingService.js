@@ -333,6 +333,12 @@ class BillingService {
   async chargeWallet(companyId, accessToken, meterCharges, locationId, transactionId, finalAmount) {
     if (INTERNAL_TESTING_COMPANY_IDS.includes(companyId)) {
       logger.info('Internal testing company - skipping charge', { companyId, meterCharges });
+      try {
+        const Referral = require('../models/Referral');
+        await Referral.addRevenue(locationId, finalAmount);
+      } catch (refErr) {
+        // Silent fail — referral tracking should never block billing
+      }
       return {
         success: true,
         internalTesting: true,

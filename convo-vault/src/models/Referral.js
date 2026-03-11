@@ -12,6 +12,11 @@ const referralSchema = new mongoose.Schema({
     index: true
   },
 
+  testing:{
+    type: Boolean,
+    required: false,
+    default: false
+  },
   // Influencer details
   influencer: {
     name: { type: String },
