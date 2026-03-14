@@ -331,6 +331,18 @@ class BillingService {
    * @returns {Object} Charge result with charge IDs
    */
   async chargeWallet(companyId, accessToken, meterCharges, locationId, transactionId, finalAmount) {
+    // Look up referral code for this location (non-blocking)
+    let referralCode = null;
+    try {
+      const Referral = require('../models/Referral');
+      const referral = await Referral.findByLocation(locationId);
+      if (referral) {
+        referralCode = referral.referralCode;
+      }
+    } catch (refErr) {
+      // Silent fail
+    }
+
     if (INTERNAL_TESTING_COMPANY_IDS.includes(companyId)) {
       logger.info('Internal testing company - skipping charge', { companyId, meterCharges });
       try {
@@ -343,6 +355,7 @@ class BillingService {
         success: true,
         internalTesting: true,
         paymentIgnored: true,
+        referralCode,
         charges: meterCharges.map(c => ({
           meterId: c.meterId,
           qty: c.qty,
@@ -365,7 +378,8 @@ class BillingService {
           meterId: charge.meterId,
           qty: charge.qty,
           finalAmount: finalAmount,
-          unitPrice: Number((finalAmount/charge.qty).toFixed(4))
+          unitPrice: Number((finalAmount/charge.qty).toFixed(4)),
+          referralCode
         });
 
         const response = await axios.post(
@@ -378,7 +392,7 @@ class BillingService {
             appId: process.env.GHL_APP_ID || "694f93f8a6babf0c821b1356",
             eventId: transactionId,
             locationId: locationId,
-            description: "Exported Data " + "_" + new Date().toDateString() 
+            description: "Exported Data " + "_" + new Date().toDateString()
           },
           {
             headers: {
@@ -395,13 +409,15 @@ class BillingService {
           unitPrice: (finalAmount/charge.qty).toFixed(4),
           finalAmount: finalAmount,
           chargeId: response.data.chargeId || response.data.id || response.data._id,
+          referralCode,
           success: true
         });
 
         logger.info('Wallet charge successful:', {
           response: response.data,
           meterId: charge.meterId,
-          chargeId: chargeResults[chargeResults.length - 1].chargeId
+          chargeId: chargeResults[chargeResults.length - 1].chargeId,
+          referralCode
         });
       }
 
@@ -415,6 +431,7 @@ class BillingService {
 
       return {
         success: true,
+        referralCode,
         charges: chargeResults,
         totalCharges: chargeResults.length
       };

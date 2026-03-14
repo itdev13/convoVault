@@ -565,8 +565,9 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
     try {
       const chargeResult = await billingService.chargeWallet(companyId, accessToken, meterCharges, locationId, transaction._id.toString(), estimate.finalAmount);
 
-      // Update transaction with charge IDs
+      // Update transaction with charge IDs and referral code
       transaction.ghlChargeId = chargeResult?.charges.map(c => c?.chargeId).join(',');
+      transaction.referralCode = chargeResult.referralCode || null;
 
       if (chargeResult.internalTesting) {
         transaction.status = 'tested';

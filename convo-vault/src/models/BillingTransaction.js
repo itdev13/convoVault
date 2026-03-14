@@ -96,6 +96,13 @@ const billingTransactionSchema = new mongoose.Schema({
   paymentIgnored: {
     type: Boolean,
     default: false
+  },
+
+  // Referral code if installed via referral
+  referralCode: {
+    type: String,
+    default: null,
+    index: true
   }
 
 }, {
