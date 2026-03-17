@@ -73,6 +73,7 @@ router.get('/authorize', (req, res) => {
  */
 router.get('/callback', async (req, res) => {
   const { code, state } = req.query;
+  console.log("query: ", req.query)
 
   if (!code) {
     return res.status(400).send('Authorization code not provided');
@@ -83,7 +84,9 @@ router.get('/callback', async (req, res) => {
   let referralCampaign = null;
   if (state) {
     try {
+      console.log("state: ", state);
       const stateData = JSON.parse(Buffer.from(state, 'base64').toString('utf-8'));
+      console.log("stateData: ", stateData);
       referralCode = stateData.ref || null;
       referralCampaign = stateData.campaign || null;
       if (referralCode) {

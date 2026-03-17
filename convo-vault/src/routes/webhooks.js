@@ -3,6 +3,7 @@ const router = express.Router();
 const Installation = require('../models/Installation');
 const OAuthToken = require('../models/OAuthToken');
 const DeletedOAuthToken = require('../models/DeletedOAuthToken');
+const Referral = require('../models/Referral');
 const logger = require('../utils/logger');
 const { authenticateSession } = require('../middleware/auth');
 const GHLService = require('../services/ghlService');
@@ -191,8 +192,38 @@ async function handleInstall(data) {
       }
     }
     
+    // REFERRAL PROPAGATION: If locationId install and company has a referral,
+    // create a location-level referral record from the company referral
+    if (locationId && companyId) {
+      try {
+        const companyReferral = await Referral.findOne({ companyId, locationId: { $exists: false } });
+        if (companyReferral) {
+          await Referral.findOneAndUpdate(
+            { locationId },
+            {
+              referralCode: companyReferral.referralCode,
+              companyId,
+              locationId,
+              campaign: companyReferral.campaign,
+              status: 'installed',
+              testing: companyReferral.testing,
+              installedAt: new Date()
+            },
+            { upsert: true, new: true }
+          );
+          logger.info('✅ Referral propagated from company to location:', {
+            referralCode: companyReferral.referralCode,
+            companyId,
+            locationId
+          });
+        }
+      } catch (refErr) {
+        logger.warn('Failed to propagate referral to location (non-blocking):', refErr.message);
+      }
+    }
+
     return installation;
-    
+
   } catch (error) {
     logger.error('❌ Install handler error:', error);
     throw error;
