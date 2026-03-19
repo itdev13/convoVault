@@ -72,7 +72,13 @@ const installationSchema = new mongoose.Schema({
   companyName: {
     type: String
   },
-  
+
+  // Referral tracking
+  referralCode: {
+    type: String,
+    default: null
+  },
+
   // Installation status
   status: {
     type: String,

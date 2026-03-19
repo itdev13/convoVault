@@ -193,7 +193,7 @@ async function handleInstall(data) {
     }
     
     // REFERRAL PROPAGATION: If locationId install and company has a referral,
-    // create a location-level referral record from the company referral
+    // create a location-level referral record and stamp referralCode on installation
     if (locationId && companyId) {
       try {
         const companyReferral = await Referral.findOne({ companyId, locationId: { $exists: false } });
@@ -211,11 +211,21 @@ async function handleInstall(data) {
             },
             { upsert: true, new: true }
           );
+          // Stamp referralCode on the installation record
+          installation.referralCode = companyReferral.referralCode;
+          await installation.save();
           logger.info('✅ Referral propagated from company to location:', {
             referralCode: companyReferral.referralCode,
             companyId,
             locationId
           });
+        } else {
+          // Check if location already has a direct referral (installed via referral link)
+          const locationReferral = await Referral.findOne({ locationId });
+          if (locationReferral?.referralCode && !installation.referralCode) {
+            installation.referralCode = locationReferral.referralCode;
+            await installation.save();
+          }
         }
       } catch (refErr) {
         logger.warn('Failed to propagate referral to location (non-blocking):', refErr.message);
@@ -289,7 +299,19 @@ async function handleUninstall(data) {
     // SECURITY: Archive OAuth tokens before deletion
     // Keeps audit trail while preventing access
     await archiveAndDeleteTokens(locationId, companyId, installation._id, data);
-    
+
+    // Soft-delete referral record on uninstall
+    try {
+      const referralQuery = locationId ? { locationId } : { companyId, locationId: { $exists: false } };
+      await Referral.findOneAndUpdate(
+        referralQuery,
+        { status: 'uninstalled', uninstalledAt: new Date() }
+      );
+      logger.info('✅ Referral marked as uninstalled', { locationId, companyId });
+    } catch (refErr) {
+      logger.warn('Failed to soft-delete referral on uninstall (non-blocking):', refErr.message);
+    }
+
     return installation;
     
   } catch (error) {
