@@ -1,11 +1,58 @@
 const express = require('express');
 const router = express.Router();
 const Referral = require('../models/Referral');
+const BillingTransaction = require('../models/BillingTransaction');
 const logger = require('../utils/logger');
 
 /**
  * Referral Routes - Influencer tracking dashboard
  */
+
+/**
+ * Open API: Get dashboard stats for a referral code
+ * GET /referrals/dashboard/:referralCode
+ * Used by the external referral dashboard service
+ */
+router.get('/dashboard/:referralCode', async (req, res) => {
+  try {
+    const { referralCode } = req.params;
+
+    const [referrals, billingAgg] = await Promise.all([
+      Referral.find({ referralCode }),
+      BillingTransaction.aggregate([
+        { $match: { referralCode, status: 'charged' } },
+        {
+          $group: {
+            _id: null,
+            totalRevenueCents: { $sum: '$pricing.finalAmount' },
+            transactionCount: { $sum: 1 },
+            totalExports: { $sum: '$itemCounts.total' }
+          }
+        }
+      ])
+    ]);
+
+    const companies = new Set(referrals.filter(r => r.companyId).map(r => r.companyId));
+    const locations = new Set(referrals.filter(r => r.locationId).map(r => r.locationId));
+    const billing = billingAgg[0] || { totalRevenueCents: 0, transactionCount: 0, totalExports: 0 };
+
+    res.json({
+      success: true,
+      referralCode,
+      totalRevenue: Number((billing.totalRevenueCents / 100).toFixed(4)),
+      uniqueCompanies: companies.size,
+      uniqueLocations: locations.size,
+      transactionCount: billing.transactionCount,
+      totalExports: billing.totalExports,
+      totalInstalls: referrals.length,
+      activeInstalls: referrals.filter(r => r.status === 'installed').length,
+      uninstalls: referrals.filter(r => r.status === 'uninstalled').length
+    });
+  } catch (error) {
+    logger.error('Error fetching referral dashboard:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 /**
  * Get all influencer stats (grouped by referral code)
