@@ -16,11 +16,23 @@ const logger = require('../utils/logger');
 router.get('/dashboard/:referralCode', async (req, res) => {
   try {
     const { referralCode } = req.params;
+    const { from, to } = req.query;
+
+    const referralFilter = { referralCode };
+    const billingFilter = { referralCode, status: 'charged' };
+
+    if (from || to) {
+      const dateFilter = {};
+      if (from) dateFilter.$gte = new Date(from);
+      if (to) dateFilter.$lte = new Date(to + 'T23:59:59.999Z');
+      referralFilter.installedAt = dateFilter;
+      billingFilter.createdAt = dateFilter;
+    }
 
     const [referrals, billingAgg] = await Promise.all([
-      Referral.find({ referralCode }),
+      Referral.find(referralFilter),
       BillingTransaction.aggregate([
-        { $match: { referralCode, status: 'charged' } },
+        { $match: billingFilter },
         {
           $group: {
             _id: null,
