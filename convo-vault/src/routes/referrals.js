@@ -39,7 +39,7 @@ router.get('/dashboard/:referralCode', async (req, res) => {
     res.json({
       success: true,
       referralCode,
-      totalRevenue: Number((billing.totalRevenueCents / 100).toFixed(4)),
+      totalRevenue: Number((billing.totalRevenueCents).toFixed(4)),
       uniqueCompanies: companies.size,
       uniqueLocations: locations.size,
       transactionCount: billing.transactionCount,
