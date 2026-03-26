@@ -1666,6 +1666,7 @@ exports.handler = async (event, context) => {
           if (totalProcessed >= job.totalItems) {
             log('Reached totalItems count, stopping fetch', { totalProcessed, totalItems: job.totalItems });
             hasMoreData = false;
+            cursor = null;
             break;
           }
         }
@@ -1723,45 +1724,46 @@ exports.handler = async (event, context) => {
     log('Batch complete', { processedItems: job.processedItems,  batchRecords: records.length, cursor: cursor, hasMore: hasMoreData || !!cursor });
 
     // Convert to format and upload
-    const isFirstPart = parts.length === 0;
+    const hasPendingBuffer = !!(job.s3Upload?.pendingBuffer);
+    const isFirstContent = parts.length === 0 && !hasPendingBuffer;
     const isLastPart = !hasMoreData && !cursor;
     let useSimpleUpload = false;  // Flag to skip multipart finalization
 
-    if (records.length > 0 || (isFirstPart && isLastPart && records.length === 0)) {
+    if (records.length > 0 || (isFirstContent && isLastPart && records.length === 0)) {
       // Handle empty export case
       if (records.length === 0) {
         log('Empty export, creating empty file');
       }
       let content;
       if (job.format === 'json') {
-        content = toJSON(records, job.exportType, isFirstPart, isLastPart);
+        content = toJSON(records, job.exportType, isFirstContent, isLastPart);
       } else if (job.exportType === 'conversations') {
-        content = conversationsToCSV(records, isFirstPart);
+        content = conversationsToCSV(records, isFirstContent);
       } else if (job.exportType === 'notes') {
-        content = notesToCSV(records, isFirstPart);
+        content = notesToCSV(records, isFirstContent);
       } else if (job.exportType === 'tasks') {
-        content = tasksToCSV(records, isFirstPart);
+        content = tasksToCSV(records, isFirstContent);
       } else if (job.exportType === 'opportunities') {
-        content = opportunitiesToCSV(records, isFirstPart);
+        content = opportunitiesToCSV(records, isFirstContent);
       } else if (job.exportType === 'formSubmissions') {
-        content = formSubmissionsToCSV(records, isFirstPart);
+        content = formSubmissionsToCSV(records, isFirstContent);
       } else if (job.exportType === 'links') {
-        content = linksToCSV(records, isFirstPart);
+        content = linksToCSV(records, isFirstContent);
       } else if (job.exportType === 'socialPosts') {
-        content = socialPostsToCSV(records, isFirstPart);
+        content = socialPostsToCSV(records, isFirstContent);
       } else if (job.exportType === 'callLogs') {
-        content = callLogsToCSV(records, isFirstPart);
+        content = callLogsToCSV(records, isFirstContent);
       } else if (job.exportType === 'templates') {
-        content = templatesToCSV(records, isFirstPart);
+        content = templatesToCSV(records, isFirstContent);
       } else {
-        content = messagesToCSV(records, isFirstPart, job.filters?.channel || '');
+        content = messagesToCSV(records, isFirstContent, job.filters?.channel || '');
       }
 
       const contentSize = Buffer.byteLength(content);
 
-      // If this is both first and last part (single batch export), use putObject directly
+      // If truly a single-batch export (no buffer, no parts), use putObject directly
       // This avoids S3 multipart upload issues with small files (< 5MB)
-      if (isFirstPart && isLastPart) {
+      if (isFirstContent && isLastPart && !hasPendingBuffer) {
         log('Single batch export, using putObject directly', { contentSize });
 
         // Abort the multipart upload we started (if any)
@@ -1807,8 +1809,41 @@ exports.handler = async (event, context) => {
           await updateJob(db, exportJobId, {
             's3Upload.pendingBuffer': accumulated
           });
+        } else if (isLastPart && parts.length === 0) {
+          // All data fits in buffer + this batch, and no parts uploaded yet
+          // Use putObject instead of multipart (total data < 5MB)
+          log('Total export under 5MB, using putObject', { accumulatedSize });
+
+          // Abort the multipart upload
+          if (uploadId) {
+            try {
+              await s3.send(new AbortMultipartUploadCommand({
+                Bucket: S3_BUCKET,
+                Key: s3Key,
+                UploadId: uploadId
+              }));
+            } catch (abortErr) {
+              log('Could not abort multipart upload', { error: abortErr.message });
+            }
+          }
+
+          await s3.send(new PutObjectCommand({
+            Bucket: S3_BUCKET,
+            Key: s3Key,
+            Body: accumulated,
+            ContentType: job.format === 'json' ? 'application/json' : 'text/csv',
+            ContentDisposition: `attachment; filename="${exportFilename}"`
+          }));
+
+          log('File uploaded with putObject (buffered)');
+          useSimpleUpload = true;
+
+          // Clear the pending buffer
+          await updateJob(db, exportJobId, {
+            's3Upload.pendingBuffer': ''
+          });
         } else {
-          // Either enough data or this is the last part - upload
+          // Enough data or last part with existing parts - upload as multipart part
           const partNumber = parts.length + 1;
 
           const uploadResult = await s3.send(new UploadPartCommand({
