@@ -1793,23 +1793,45 @@ exports.handler = async (event, context) => {
 
       } else {
         // Multi-batch: use multipart upload
-        const partNumber = parts.length + 1;
+        // S3 requires each part (except last) to be >= 5MB
+        const MIN_PART_SIZE = 5 * 1024 * 1024; // 5MB
 
-        const uploadResult = await s3.send(new UploadPartCommand({
-          Bucket: S3_BUCKET,
-          Key: s3Key,
-          UploadId: uploadId,
-          PartNumber: partNumber,
-          Body: content
-        }));
+        // Accumulate content with any pending buffer from previous batches
+        const pendingBuffer = job.s3Upload?.pendingBuffer || '';
+        const accumulated = pendingBuffer + content;
+        const accumulatedSize = Buffer.byteLength(accumulated);
 
-        parts.push({
-          partNumber,
-          etag: uploadResult.ETag,
-          size: contentSize
-        });
+        if (!isLastPart && accumulatedSize < MIN_PART_SIZE) {
+          // Not enough data yet and more batches coming - buffer it
+          log('Buffering content for next batch', { accumulatedSize, minRequired: MIN_PART_SIZE });
+          await updateJob(db, exportJobId, {
+            's3Upload.pendingBuffer': accumulated
+          });
+        } else {
+          // Either enough data or this is the last part - upload
+          const partNumber = parts.length + 1;
 
-        log('Uploaded part', { partNumber, size: contentSize });
+          const uploadResult = await s3.send(new UploadPartCommand({
+            Bucket: S3_BUCKET,
+            Key: s3Key,
+            UploadId: uploadId,
+            PartNumber: partNumber,
+            Body: accumulated
+          }));
+
+          parts.push({
+            partNumber,
+            etag: uploadResult.ETag,
+            size: accumulatedSize
+          });
+
+          log('Uploaded part', { partNumber, size: accumulatedSize });
+
+          // Clear the pending buffer
+          await updateJob(db, exportJobId, {
+            's3Upload.pendingBuffer': ''
+          });
+        }
       }
     }
 
@@ -1855,6 +1877,27 @@ exports.handler = async (event, context) => {
     } else {
       // No more data - finalize
       log('All data fetched, finalizing...');
+
+      // Flush any remaining pending buffer as the final part
+      // Re-read from DB in case buffer was updated during this invocation
+      const freshJob = await db.collection('exportjobs').findOne({ _id: new ObjectId(exportJobId) });
+      const remainingBuffer = freshJob?.s3Upload?.pendingBuffer || '';
+      if (!useSimpleUpload && remainingBuffer) {
+        const partNumber = parts.length + 1;
+        const uploadResult = await s3.send(new UploadPartCommand({
+          Bucket: S3_BUCKET,
+          Key: s3Key,
+          UploadId: uploadId,
+          PartNumber: partNumber,
+          Body: remainingBuffer
+        }));
+        parts.push({
+          partNumber,
+          etag: uploadResult.ETag,
+          size: Buffer.byteLength(remainingBuffer)
+        });
+        log('Flushed remaining buffer as final part', { partNumber, size: Buffer.byteLength(remainingBuffer) });
+      }
 
       // Complete multipart upload (only if we didn't use simple putObject)
       if (!useSimpleUpload && parts.length > 0) {

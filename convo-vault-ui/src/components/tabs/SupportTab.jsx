@@ -337,7 +337,13 @@ export default function SupportTab() {
               </li>
             </ul>
             <div className="mt-4 text-xs text-blue-700 bg-blue-100 rounded-lg p-3">
-              <strong>📧 Response Time:</strong> We typically respond within 24 hours
+              <strong>📧 Response Time:</strong> We typically respond within 24 hours. You will receive a reply to your email from <strong>rapiddev21@gmail.com</strong>
+            </div>
+            <div className="mt-3 text-xs text-blue-700 bg-blue-100 rounded-lg p-3">
+              <strong>📅 Need more help?</strong> Book a free one-on-one session with our team:{' '}
+              <a href="https://calendar.app.google/SLTbAPo5zSMrq7vi8" target="_blank" rel="noopener noreferrer" className="font-bold text-blue-600 underline hover:text-blue-800">
+                Schedule a Meeting
+              </a>
             </div>
           </div>
         </div>

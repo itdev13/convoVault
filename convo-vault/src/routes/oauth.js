@@ -10,7 +10,8 @@ const { logError } = require('../utils/errorLogger');
 // Internal testing company IDs
 const INTERNAL_TESTING_COMPANY_IDS = [
   'PG9VJ27QFRumQrOGB2Ee',
-  '7IlT9P1bafOCnq2JV00t'
+  '7IlT9P1bafOCnq2JV00t',
+  "Wf0uCtlXazt236iDXeP9"
 ];
 
 /**
