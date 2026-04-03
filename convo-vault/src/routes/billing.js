@@ -172,7 +172,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               resolvedContactNames[c.id] = c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown';
             }
           }
-          if (contacts.length < 100) { hasMore = false; } else { startAfterId = contacts[contacts.length - 1].id; }
+          if (contacts.length < 100) { hasMore = false; } else { startAfterId = contacts[contacts.length - 1]?.startAfter[0]; }
         }
       }
 
