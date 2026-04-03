@@ -198,28 +198,54 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         logger.info('Tag contact resolution complete', { tag: filters.tags, totalContacts: resolvedContactIds.length, pages: page });
       }
 
+      // Dedup contactIds
+      const beforeDedup = resolvedContactIds.length;
+      resolvedContactIds = [...new Set(resolvedContactIds)];
+      if (beforeDedup !== resolvedContactIds.length) {
+        logger.warn('Duplicate contactIds removed', { before: beforeDedup, after: resolvedContactIds.length });
+      }
+
       if (resolvedContactIds.length === 0) {
         return res.status(400).json({ success: false, error: 'No contacts found with this tag' });
       }
 
-      // Count notes in parallel batches of 100
+      // Count notes in parallel batches with retry (3 attempts max)
       let total = 0;
-      const BATCH_SIZE = 10;
-      logger.info('Counting notes for contacts', { totalContacts: resolvedContactIds.length });
-      for (let i = 0; i < resolvedContactIds.length; i += BATCH_SIZE) {
-        const batch = resolvedContactIds.slice(i, i + BATCH_SIZE);
-        const results = await Promise.allSettled(
-          batch.map(cId => ghlService.getContactNotes(locationId, cId))
-        );
-        for (const result of results) {
-          if (result.status === 'fulfilled') {
-            total += result.value.total;
+      let skipped = 0;
+      const BATCH_SIZE = 5;
+      const MAX_RETRIES = 3;
+      let pendingContactIds = [...resolvedContactIds];
+
+      logger.info('Counting notes for contacts', { totalContacts: pendingContactIds.length });
+
+      for (let attempt = 1; attempt <= MAX_RETRIES && pendingContactIds.length > 0; attempt++) {
+        const failedThisRound = [];
+        for (let i = 0; i < pendingContactIds.length; i += BATCH_SIZE) {
+          const batch = pendingContactIds.slice(i, i + BATCH_SIZE);
+          const results = await Promise.allSettled(
+            batch.map(cId => ghlService.getContactNotes(locationId, cId).then(r => ({ cId, total: r.total })))
+          );
+          for (let j = 0; j < results.length; j++) {
+            if (results[j].status === 'fulfilled') {
+              total += results[j].value.total;
+            } else {
+              failedThisRound.push(batch[j]);
+            }
           }
         }
-        logger.info('Notes count batch done', { batchIndex: Math.floor(i / BATCH_SIZE) + 1, batchSize: batch.length, runningTotal: total });
+        if (failedThisRound.length > 0) {
+          logger.warn(`Attempt ${attempt}: ${failedThisRound.length} contacts failed`, { attempt, failed: failedThisRound.length, runningTotal: total });
+        }
+        pendingContactIds = failedThisRound;
       }
+
+      if (pendingContactIds.length > 0) {
+        skipped = pendingContactIds.length;
+        logger.warn('Contacts skipped after max retries', { skipped, contactIds: pendingContactIds.slice(0, 10) });
+      }
+
       counts.notes = total;
-      logger.info('Notes count complete', { totalContacts: resolvedContactIds.length, totalNotes: total });
+      logger.info('Notes count complete', { totalContacts: resolvedContactIds.length, totalNotes: total, skippedContacts: skipped });
 
     } else if (exportType === 'tasks') {
       // Tasks: location-level search API — always upfront billing
