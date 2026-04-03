@@ -215,6 +215,7 @@ class ConversationsManagerApp {
       });
       server.timeout = 600000; // 10 minute timeout
       server.keepAliveTimeout = 620000; // slightly higher than timeout
+      server.headersTimeout = 660000; // slightly higher than keepAlive
 
     } catch (error) {
       logger.error('Failed to start server:', error);

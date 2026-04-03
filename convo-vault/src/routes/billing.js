@@ -58,6 +58,9 @@ function validateDateRange(startDate, endDate) {
  * @desc Get cost estimate for export
  */
 router.post('/estimate', authenticateSession, async (req, res) => {
+  // Extend timeout for this route — tag resolution + note counting can take minutes
+  req.setTimeout(600000);
+  res.setTimeout(600000);
   try {
     const { locationId, exportType, filters } = req.body;
 
@@ -201,7 +204,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
       // Count notes in parallel batches of 100
       let total = 0;
-      const BATCH_SIZE = 100;
+      const BATCH_SIZE = 10;
       logger.info('Counting notes for contacts', { totalContacts: resolvedContactIds.length });
       for (let i = 0; i < resolvedContactIds.length; i += BATCH_SIZE) {
         const batch = resolvedContactIds.slice(i, i + BATCH_SIZE);
