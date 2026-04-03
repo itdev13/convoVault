@@ -86,7 +86,9 @@ const exportJobSchema = new mongoose.Schema({
     businessId: { type: String, default: null },
     completed: { type: Boolean, default: null },
     overdue: { type: Boolean, default: null },
-    unAssigned: { type: Boolean, default: null }
+    unAssigned: { type: Boolean, default: null },
+    // Tag filter for notes export
+    tags: { type: String, default: null }
   },
 
   // Progress tracking

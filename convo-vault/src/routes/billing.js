@@ -647,6 +647,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       completed: filters?.completed ?? null,
       overdue: filters?.overdue ?? null,
       unAssigned: filters?.unAssigned != null ? filters?.unAssigned : null,
+      // Tag filter for notes export
+      tags: filters?.tags || null,
     };
 
     const exportJob = await ExportJob.create({
