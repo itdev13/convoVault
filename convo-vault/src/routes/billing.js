@@ -223,11 +223,13 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         for (let i = 0; i < pendingContactIds.length; i += BATCH_SIZE) {
           const batch = pendingContactIds.slice(i, i + BATCH_SIZE);
           const results = await Promise.allSettled(
-            batch.map(cId => ghlService.getContactNotes(locationId, cId).then(r => ({ cId, total: r.total })))
+            batch.map(cId => ghlService.getContactNotes(locationId, cId).then(r => ({ cId, total: r.total, notesLength: r.notes?.length || 0 })))
           );
           for (let j = 0; j < results.length; j++) {
             if (results[j].status === 'fulfilled') {
-              total += results[j].value.total;
+              const { cId, total: noteCount, notesLength } = results[j].value;
+              logger.info('Contact notes count', { contactId: cId, noteCount, notesArrayLength: notesLength });
+              total += noteCount;
             } else {
               failedThisRound.push(batch[j]);
             }
