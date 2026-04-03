@@ -14,7 +14,8 @@ export default function ExportEstimateModal({
   error = null,
   exportType = 'messages',
   usingDefaultDates = false,
-  postExportBilling = false
+  postExportBilling = false,
+  estimatingMessage = null
 }) {
   console.log('estimate modal props', estimate, exportType, postExportBilling);
   const [email, setEmail] = useState('');
@@ -109,7 +110,7 @@ export default function ExportEstimateModal({
       {estimating && (
         <div className="flex flex-col justify-center items-center py-12">
           <Spin size="large" />
-          <span className="mt-4 text-gray-600">Calculating estimate...</span>
+          <span className="mt-4 text-gray-600">{estimatingMessage || 'Calculating estimate...'}</span>
         </div>
       )}
 

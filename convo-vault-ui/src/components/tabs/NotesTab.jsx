@@ -18,6 +18,8 @@ export default function NotesTab() {
   const [postExportBilling, setPostExportBilling] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
+  // Resolved contactIds from estimate (for tag-based exports — avoids re-resolving)
+  const [resolvedFromEstimate, setResolvedFromEstimate] = useState(null);
 
   // Contacts pool for dropdown
   const [allContacts, setAllContacts] = useState([]);
@@ -210,14 +212,30 @@ export default function NotesTab() {
     return { contactIds: selectedContacts.map(c => c.id), contactNames };
   };
 
+  // For export: use resolved contactIds from estimate if available (avoids re-resolving tags)
+  const getExportFilters = () => {
+    if (resolvedFromEstimate) {
+      const ids = resolvedFromEstimate.contactIds;
+      const names = resolvedFromEstimate.contactNames;
+      if (ids.length === 1) return { contactId: ids[0], contactNames: names };
+      return { contactIds: ids, contactNames: names };
+    }
+    return getFilters();
+  };
+
   const handleGetEstimate = async () => {
+    if (!hasSelected && !isTagMode) {
+      antMessage.warning('Please select contacts or enter a tag to export');
+      return;
+    }
     setExportModalVisible(true);
     setEstimating(true);
     setEstimate(null);
     setEstimateError(null);
     setPostExportBilling(false);
+    setResolvedFromEstimate(null);
     try {
-      if (selectedContacts.length > 0 && notesLoaded) {
+      if (notesLoaded && notes.length > 0) {
         // Exact count already known from loaded notes — calculate cost locally
         const count = notes.length;
         const unitPrice = UNIT_PRICES.notesAndTasks;
@@ -232,13 +250,16 @@ export default function NotesTab() {
           finalAmountDollars: finalAmount
         });
       } else {
-        // No contacts selected or notes not yet loaded — call API
+        // Call API to resolve contacts (by tag or IDs) and count notes
         const res = await billingAPI.getEstimate(location.id, 'notes', getFilters());
         if (res.success) {
-          if (res.data.postExportBilling) {
-            setPostExportBilling(true);
-          } else {
-            setEstimate(res.data.estimate);
+          setEstimate(res.data.estimate);
+          // Save resolved contactIds from tag lookup to reuse during export
+          if (res.data.resolvedContactIds) {
+            setResolvedFromEstimate({
+              contactIds: res.data.resolvedContactIds,
+              contactNames: res.data.resolvedContactNames
+            });
           }
         } else {
           setEstimateError(res.error || 'Failed to calculate estimate');
@@ -255,7 +276,7 @@ export default function NotesTab() {
     setProcessing(true);
     setEstimateError(null);
     try {
-      const res = await billingAPI.chargeAndExport(location.id, 'notes', format, getFilters(), notificationEmail);
+      const res = await billingAPI.chargeAndExport(location.id, 'notes', format, getExportFilters(), notificationEmail);
       if (res.success) {
         setActiveJob({
           jobId: res.data.jobId,
@@ -318,6 +339,9 @@ export default function NotesTab() {
         error={estimateError}
         exportType="notes"
         postExportBilling={postExportBilling}
+        estimatingMessage={isTagMode
+          ? 'Finding all contacts for this tag and counting notes... This may take a moment, please stay with us!'
+          : 'Counting notes for selected contacts...'}
       />
 
       {/* Header */}
@@ -329,7 +353,7 @@ export default function NotesTab() {
               ? `${selectedContacts.length} contact${selectedContacts.length > 1 ? 's' : ''} selected`
               : isTagMode
                 ? `Filtering by tag: "${tagFilter.trim()}"`
-                : 'Export all contact notes from this sub-account'}
+                : 'Select contacts or enter a tag to export notes'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -341,7 +365,7 @@ export default function NotesTab() {
           )}
           <Button
             onClick={handleGetEstimate}
-            disabled={isExporting}
+            disabled={isExporting || (!hasSelected && !isTagMode)}
             size="large"
             type="primary"
             icon={
@@ -353,7 +377,7 @@ export default function NotesTab() {
             {hasSelected
               ? selectedContacts.length === 1 ? 'Export Notes' : `Export ${selectedContacts.length} Contacts`
               : isTagMode ? 'Export Notes by Tag'
-              : 'Export All Notes'}
+              : 'Export Notes'}
           </Button>
         </div>
       </div>
@@ -435,7 +459,7 @@ export default function NotesTab() {
 
           {/* Contact search */}
           <label className="block text-xs font-medium text-gray-600 mb-1">
-            Contact <span className="text-gray-400">(optional — leave blank to export all)</span>
+            Contact <span className="text-gray-400">(select one or more contacts)</span>
           </label>
           <div className="flex gap-3 items-center">
             <div className="relative" style={{ flex: 1 }}>
@@ -576,8 +600,8 @@ export default function NotesTab() {
         </div>
 
         {!hasSelected && !isTagMode && (
-          <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2 mt-3">
-            <strong>Export All:</strong> No contact selected — will export notes for all contacts.
+          <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-2 mt-3">
+            Enter a tag above or select contacts below to export notes.
           </p>
         )}
         {isTagMode && (

@@ -12,6 +12,7 @@ const APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
 const INTERNAL_TESTING_COMPANY_IDS = [
   'PG9VJ27QFRumQrOGB2Ee',
   '7IlT9P1bafOCnq2JV00t',
+  'ZCp6RN2dJWIQZjLqdtJL'
 ];
 
 // Meter IDs for GHL Marketplace billing

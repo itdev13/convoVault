@@ -89,6 +89,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
     logger.info('Calculating export estimate', { locationId, exportType, filters });
 
+    // For notes: track resolved contacts from tag lookup to return to frontend
+    let resolvedContactIds = null;
+    let resolvedContactNames = null;
+
     let counts = {
       conversations: 0,
       smsMessages: 0,
@@ -147,33 +151,50 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       }
 
     } else if (exportType === 'notes') {
+      // Resolve contactIds: either direct selection or by tag
+      resolvedContactIds = [];
+      resolvedContactNames = filters?.contactNames || {};
+
       if (filters?.contactId) {
-        const result = await ghlService.getContactNotes(locationId, filters.contactId);
-        counts.notes = result.total;
+        resolvedContactIds = [filters.contactId];
       } else if (filters?.contactIds?.length > 0) {
-        let total = 0;
-        for (const cId of filters.contactIds) {
-          try {
-            const result = await ghlService.getContactNotes(locationId, cId);
-            total += result.total;
-          } catch (err) {
-            logger.warn('Failed to count notes for contact during estimation:', { contactId: cId });
+        resolvedContactIds = filters.contactIds;
+      } else if (filters?.tags) {
+        // Resolve all contacts matching the tag via pagination
+        let startAfterId = null;
+        let hasMore = true;
+        while (hasMore) {
+          const result = await ghlService.searchContacts(locationId, { tag: filters.tags, limit: 100, startAfterId });
+          const contacts = result.contacts || [];
+          for (const c of contacts) {
+            resolvedContactIds.push(c.id);
+            if (!resolvedContactNames[c.id]) {
+              resolvedContactNames[c.id] = c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown';
+            }
+          }
+          if (contacts.length < 100) { hasMore = false; } else { startAfterId = contacts[contacts.length - 1].id; }
+        }
+      }
+
+      if (resolvedContactIds.length === 0) {
+        return res.status(400).json({ success: false, error: 'Please select contacts or enter a tag to export notes' });
+      }
+
+      // Count notes in parallel batches of 10
+      let total = 0;
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < resolvedContactIds.length; i += BATCH_SIZE) {
+        const batch = resolvedContactIds.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map(cId => ghlService.getContactNotes(locationId, cId))
+        );
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            total += result.value.total;
           }
         }
-        counts.notes = total;
-      } else {
-        // Notes: all contacts — use post-export billing
-        return res.json({
-          success: true,
-          data: {
-            estimate: null,
-            postExportBilling: true,
-            unitPrice: billingService.getDefaultUnitPrices().notesAndTasks,
-            exportType,
-            filters
-          }
-        });
       }
+      counts.notes = total;
 
     } else if (exportType === 'tasks') {
       // Tasks: location-level search API — always upfront billing
@@ -251,16 +272,21 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       discountTiers: billingService.getDiscountTiers(),
       unitPrices: billingService.getUnitPrices()
     }
-    res.json({
-      success: true,
-      data: {
-        estimate,
-        filters,
-        exportType,
-        discountTiers: billingService.getDiscountTiers(),
-        unitPrices: billingService.getUnitPrices()
-      }
-    });
+    const responseData = {
+      estimate,
+      filters,
+      exportType,
+      discountTiers: billingService.getDiscountTiers(),
+      unitPrices: billingService.getUnitPrices()
+    };
+
+    // For notes with tags: return resolved contactIds so frontend can reuse them for export
+    if (exportType === 'notes' && resolvedContactIds && resolvedContactIds.length > 0) {
+      responseData.resolvedContactIds = resolvedContactIds;
+      responseData.resolvedContactNames = resolvedContactNames;
+    }
+
+    res.json({ success: true, data: responseData });
 
   } catch (error) {
     logError('Estimate calculation error', error, {
@@ -354,75 +380,50 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       totalItems = result.total || result.conversations?.length || 0;
       counts.conversations = totalItems;
     } else if (exportType === 'notes') {
+      // Resolve contactIds: either direct selection or by tag — always upfront
+      let resolvedContactIds = [];
+      let resolvedContactNames = filters?.contactNames || {};
+
       if (filters?.contactId) {
-        const result = await ghlService.getContactNotes(locationId, filters.contactId);
-        totalItems = result.total;
-        counts.notes = totalItems;
+        resolvedContactIds = [filters.contactId];
       } else if (filters?.contactIds?.length > 0) {
-        let total = 0;
-        for (const cId of filters.contactIds) {
-          try {
-            const result = await ghlService.getContactNotes(locationId, cId);
-            total += result.total;
-          } catch (err) {
-            logger.warn('Sample contact notes fetch failed:', { contactId: cId });
+        resolvedContactIds = filters.contactIds;
+      } else if (filters?.tags) {
+        // Resolve all contacts matching the tag via pagination
+        let startAfterId = null;
+        let hasMore = true;
+        while (hasMore) {
+          const result = await ghlService.searchContacts(locationId, { tag: filters.tags, limit: 100, startAfterId });
+          const contacts = result.contacts || [];
+          for (const c of contacts) {
+            resolvedContactIds.push(c.id);
+            if (!resolvedContactNames[c.id]) {
+              resolvedContactNames[c.id] = c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown';
+            }
           }
+          if (contacts.length < 100) { hasMore = false; } else { startAfterId = contacts[contacts.length - 1].id; }
         }
-        totalItems = total;
-        counts.notes = totalItems;
-      } else {
-        // Notes: all contacts — post-export billing
-        const oauthTokenCheck = await OAuthToken.findActiveToken(locationId);
-        if (!oauthTokenCheck || !oauthTokenCheck.refreshToken) {
-          return res.status(400).json({ success: false, error: 'No valid OAuth token found for this location' });
-        }
-
-        const transaction = await BillingTransaction.create({
-          locationId, companyId, type: 'export_notes',
-          itemCounts: { notes: 0, total: 0 },
-          pricing: { baseAmount: 0, discountPercent: 0, discountAmount: 0, finalAmount: 0 },
-          meterCharges: [], status: 'deferred', userId
-        });
-
-        const jobFiltersDeferred = {
-          channel: null, startDate: null, endDate: null,
-          contactId: null, contactIds: [], query: null, id: null,
-          conversationId: null, lastMessageType: null, lastMessageDirection: null,
-          status: null, lastMessageAction: null, sortBy: null,
-          pipelineId: null, pipelineStageId: null, formId: null,
-          agentId: null, callType: null, actionType: null, contactNames: null,
-          tags: filters?.tags || null
-        };
-
-        const exportJob = await ExportJob.create({
-          locationId, companyId, billingTransactionId: transaction._id,
-          exportType: 'notes', format: format || 'csv', filters: jobFiltersDeferred,
-          totalItems: 0, postExportBilling: true, status: 'pending',
-          notificationEmail: notificationEmail || null, userId
-        });
-
-        transaction.exportJobId = exportJob._id;
-        await transaction.save();
-
-        const lambdaParams = {
-          FunctionName: LAMBDA_FUNCTION_NAME, InvocationType: 'Event', Qualifier: '$LATEST',
-          Payload: Buffer.from(JSON.stringify({ exportJobId: exportJob._id.toString() }))
-        };
-        const lambdaResult = await lambda.send(new InvokeCommand(lambdaParams));
-
-        exportJob.status = 'processing';
-        exportJob.startedAt = new Date();
-        exportJob.lambdaRequestId = lambdaResult.$metadata?.requestId || null;
-        await exportJob.save();
-
-        return res.json({
-          success: true,
-          data: {
-            jobId: exportJob._id.toString(), status: 'processing', totalItems: 0,
-            message: `Export started. You will be charged $${billingService.getDefaultUnitPrices().notesAndTasks} per note after export completes.`
-          }
-        });
+        // Override filters with resolved contactIds so the standard upfront path handles it
+        filters.contactIds = resolvedContactIds;
+        filters.contactNames = resolvedContactNames;
       }
+
+      if (resolvedContactIds.length === 0) {
+        return res.status(400).json({ success: false, error: 'Please select contacts or enter a tag to export notes' });
+      }
+
+      // Count notes for all resolved contacts
+      let total = 0;
+      for (const cId of resolvedContactIds) {
+        try {
+          const result = await ghlService.getContactNotes(locationId, cId);
+          total += result.total;
+        } catch (err) {
+          logger.warn('Sample contact notes fetch failed:', { contactId: cId });
+        }
+      }
+      totalItems = total;
+      counts.notes = totalItems;
 
     } else if (exportType === 'tasks') {
       // Tasks: location-level search API — always upfront billing
