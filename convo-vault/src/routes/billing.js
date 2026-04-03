@@ -390,7 +390,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
           conversationId: null, lastMessageType: null, lastMessageDirection: null,
           status: null, lastMessageAction: null, sortBy: null,
           pipelineId: null, pipelineStageId: null, formId: null,
-          agentId: null, callType: null, actionType: null, contactNames: null
+          agentId: null, callType: null, actionType: null, contactNames: null,
+          tags: filters?.tags || null
         };
 
         const exportJob = await ExportJob.create({
@@ -1258,16 +1259,19 @@ router.get('/users', authenticateSession, async (req, res) => {
  */
 router.get('/contacts/search', authenticateSession, async (req, res) => {
   try {
-    const { locationId, query, limit } = req.query;
+    const { locationId, query, limit, tag } = req.query;
 
     if (!locationId) {
       return res.status(400).json({ success: false, error: 'locationId is required' });
     }
 
-    const result = await ghlService.searchContacts(locationId, {
+    const options = {
       query: query || '',
       limit: parseInt(limit) || 20
-    });
+    };
+    if (tag) options.tag = tag;
+
+    const result = await ghlService.searchContacts(locationId, options);
 
     res.json({
       success: true,

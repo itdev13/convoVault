@@ -157,9 +157,10 @@ async function fetchMessagesPage(locationId, accessToken, filters, cursor) {
 /**
  * Fetch a page of contacts for a location
  */
-async function fetchContactsPage(locationId, accessToken, startAfterId) {
+async function fetchContactsPage(locationId, accessToken, startAfterId, tag) {
   const params = { locationId, limit: 100 };
   if (startAfterId) params.startAfterId = startAfterId;
+  if (tag) params.tag = tag;
 
   const response = await axios.get(`${GHL_API_URL}/contacts/`, {
     headers: {
@@ -1316,17 +1317,18 @@ exports.handler = async (event, context) => {
         hasMoreData = false;
         cursor = null;
       } else {
-        // === NOTES: All contacts — per-contact iteration ===
+        // === NOTES: All contacts (or by tag) — per-contact iteration ===
+        const tagFilter = job.filters?.tags || null;
         let contactStartAfter = cursor;
         while (recordsFetched < BATCH_SIZE && hasMoreData) {
           if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) { break; }
           let contactsResult;
           try {
-            contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
+            contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter, tagFilter);
           } catch (fetchError) {
             if (fetchError.response?.status === 401) {
               await refreshAndUpdateToken();
-              contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter);
+              contactsResult = await fetchContactsPage(job.locationId, accessToken, contactStartAfter, tagFilter);
             } else { throw fetchError; }
           }
           const contacts = contactsResult.contacts;

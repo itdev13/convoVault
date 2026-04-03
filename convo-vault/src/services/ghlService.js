@@ -914,6 +914,9 @@ class GHLService {
       if (options.query) {
         params.query = options.query;
       }
+      if (options.tag) {
+        params.tag = options.tag;
+      }
 
       const response = await this.apiRequest(
         'GET',

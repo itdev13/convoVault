@@ -31,6 +31,11 @@ export default function NotesTab() {
   // Selected contacts chips
   const [selectedContacts, setSelectedContacts] = useState([]);
 
+  // Tag filter (mutually exclusive with contact selection)
+  const [tagFilter, setTagFilter] = useState('');
+  const [tagContacts, setTagContacts] = useState([]); // contacts found by tag (preview)
+  const [tagSearching, setTagSearching] = useState(false);
+
   // Notes results — flat list with contactName attached
   const [notes, setNotes] = useState([]);
   const [notesLoading, setNotesLoading] = useState(false);
@@ -89,6 +94,48 @@ export default function NotesTab() {
       } catch (err) { /* silent */ }
       finally { setContactsLoading(false); }
     }, 400);
+  };
+
+  // Tag search: find contacts by tag, fetch their notes for preview
+  const handleTagSearch = async () => {
+    const tag = tagFilter.trim();
+    if (!tag) return;
+    setTagSearching(true);
+    setNotesLoading(true);
+    setNotesLoaded(false);
+    setNotes([]);
+    setTagContacts([]);
+    try {
+      const res = await contactsAPI.searchByTag(location.id, tag, 10);
+      if (res.success) {
+        const contacts = res.data.contacts || [];
+        setTagContacts(contacts);
+        if (contacts.length > 0) {
+          const results = await Promise.all(
+            contacts.map(contact => {
+              const name = getContactName(contact);
+              return contactsAPI.fetchNotes(location.id, contact.id)
+                .then(res2 => (res2.success ? res2.data.notes || [] : []).map(n => ({ ...n, _contactName: name, _contactEmail: contact.email || contact.phone, _contactId: contact.id })))
+                .catch(() => []);
+            })
+          );
+          setNotes(results.flat());
+        }
+        setNotesLoaded(true);
+      }
+    } catch (err) {
+      antMessage.error('Failed to search contacts by tag');
+    } finally {
+      setTagSearching(false);
+      setNotesLoading(false);
+    }
+  };
+
+  const clearTagFilter = () => {
+    setTagFilter('');
+    setTagContacts([]);
+    setNotes([]);
+    setNotesLoaded(false);
   };
 
   const handleContactSelect = (contactId) => {
@@ -170,6 +217,10 @@ export default function NotesTab() {
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
   const getFilters = () => {
+    // Tag-based filter (mutually exclusive with contact selection)
+    if (tagFilter.trim() && selectedContacts.length === 0) {
+      return { tags: tagFilter.trim() };
+    }
     if (selectedContacts.length === 0) return {};
     const contactNames = Object.fromEntries(selectedContacts.map(c => [c.id, c.name]));
     if (selectedContacts.length === 1) return { contactId: selectedContacts[0].id, contactNames };
@@ -254,6 +305,7 @@ export default function NotesTab() {
 
   const isExporting = activeJob && ['pending', 'processing'].includes(activeJob.status);
   const hasSelected = selectedContacts.length > 0;
+  const isTagMode = tagFilter.trim().length > 0 && !hasSelected;
 
   // Dropdown: matching contacts first, then selected contacts not matching (so they're always visible)
   const dropdownContacts = (() => {
@@ -292,7 +344,9 @@ export default function NotesTab() {
           <p className="text-sm text-gray-500 mt-1">
             {hasSelected
               ? `${selectedContacts.length} contact${selectedContacts.length > 1 ? 's' : ''} selected`
-              : 'Export all contact notes from this sub-account'}
+              : isTagMode
+                ? `Filtering by tag: "${tagFilter.trim()}"`
+                : 'Export all contact notes from this sub-account'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -315,6 +369,7 @@ export default function NotesTab() {
           >
             {hasSelected
               ? selectedContacts.length === 1 ? 'Export Notes' : `Export ${selectedContacts.length} Contacts`
+              : isTagMode ? 'Export Notes by Tag'
               : 'Export All Notes'}
           </Button>
         </div>
@@ -349,6 +404,7 @@ export default function NotesTab() {
             <div className="relative" style={{ flex: 1 }}>
               <Select
                 showSearch
+                disabled={isTagMode}
                 open={dropdownOpen}
                 onDropdownVisibleChange={(open) => {
                   if (!open && keepOpenRef.current) return; // stay open after selection
@@ -466,6 +522,7 @@ export default function NotesTab() {
               <Input
                 placeholder="Paste contact ID and press Enter to add..."
                 size="large"
+                disabled={isTagMode}
                 onPressEnter={(e) => {
                   const id = e.target.value.trim();
                   if (!id) return;
@@ -479,11 +536,69 @@ export default function NotesTab() {
               />
             </div>
           </div>
+
+          {/* Divider */}
+          <div className="mt-4 mb-1 flex items-center gap-3">
+            <div className="flex-1 border-t border-gray-200" />
+            <span className="text-xs text-gray-400 font-medium">OR</span>
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+
+          {/* Tag filter */}
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Tag <span className="text-gray-400">(find contacts by tag — mutually exclusive with contact selection)</span>
+            </label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter tag to find contacts..."
+                size="large"
+                value={tagFilter}
+                disabled={hasSelected}
+                onChange={(e) => setTagFilter(e.target.value)}
+                onPressEnter={handleTagSearch}
+              />
+              <Button
+                onClick={handleTagSearch}
+                disabled={!tagFilter.trim() || hasSelected || tagSearching}
+                size="large"
+                loading={tagSearching}
+                icon={
+                  !tagSearching && (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  )
+                }
+              >
+                Search
+              </Button>
+              {tagFilter && (
+                <Button onClick={clearTagFilter} size="large">Clear</Button>
+              )}
+            </div>
+            {tagContacts.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2 items-center">
+                <span className="text-xs text-gray-500">Found {tagContacts.length} contacts:</span>
+                {tagContacts.map(c => (
+                  <span key={c.id} className="px-2 py-1 bg-green-50 border border-green-200 rounded-full text-xs text-green-700 font-medium">
+                    {getContactName(c)}
+                  </span>
+                ))}
+                <span className="text-xs text-gray-400 italic">(preview — export will include all matching contacts)</span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {!hasSelected && (
+        {!hasSelected && !isTagMode && (
           <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2 mt-3">
             <strong>Export All:</strong> No contact selected — will export notes for all contacts.
+          </p>
+        )}
+        {isTagMode && (
+          <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2 mt-3">
+            <strong>Export by Tag:</strong> Will find all contacts with tag "{tagFilter.trim()}" and export their notes.
           </p>
         )}
       </div>

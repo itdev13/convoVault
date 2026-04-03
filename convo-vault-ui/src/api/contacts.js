@@ -7,6 +7,12 @@ export const contactsAPI = {
     });
   },
 
+  searchByTag: async (locationId, tag, limit = 10) => {
+    return await apiClient.get('/billing/contacts/search', {
+      params: { locationId, tag, limit }
+    });
+  },
+
   fetchNotes: async (locationId, contactId) => {
     return await apiClient.get(`/billing/contacts/${contactId}/notes`, {
       params: { locationId }
