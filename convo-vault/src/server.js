@@ -204,7 +204,7 @@ class ConversationsManagerApp {
     try {
       await database.connect();
       
-      this.app.listen(this.port, () => {
+      const server = this.app.listen(this.port, () => {
         logger.info('='.repeat(50));
         logger.info('🚀 ConvoVault Started');
         logger.info('='.repeat(50));
@@ -213,6 +213,8 @@ class ConversationsManagerApp {
         logger.info(`🔗 URL: ${process.env.BASE_URL}`);
         logger.info('='.repeat(50));
       });
+      server.timeout = 600000; // 10 minute timeout
+      server.keepAliveTimeout = 620000; // slightly higher than timeout
 
     } catch (error) {
       logger.error('Failed to start server:', error);

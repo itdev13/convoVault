@@ -199,9 +199,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         return res.status(400).json({ success: false, error: 'No contacts found with this tag' });
       }
 
-      // Count notes in parallel batches of 10
+      // Count notes in parallel batches of 100
       let total = 0;
-      const BATCH_SIZE = 10;
+      const BATCH_SIZE = 100;
+      logger.info('Counting notes for contacts', { totalContacts: resolvedContactIds.length });
       for (let i = 0; i < resolvedContactIds.length; i += BATCH_SIZE) {
         const batch = resolvedContactIds.slice(i, i + BATCH_SIZE);
         const results = await Promise.allSettled(
@@ -212,8 +213,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             total += result.value.total;
           }
         }
+        logger.info('Notes count batch done', { batchIndex: Math.floor(i / BATCH_SIZE) + 1, batchSize: batch.length, runningTotal: total });
       }
       counts.notes = total;
+      logger.info('Notes count complete', { totalContacts: resolvedContactIds.length, totalNotes: total });
 
     } else if (exportType === 'tasks') {
       // Tasks: location-level search API — always upfront billing
