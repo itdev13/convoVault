@@ -162,22 +162,41 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       } else if (filters?.tags) {
         // Resolve all contacts matching the tag via pagination
         let startAfterId = null;
+        let startAfter = null;
         let hasMore = true;
-        while (hasMore) {
-          const result = await ghlService.searchContacts(locationId, { tag: filters.tags, limit: 100, startAfterId });
+        let page = 0;
+        const MAX_PAGES = 100; // Safety limit: 100 pages * 100 contacts = 10,000 max
+        while (hasMore && page < MAX_PAGES) {
+          page++;
+          logger.info('Fetching contacts by tag', { tag: filters.tags, page, startAfterId, startAfter });
+          const result = await ghlService.searchContacts(locationId, { tag: filters.tags, limit: 100, startAfterId, startAfter });
           const contacts = result.contacts || [];
+          logger.info('Tag contacts page result', { page, contactsReturned: contacts.length, metaTotal: result.meta?.total, metaStartAfterId: result.meta?.startAfterId });
           for (const c of contacts) {
             resolvedContactIds.push(c.id);
             if (!resolvedContactNames[c.id]) {
               resolvedContactNames[c.id] = c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown';
             }
           }
-          if (contacts.length < 100) { hasMore = false; } else { startAfterId = contacts[contacts.length - 1]?.startAfter[0]; }
+          if (contacts.length < 100) {
+            hasMore = false;
+          } else if (result.meta?.startAfterId) {
+            startAfterId = result.meta.startAfterId;
+            startAfter = result.meta.startAfter || null;
+          } else {
+            // No cursor in meta — stop to avoid infinite loop
+            logger.warn('No pagination cursor in meta, stopping', { page, totalResolved: resolvedContactIds.length });
+            hasMore = false;
+          }
         }
+        if (page >= MAX_PAGES) {
+          logger.warn('Hit max pages limit for tag contact resolution', { tag: filters.tags, totalResolved: resolvedContactIds.length });
+        }
+        logger.info('Tag contact resolution complete', { tag: filters.tags, totalContacts: resolvedContactIds.length, pages: page });
       }
 
       if (resolvedContactIds.length === 0) {
-        return res.status(400).json({ success: false, error: 'Please select contacts or enter a tag to export notes' });
+        return res.status(400).json({ success: false, error: 'No contacts found with this tag' });
       }
 
       // Count notes in parallel batches of 10
@@ -391,18 +410,33 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       } else if (filters?.tags) {
         // Resolve all contacts matching the tag via pagination
         let startAfterId = null;
+        let startAfter = null;
         let hasMore = true;
-        while (hasMore) {
-          const result = await ghlService.searchContacts(locationId, { tag: filters.tags, limit: 100, startAfterId });
+        let page = 0;
+        const MAX_PAGES = 100;
+        while (hasMore && page < MAX_PAGES) {
+          page++;
+          logger.info('Export: fetching contacts by tag', { tag: filters.tags, page, startAfterId, startAfter });
+          const result = await ghlService.searchContacts(locationId, { tag: filters.tags, limit: 100, startAfterId, startAfter });
           const contacts = result.contacts || [];
+          logger.info('Export: tag contacts page result', { page, contactsReturned: contacts.length, metaStartAfterId: result.meta?.startAfterId });
           for (const c of contacts) {
             resolvedContactIds.push(c.id);
             if (!resolvedContactNames[c.id]) {
               resolvedContactNames[c.id] = c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown';
             }
           }
-          if (contacts.length < 100) { hasMore = false; } else { startAfterId = contacts[contacts.length - 1].id; }
+          if (contacts.length < 100) {
+            hasMore = false;
+          } else if (result.meta?.startAfterId) {
+            startAfterId = result.meta.startAfterId;
+            startAfter = result.meta.startAfter || null;
+          } else {
+            logger.warn('Export: no pagination cursor in meta, stopping', { page, totalResolved: resolvedContactIds.length });
+            hasMore = false;
+          }
         }
+        logger.info('Export: tag contact resolution complete', { tag: filters.tags, totalContacts: resolvedContactIds.length, pages: page });
         // Override filters with resolved contactIds so the standard upfront path handles it
         filters.contactIds = resolvedContactIds;
         filters.contactNames = resolvedContactNames;

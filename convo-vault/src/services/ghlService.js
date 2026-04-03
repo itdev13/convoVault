@@ -911,6 +911,9 @@ class GHLService {
       if (options.startAfterId) {
         params.startAfterId = options.startAfterId;
       }
+      if (options.startAfter) {
+        params.startAfter = options.startAfter;
+      }
       if (options.query) {
         params.query = options.query;
       }
@@ -929,7 +932,7 @@ class GHLService {
       return {
         contacts: response.contacts || [],
         meta: response.meta || {},
-        total: response.meta?.total || response.contacts?.length || 0
+        total: response.total || response.meta?.total || response.contacts?.length || 0
       };
     } catch (error) {
       logger.error('Search contacts failed:', error.message);
