@@ -1277,8 +1277,18 @@ exports.handler = async (event, context) => {
         hasMoreData = false;
         cursor = null;
       } else if (job.filters?.contactIds?.length > 0) {
-        // === NOTES: Multiple specific contacts ===
-        for (const cId of job.filters.contactIds) {
+        // === NOTES: Multiple contacts — process 50 per Lambda invocation ===
+        const CONTACTS_PER_BATCH = 50;
+        const allContactIds = job.filters.contactIds;
+        const startIndex = cursor ? parseInt(cursor) : 0;
+        const endIndex = Math.min(startIndex + CONTACTS_PER_BATCH, allContactIds.length);
+        const batchContactIds = allContactIds.slice(startIndex, endIndex);
+
+        log('Notes multi-contact batch starting', { totalContactIds: allContactIds.length, startIndex, endIndex, batchSize: batchContactIds.length });
+
+        let processedCount = 0;
+        let skippedCount = 0;
+        for (const cId of batchContactIds) {
           if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) { hasMoreData = true; break; }
           let items;
           try {
@@ -1286,16 +1296,49 @@ exports.handler = async (event, context) => {
           } catch (fetchError) {
             if (fetchError.response?.status === 401) {
               await refreshAndUpdateToken();
-              items = await fetchNotesForContact(cId, accessToken);
-            } else { throw fetchError; }
+              try {
+                items = await fetchNotesForContact(cId, accessToken);
+              } catch (retryError) {
+                log('Failed to fetch notes after token refresh, skipping contact', { contactId: cId, error: retryError.message });
+                skippedCount++;
+                continue;
+              }
+            } else if (fetchError.response?.status === 429) {
+              // Rate limited — wait and retry up to 3 times
+              let retryItems = null;
+              for (let r = 0; r < 3; r++) {
+                await sleep(2000 * (r + 1));
+                try {
+                  retryItems = await fetchNotesForContact(cId, accessToken);
+                  break;
+                } catch (retryErr) {
+                  if (r === 2) log('Rate limit retry exhausted, skipping contact', { contactId: cId });
+                }
+              }
+              if (!retryItems) { skippedCount++; continue; }
+              items = retryItems;
+            } else {
+              log('Failed to fetch notes, skipping contact', { contactId: cId, status: fetchError.response?.status, error: fetchError.message });
+              skippedCount++;
+              continue;
+            }
           }
           const cName = (job.filters.contactNames || {})[cId] || '';
           items.forEach(item => { item.contactId = cId; item.contactName = cName; });
           records.push(...items);
+          processedCount++;
           await sleep(150);
         }
-        hasMoreData = false;
-        cursor = null;
+
+        // Check if more contacts remain
+        if (endIndex < allContactIds.length) {
+          hasMoreData = true;
+          cursor = String(endIndex);
+        } else {
+          hasMoreData = false;
+          cursor = null;
+        }
+        log('Notes multi-contact batch done', { totalContactIds: allContactIds.length, startIndex, endIndex, processed: processedCount, skipped: skippedCount, notesFound: records.length, hasMore: hasMoreData });
       } else {
         // No contactId or contactIds — should not happen (backend resolves tags to contactIds)
         log('Notes export with no contacts — skipping');
