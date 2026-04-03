@@ -405,64 +405,14 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       totalItems = result.total || result.conversations?.length || 0;
       counts.conversations = totalItems;
     } else if (exportType === 'notes') {
-      // Resolve contactIds: either direct selection or by tag — always upfront
-      let resolvedContactIds = [];
-      let resolvedContactNames = filters?.contactNames || {};
-
-      if (filters?.contactId) {
-        resolvedContactIds = [filters.contactId];
-      } else if (filters?.contactIds?.length > 0) {
-        resolvedContactIds = filters.contactIds;
-      } else if (filters?.tags) {
-        // Resolve all contacts matching the tag via pagination
-        let startAfterId = null;
-        let startAfter = null;
-        let hasMore = true;
-        let page = 0;
-        const MAX_PAGES = 100;
-        while (hasMore && page < MAX_PAGES) {
-          page++;
-          logger.info('Export: fetching contacts by tag', { tag: filters.tags, page, startAfterId, startAfter });
-          const result = await ghlService.searchContacts(locationId, { tag: filters.tags, limit: 100, startAfterId, startAfter });
-          const contacts = result.contacts || [];
-          logger.info('Export: tag contacts page result', { page, contactsReturned: contacts.length, metaStartAfterId: result.meta?.startAfterId });
-          for (const c of contacts) {
-            resolvedContactIds.push(c.id);
-            if (!resolvedContactNames[c.id]) {
-              resolvedContactNames[c.id] = c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown';
-            }
-          }
-          if (contacts.length < 100) {
-            hasMore = false;
-          } else if (result.meta?.startAfterId) {
-            startAfterId = result.meta.startAfterId;
-            startAfter = result.meta.startAfter || null;
-          } else {
-            logger.warn('Export: no pagination cursor in meta, stopping', { page, totalResolved: resolvedContactIds.length });
-            hasMore = false;
-          }
-        }
-        logger.info('Export: tag contact resolution complete', { tag: filters.tags, totalContacts: resolvedContactIds.length, pages: page });
-        // Override filters with resolved contactIds so the standard upfront path handles it
-        filters.contactIds = resolvedContactIds;
-        filters.contactNames = resolvedContactNames;
-      }
-
-      if (resolvedContactIds.length === 0) {
+      // Notes: contactIds already resolved during estimate, count passed from frontend
+      if (!filters?.contactId && !filters?.contactIds?.length) {
         return res.status(400).json({ success: false, error: 'Please select contacts or enter a tag to export notes' });
       }
-
-      // Count notes for all resolved contacts
-      let total = 0;
-      for (const cId of resolvedContactIds) {
-        try {
-          const result = await ghlService.getContactNotes(locationId, cId);
-          total += result.total;
-        } catch (err) {
-          logger.warn('Sample contact notes fetch failed:', { contactId: cId });
-        }
+      totalItems = filters?.estimatedNoteCount || 0;
+      if (totalItems === 0) {
+        return res.status(400).json({ success: false, error: 'No notes found for the selected contacts' });
       }
-      totalItems = total;
       counts.notes = totalItems;
 
     } else if (exportType === 'tasks') {

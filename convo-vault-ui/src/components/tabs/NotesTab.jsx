@@ -276,7 +276,12 @@ export default function NotesTab() {
     setProcessing(true);
     setEstimateError(null);
     try {
-      const res = await billingAPI.chargeAndExport(location.id, 'notes', format, getExportFilters(), notificationEmail);
+      const exportFilters = getExportFilters();
+      // Pass the note count from estimate so backend doesn't re-count
+      if (estimate?.itemCounts?.notes) {
+        exportFilters.estimatedNoteCount = estimate.itemCounts.notes;
+      }
+      const res = await billingAPI.chargeAndExport(location.id, 'notes', format, exportFilters, notificationEmail);
       if (res.success) {
         setActiveJob({
           jobId: res.data.jobId,
