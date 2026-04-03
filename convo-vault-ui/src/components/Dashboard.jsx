@@ -69,8 +69,8 @@ export default function Dashboard() {
               </svg>
             </div>
             <div>
-              <p className="text-white font-semibold text-sm">Join our Facebook Community</p>
-              <p className="text-blue-100 text-xs">Get immediate help, share feedback, and connect with other ExportKit users</p>
+              <p className="text-white font-semibold text-sm">ExportKit on Facebook</p>
+              <p className="text-blue-100 text-xs">Got questions or need help? Reach out to us directly on Facebook for quick support!</p>
             </div>
           </div>
           <a
