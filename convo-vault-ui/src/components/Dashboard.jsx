@@ -59,7 +59,33 @@ export default function Dashboard() {
       <div className="max-w-12xl mx-auto px-3 py-3">
         {/* Updates Banner */}
         {/* <UpdatesBanner /> */}
-        
+
+        {/* Facebook Community Banner */}
+        <div className="mb-4 bg-gradient-to-r from-[#1877F2] to-[#0C63D4] rounded-xl px-5 py-3 flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm">Join our Facebook Community</p>
+              <p className="text-blue-100 text-xs">Get immediate help, share feedback, and connect with other ExportKit users</p>
+            </div>
+          </div>
+          <a
+            href="https://www.facebook.com/groups/exportkit"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-white hover:bg-gray-50 text-[#1877F2] text-sm font-semibold px-5 py-2 rounded-lg transition-colors flex-shrink-0 shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+            </svg>
+            Join Now
+          </a>
+        </div>
+
         {/* Tab Navigation */}
         <div className="bg-white rounded-xl shadow-lg mb-6 overflow-x-auto">
           <div className="border-b border-gray-200">
@@ -134,26 +160,6 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Support Banner */}
-        <div className="mt-4 mb-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-500 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-            </svg>
-            <span className="text-sm text-blue-800">Need help or facing issues? Join our community for immediate assistance!</span>
-          </div>
-          <a
-            href="https://www.facebook.com/groups/exportkit"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-            </svg>
-            Join Here
-          </a>
-        </div>
       </div>
     </div>
   );
