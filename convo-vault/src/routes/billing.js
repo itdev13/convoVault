@@ -212,7 +212,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       // Count notes in parallel batches with retry (3 attempts max)
       let total = 0;
       let skipped = 0;
-      const BATCH_SIZE = 10;
+      const BATCH_SIZE = 5;
       const MAX_RETRIES = 3;
       let pendingContactIds = [...resolvedContactIds];
 
