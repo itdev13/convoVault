@@ -44,31 +44,14 @@ export default function NotesTab() {
   const getContactName = (c) =>
     c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || 'Unknown';
 
-  // Load 100 contacts on mount, auto-select first
+  // Load 100 contacts on mount (no auto-select)
   useEffect(() => {
     if (!location?.id) return;
     setContactsLoading(true);
     contactsAPI.search(location.id, '', 100)
       .then(res => {
         if (res.success) {
-          const list = res.data.contacts || [];
-          setAllContacts(list);
-          if (list.length > 0) {
-            const first = list[0];
-            const firstContact = { id: first.id, name: getContactName(first), email: first.email || '', phone: first.phone || '' };
-            setSelectedContacts([firstContact]);
-            // Auto-fetch notes for first contact
-            setNotesLoading(true);
-            contactsAPI.fetchNotes(location.id, first.id)
-              .then(res2 => {
-                if (res2.success) {
-                  setNotes((res2.data.notes || []).map(n => ({ ...n, _contactName: firstContact.name, _contactEmail: firstContact.email || firstContact.phone, _contactId: first.id })));
-                  setNotesLoaded(true);
-                }
-              })
-              .catch(console.error)
-              .finally(() => setNotesLoading(false));
-          }
+          setAllContacts(res.data.contacts || []);
         }
       })
       .catch(console.error)
@@ -397,6 +380,60 @@ export default function NotesTab() {
         </div>
 
         <div>
+          {/* Tag filter — shown first */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Tag <span className="text-gray-400">(find contacts by tag)</span>
+            </label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter tag to find contacts..."
+                size="large"
+                value={tagFilter}
+                disabled={hasSelected}
+                onChange={(e) => setTagFilter(e.target.value)}
+                onPressEnter={handleTagSearch}
+              />
+              <Button
+                onClick={handleTagSearch}
+                disabled={!tagFilter.trim() || hasSelected || tagSearching}
+                size="large"
+                loading={tagSearching}
+                icon={
+                  !tagSearching && (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  )
+                }
+              >
+                Search
+              </Button>
+              {tagFilter && (
+                <Button onClick={clearTagFilter} size="large">Clear</Button>
+              )}
+            </div>
+            {tagContacts.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2 items-center">
+                <span className="text-xs text-gray-500">Found {tagContacts.length} contacts:</span>
+                {tagContacts.map(c => (
+                  <span key={c.id} className="px-2 py-1 bg-green-50 border border-green-200 rounded-full text-xs text-green-700 font-medium">
+                    {getContactName(c)}
+                  </span>
+                ))}
+                <span className="text-xs text-gray-400 italic">(preview — export will include all matching contacts)</span>
+              </div>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="mt-4 mb-4 flex items-center gap-3">
+            <div className="flex-1 border-t border-gray-200" />
+            <span className="text-xs text-gray-400 font-medium">OR</span>
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+
+          {/* Contact search */}
           <label className="block text-xs font-medium text-gray-600 mb-1">
             Contact <span className="text-gray-400">(optional — leave blank to export all)</span>
           </label>
@@ -407,7 +444,7 @@ export default function NotesTab() {
                 disabled={isTagMode}
                 open={dropdownOpen}
                 onDropdownVisibleChange={(open) => {
-                  if (!open && keepOpenRef.current) return; // stay open after selection
+                  if (!open && keepOpenRef.current) return;
                   setDropdownOpen(open);
                   if (!open && selectedContacts.length > 0) handleSearch();
                 }}
@@ -536,59 +573,6 @@ export default function NotesTab() {
               />
             </div>
           </div>
-
-          {/* Divider */}
-          <div className="mt-4 mb-1 flex items-center gap-3">
-            <div className="flex-1 border-t border-gray-200" />
-            <span className="text-xs text-gray-400 font-medium">OR</span>
-            <div className="flex-1 border-t border-gray-200" />
-          </div>
-
-          {/* Tag filter */}
-          <div className="mt-3">
-            <label className="block text-xs font-medium text-gray-600 mb-1">
-              Tag <span className="text-gray-400">(find contacts by tag — mutually exclusive with contact selection)</span>
-            </label>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter tag to find contacts..."
-                size="large"
-                value={tagFilter}
-                disabled={hasSelected}
-                onChange={(e) => setTagFilter(e.target.value)}
-                onPressEnter={handleTagSearch}
-              />
-              <Button
-                onClick={handleTagSearch}
-                disabled={!tagFilter.trim() || hasSelected || tagSearching}
-                size="large"
-                loading={tagSearching}
-                icon={
-                  !tagSearching && (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  )
-                }
-              >
-                Search
-              </Button>
-              {tagFilter && (
-                <Button onClick={clearTagFilter} size="large">Clear</Button>
-              )}
-            </div>
-            {tagContacts.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2 items-center">
-                <span className="text-xs text-gray-500">Found {tagContacts.length} contacts:</span>
-                {tagContacts.map(c => (
-                  <span key={c.id} className="px-2 py-1 bg-green-50 border border-green-200 rounded-full text-xs text-green-700 font-medium">
-                    {getContactName(c)}
-                  </span>
-                ))}
-                <span className="text-xs text-gray-400 italic">(preview — export will include all matching contacts)</span>
-              </div>
-            )}
-          </div>
         </div>
 
         {!hasSelected && !isTagMode && (
@@ -608,7 +592,9 @@ export default function NotesTab() {
         <div className="bg-white border border-gray-200 rounded-xl p-12 flex items-center justify-center gap-3">
           <Spin />
           <span className="text-gray-400 text-sm">
-            Loading notes for {selectedContacts.length} contact{selectedContacts.length > 1 ? 's' : ''}...
+            {isTagMode
+              ? `Loading notes for contacts with tag "${tagFilter.trim()}"...`
+              : `Loading notes for ${selectedContacts.length} contact${selectedContacts.length > 1 ? 's' : ''}...`}
           </span>
         </div>
       ) : notesLoaded && (
