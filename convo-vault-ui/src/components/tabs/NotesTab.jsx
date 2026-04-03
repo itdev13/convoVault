@@ -235,8 +235,8 @@ export default function NotesTab() {
     setPostExportBilling(false);
     setResolvedFromEstimate(null);
     try {
-      if (notesLoaded && notes.length > 0) {
-        // Exact count already known from loaded notes — calculate cost locally
+      if (hasSelected && notesLoaded && notes.length > 0) {
+        // Contact mode with loaded notes — exact count known, calculate locally
         const count = notes.length;
         const unitPrice = UNIT_PRICES.notesAndTasks;
         const finalAmount = count * unitPrice;
@@ -250,7 +250,7 @@ export default function NotesTab() {
           finalAmountDollars: finalAmount
         });
       } else {
-        // Call API to resolve contacts (by tag or IDs) and count notes
+        // Tag mode or contacts without loaded notes — call API to resolve ALL contacts and count notes
         const res = await billingAPI.getEstimate(location.id, 'notes', getFilters());
         if (res.success) {
           setEstimate(res.data.estimate);
@@ -438,15 +438,9 @@ export default function NotesTab() {
               )}
             </div>
             {tagContacts.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2 items-center">
-                <span className="text-xs text-gray-500">Found {tagContacts.length} contacts:</span>
-                {tagContacts.map(c => (
-                  <span key={c.id} className="px-2 py-1 bg-green-50 border border-green-200 rounded-full text-xs text-green-700 font-medium">
-                    {getContactName(c)}
-                  </span>
-                ))}
-                <span className="text-xs text-gray-400 italic">(preview — export will include all matching contacts)</span>
-              </div>
+              <p className="mt-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+                Showing notes from top {tagContacts.length} contacts with this tag. On export, we'll find <strong>all</strong> contacts matching this tag and calculate the exact pricing.
+              </p>
             )}
           </div>
 
