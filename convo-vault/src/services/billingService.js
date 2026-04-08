@@ -43,6 +43,15 @@ const DEFAULT_UNIT_PRICES = {
   templates: 0.015         // 0.015 cents per template (with volume discounts)
 };
 
+// Special location pricing (enriched exports)
+const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I'];
+const SPECIAL_UNIT_PRICES = {
+  ...DEFAULT_UNIT_PRICES,
+  conversations: 0.025,
+  smsWhatsapp: 0.025,
+  email: 0.075
+};
+
 // Cached prices from GHL API
 let cachedPrices = null;
 let cacheExpiry = null;
@@ -283,7 +292,11 @@ class BillingService {
    * @returns {Object} Pricing estimate with actual GHL prices
    */
   async calculateEstimateWithPrices(counts, accessToken, locationId) {
-    const prices = await this.fetchMeterPrices(accessToken, locationId);
+    let prices = await this.fetchMeterPrices(accessToken, locationId);
+    // Override with special pricing for special locations
+    if (SPECIAL_LOCATION_IDS.includes(locationId)) {
+      prices = { ...prices, ...SPECIAL_UNIT_PRICES };
+    }
     return this.calculateEstimate(counts, prices);
   }
 
@@ -545,14 +558,21 @@ class BillingService {
   /**
    * Get unit prices (returns cached prices if available, otherwise defaults)
    */
-  getUnitPrices() {
-    return cachedPrices ? { ...cachedPrices } : { ...DEFAULT_UNIT_PRICES };
+  getUnitPrices(locationId) {
+    const base = cachedPrices ? { ...cachedPrices } : { ...DEFAULT_UNIT_PRICES };
+    if (locationId && SPECIAL_LOCATION_IDS.includes(locationId)) {
+      return { ...base, ...SPECIAL_UNIT_PRICES };
+    }
+    return base;
   }
 
   /**
    * Get default unit prices (always returns the configured defaults, ignoring cache)
    */
-  getDefaultUnitPrices() {
+  getDefaultUnitPrices(locationId) {
+    if (locationId && SPECIAL_LOCATION_IDS.includes(locationId)) {
+      return { ...SPECIAL_UNIT_PRICES };
+    }
     return { ...DEFAULT_UNIT_PRICES };
   }
 }

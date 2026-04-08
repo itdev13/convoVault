@@ -158,6 +158,22 @@ async function fetchMessagesPage(locationId, accessToken, filters, cursor) {
 
 
 /**
+ * Fetch a single contact by ID (fallback for enriched exports)
+ */
+async function fetchContact(contactId, accessToken) {
+  const response = await axios.get(`${GHL_API_URL}/contacts/${contactId}`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    }
+  });
+  const c = response.data?.contact || response.data || {};
+  return parseContactInfo(c);
+}
+
+
+/**
  * Fetch all notes for a specific contact
  */
 async function fetchNotesForContact(contactId, accessToken) {
@@ -595,6 +611,53 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
         escapeCsv(igPage)
       ].join(',');
     }
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert messages to enriched CSV format (special location — includes contact details)
+ */
+function messagesToCSV_enriched(messages, includeHeader = true) {
+  let header = '';
+  if (includeHeader) {
+    header = 'Date,LocalTimeOfDelivery,ConversationID,ContactID,ContactFirstName,ContactLastName,ContactPhone,ContactState,ContactTimezone,ContactType,AttributionSource,MessageType,Direction,Status,From,To,Message,Attachments,Source\n';
+  }
+
+  const rows = messages.map(msg => {
+    const direction = msg.direction || 'outbound';
+    const contact = msg._contactInfo || {};
+
+    // Compute local time from timezone
+    let localTime = '';
+    if (msg.dateAdded && contact.timezone) {
+      try {
+        localTime = new Date(msg.dateAdded).toLocaleString('en-US', { timeZone: contact.timezone });
+      } catch { localTime = ''; }
+    }
+
+    return [
+      escapeCsv(formatDate(msg.dateAdded)),
+      escapeCsv(localTime),
+      escapeCsv(msg.conversationId),
+      escapeCsv(msg.contactId),
+      escapeCsv(contact.firstName),
+      escapeCsv(contact.lastName),
+      escapeCsv(contact.phone),
+      escapeCsv(contact.state),
+      escapeCsv(contact.timezone),
+      escapeCsv(contact.type),
+      escapeCsv(contact.attributionSource),
+      escapeCsv(msg.messageType || msg.type),
+      escapeCsv(direction),
+      escapeCsv(msg.status),
+      escapeCsv(msg.meta?.email?.from || msg.from || ''),
+      escapeCsv(msg.meta?.email?.to?.join('; ') || msg.to || msg.phone || ''),
+      escapeCsv(msg.body || msg.message || ''),
+      escapeCsv((msg.attachments || []).map(a => a.url || a).join('; ')),
+      escapeCsv(msg.source || '')
+    ].join(',');
   }).join('\n');
 
   return header + rows + (rows.length > 0 ? '\n' : '');
@@ -1708,6 +1771,53 @@ exports.handler = async (event, context) => {
 
     log('Batch complete', { processedItems: job.processedItems,  batchRecords: records.length, cursor: cursor, hasMore: hasMoreData || !!cursor });
 
+    // Special location: enrich messages with contact info (lazy cache using GET /contacts/:id)
+    if (job.specialLocation && records.length > 0 && !['notes', 'tasks', 'conversations', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'].includes(job.exportType)) {
+      const contactCache = job.contactCache || {};
+      let cacheHits = 0;
+      let cacheMisses = 0;
+
+      // Only fetch contacts we haven't seen before
+      const uniqueContactIds = [...new Set(records.map(r => r.contactId).filter(Boolean))];
+      const toFetch = uniqueContactIds.filter(id => !contactCache[id]);
+
+      if (toFetch.length > 0) {
+        log('Fetching contacts for enrichment', { toFetch: toFetch.length, alreadyCached: uniqueContactIds.length - toFetch.length });
+        // Fetch one by one with rate limit safety
+        for (const cId of toFetch) {
+          try {
+            contactCache[cId] = await fetchContact(cId, accessToken);
+          } catch (err) {
+            if (err.response?.status === 401) {
+              await refreshAndUpdateToken();
+              try { contactCache[cId] = await fetchContact(cId, accessToken); } catch (e) { /* skip */ }
+            } else if (err.response?.status === 429) {
+              await sleep(2000);
+              try { contactCache[cId] = await fetchContact(cId, accessToken); } catch (e) { /* skip */ }
+            } else {
+              log('Contact fetch failed, skipping', { contactId: cId, error: err.message });
+            }
+          }
+          await sleep(100); // Rate limit: ~10 req/sec
+        }
+        log('Contact fetch done', { fetched: toFetch.length, cacheSize: Object.keys(contactCache).length });
+      }
+
+      // Enrich each message record
+      for (const record of records) {
+        if (record.contactId && contactCache[record.contactId]) {
+          record._contactInfo = contactCache[record.contactId];
+          cacheHits++;
+        } else {
+          record._contactInfo = {};
+          cacheMisses++;
+        }
+      }
+
+      log('Contact enrichment done', { cacheHits, cacheMisses, totalCacheSize: Object.keys(contactCache).length });
+      await updateJob(db, exportJobId, { contactCache });
+    }
+
     // Convert to format and upload
     const hasPendingBuffer = !!(job.s3Upload?.pendingBuffer);
     const isFirstContent = parts.length === 0 && !hasPendingBuffer;
@@ -1740,6 +1850,8 @@ exports.handler = async (event, context) => {
         content = callLogsToCSV(records, isFirstContent);
       } else if (job.exportType === 'templates') {
         content = templatesToCSV(records, isFirstContent);
+      } else if (job.specialLocation) {
+        content = messagesToCSV_enriched(records, isFirstContent);
       } else {
         content = messagesToCSV(records, isFirstContent, job.filters?.channel || '');
       }

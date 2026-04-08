@@ -91,6 +91,18 @@ const exportJobSchema = new mongoose.Schema({
     tags: { type: String, default: null }
   },
 
+  // Special location flag (enriched export with contact details)
+  specialLocation: {
+    type: Boolean,
+    default: false
+  },
+
+  // Cached contact data for special location exports (persists across Lambda invocations)
+  contactCache: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
+
   // Progress tracking
   totalItems: {
     type: Number,

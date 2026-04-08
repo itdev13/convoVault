@@ -63,8 +63,10 @@ export const billingAPI = {
   /**
    * Get pricing information
    */
-  getPricing: async () => {
-    const response = await apiClient.get('/billing/pricing');
+  getPricing: async (locationId) => {
+    const response = await apiClient.get('/billing/pricing', {
+      params: locationId ? { locationId } : {}
+    });
     return response;
   },
 

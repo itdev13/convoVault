@@ -28,11 +28,15 @@ const LAMBDA_FUNCTION_NAME = process.env.EXPORT_LAMBDA_FUNCTION_NAME || 'convo-v
 
 // Maximum date range for exports (6 months in milliseconds)
 const MAX_DATE_RANGE_MS = 6 * 31 * 24 * 60 * 60 * 1000;
+const MAX_DATE_RANGE_MS_SPECIAL = 5 * 365 * 24 * 60 * 60 * 1000; // 5 years
+
+// Special locations with extended features (compliance exports etc.)
+const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I'];
 
 /**
  * Validate date range doesn't exceed 6 months
  */
-function validateDateRange(startDate, endDate) {
+function validateDateRange(startDate, endDate, locationId) {
   if (!startDate || !endDate) return { valid: true };
 
   const start = new Date(startDate);
@@ -42,8 +46,11 @@ function validateDateRange(startDate, endDate) {
     return { valid: false, error: 'Invalid date format' };
   }
 
-  if (end - start > MAX_DATE_RANGE_MS) {
-    return { valid: false, error: 'Date range cannot exceed 6 months' };
+  const isSpecial = SPECIAL_LOCATION_IDS.includes(locationId);
+  const maxRange = isSpecial ? MAX_DATE_RANGE_MS_SPECIAL : MAX_DATE_RANGE_MS;
+
+  if (end - start > maxRange) {
+    return { valid: false, error: isSpecial ? 'Date range cannot exceed 5 years' : 'Date range cannot exceed 6 months' };
   }
 
   if (end < start) {
@@ -81,7 +88,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
     // Validate date range (not applicable for notes/links/templates)
     if (!['notes', 'links', 'templates'].includes(exportType)) {
-      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
+      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, locationId);
       if (!dateValidation.valid) {
         return res.status(400).json({
           success: false,
@@ -398,7 +405,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     // Validate date range (not applicable for notes/links/templates)
     if (!['notes', 'links', 'templates'].includes(exportType)) {
-      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate);
+      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, locationId);
       if (!dateValidation.valid) {
         return res.status(400).json({
           success: false,
@@ -670,6 +677,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       tags: filters?.tags || null,
     };
 
+    const isSpecialLocation = SPECIAL_LOCATION_IDS.includes(locationId);
+
     const exportJob = await ExportJob.create({
       locationId,
       companyId,
@@ -680,7 +689,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       totalItems,
       status: 'pending',
       notificationEmail: notificationEmail || null,
-      userId
+      userId,
+      ...(isSpecialLocation && { specialLocation: true })
     });
 
     console.log("jobfilters: ", jobFilters)
@@ -891,12 +901,16 @@ router.get('/export-history', authenticateSession, async (req, res) => {
  * @desc Get current pricing information
  */
 router.get('/pricing', async (req, res) => {
+  const locationId = req.query?.locationId;
+  const isSpecialLocation = SPECIAL_LOCATION_IDS.includes(locationId);
   res.json({
     success: true,
     data: {
       unitPrices: billingService.getUnitPrices(),
       discountTiers: billingService.getDiscountTiers(),
-      maxDateRange: '1 month'
+      maxDateRange: '1 month',
+      isSpecialLocation,
+      maxDateRangeMonths: isSpecialLocation ? 60 : 6
     }
   });
 });
