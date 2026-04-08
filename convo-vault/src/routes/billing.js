@@ -31,7 +31,7 @@ const MAX_DATE_RANGE_MS = 6 * 31 * 24 * 60 * 60 * 1000;
 const MAX_DATE_RANGE_MS_SPECIAL = 5 * 365 * 24 * 60 * 60 * 1000; // 5 years
 
 // Special locations with extended features (compliance exports etc.)
-const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I'];
+const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I', "WHspQgeC5SqFU8i55G7L"];
 
 /**
  * Validate date range doesn't exceed 6 months
@@ -330,14 +330,14 @@ router.post('/estimate', authenticateSession, async (req, res) => {
     estimate = {
       ...estimate,
       discountTiers: billingService.getDiscountTiers(),
-      unitPrices: billingService.getUnitPrices()
+      unitPrices: billingService.getUnitPrices(locationId)
     }
     const responseData = {
       estimate,
       filters,
       exportType,
       discountTiers: billingService.getDiscountTiers(),
-      unitPrices: billingService.getUnitPrices()
+      unitPrices: billingService.getUnitPrices(locationId)
     };
 
     // For notes with tags: return resolved contactIds so frontend can reuse them for export
@@ -906,7 +906,7 @@ router.get('/pricing', async (req, res) => {
   res.json({
     success: true,
     data: {
-      unitPrices: billingService.getUnitPrices(),
+      unitPrices: billingService.getUnitPrices(locationId),
       discountTiers: billingService.getDiscountTiers(),
       maxDateRange: '1 month',
       isSpecialLocation,

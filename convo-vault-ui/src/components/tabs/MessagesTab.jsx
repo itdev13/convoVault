@@ -311,6 +311,7 @@ export default function MessagesTab() {
         error={estimateError}
         exportType="messages"
         usingDefaultDates={usingDefaultDates}
+        isSpecialLocation={isSpecialLocation}
       />
 
       {/* Header with Stats */}

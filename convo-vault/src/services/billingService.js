@@ -44,7 +44,7 @@ const DEFAULT_UNIT_PRICES = {
 };
 
 // Special location pricing (enriched exports)
-const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I'];
+const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I', "WHspQgeC5SqFU8i55G7L"];
 const SPECIAL_UNIT_PRICES = {
   ...DEFAULT_UNIT_PRICES,
   conversations: 0.025,
