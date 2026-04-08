@@ -1819,8 +1819,19 @@ exports.handler = async (event, context) => {
         let fetchSuccess = 0;
         let fetchFailed = 0;
         const PARALLEL_LIMIT = 5;
+        let contactTimeoutHit = false;
 
         for (let i = 0; i < toFetch.length; i += PARALLEL_LIMIT) {
+          // Check timeout before each parallel batch
+          const remaining = context.getRemainingTimeInMillis();
+          if (remaining < TIMEOUT_BUFFER_MS) {
+            log('Approaching timeout during contact fetch, saving cache and will continue next invocation', {
+              remainingMs: remaining, fetched: fetchSuccess, remaining: toFetch.length - i
+            });
+            contactTimeoutHit = true;
+            break;
+          }
+
           const batch = toFetch.slice(i, i + PARALLEL_LIMIT);
 
           const results = await Promise.allSettled(batch.map(async (cId) => {
@@ -1859,6 +1870,31 @@ exports.handler = async (event, context) => {
           }
         }
         log('Contact fetch done', { fetchSuccess, fetchFailed, cacheSize: Object.keys(contactCache).length });
+
+        // Save contactCache to job immediately — survives timeout or failures in later steps
+        await updateJob(db, exportJobId, { contactCache });
+        log('ContactCache saved to job', { cacheSize: Object.keys(contactCache).length });
+
+        // If we hit timeout during contact fetch, save progress and re-invoke
+        // Don't process records this round — next invocation will re-fetch same messages
+        // but contacts will be cached so enrichment will be fast
+        if (contactTimeoutHit) {
+          log('Re-invoking Lambda to continue after contact fetch timeout');
+          await lambda.send(new InvokeCommand({
+            FunctionName: context.functionName,
+            InvocationType: 'Event',
+            Qualifier: '$LATEST',
+            Payload: JSON.stringify({ exportJobId })
+          }));
+          return {
+            statusCode: 200,
+            body: JSON.stringify({
+              success: true,
+              message: 'Contact fetch timeout, re-invoking to continue',
+              contactsCached: Object.keys(contactCache).length
+            })
+          };
+        }
       }
 
       // Enrich each message record
