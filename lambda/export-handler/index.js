@@ -169,7 +169,17 @@ async function fetchContact(contactId, accessToken) {
     }
   });
   const c = response.data?.contact || response.data || {};
-  return parseContactInfo(c);
+  return {
+    firstName: c.firstName || '',
+    lastName: c.lastName || '',
+    phone: c.phone || '',
+    state: c.state || '',
+    country: c.country || '',
+    timezone: c.timezone || '',
+    type: c.type || c.contactType || '',
+    source: c.source || '',
+    attributionSource: c.attributionSource?.medium || ''
+  };
 }
 
 
@@ -537,10 +547,10 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
   if (includeHeader) {
     if (isEmailExport) {
       // Email-specific columns with Subject, CC, BCC
-      header = 'Date,ConversationID,ContactID,MessageType,Direction,Status,From,To,Subject,CC,BCC,Message,Attachments,Source\n';
+      header = 'Date,ConversationID,ContactID,ConversationProviderId,MessageType,Direction,Status,From,To,Subject,CC,BCC,Message,Attachments,Source\n';
     } else {
       // Default for SMS, WhatsApp, Facebook, Instagram, Call, etc. - includes meta fields
-      header = 'Date,ConversationID,ContactID,MessageType,Direction,Status,From,To,Message,Attachments,Source,CallDuration,CallStatus,FacebookPage,InstagramPage\n';
+      header = 'Date,ConversationID,ContactID,ConversationProviderId,MessageType,Direction,Status,From,To,Message,Attachments,Source,CallDuration,CallStatus,FacebookPage,InstagramPage\n';
     }
   }
 
@@ -579,6 +589,7 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
         escapeCsv(formatDate(msg.dateAdded)),
         escapeCsv(msg.conversationId),
         escapeCsv(msg.contactId),
+        escapeCsv(msg.conversationProviderId || ''),
         escapeCsv(msg.messageType || msg.type),
         escapeCsv(direction),
         escapeCsv(msg.status),
@@ -597,6 +608,7 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
         escapeCsv(formatDate(msg.dateAdded)),
         escapeCsv(msg.conversationId),
         escapeCsv(msg.contactId),
+        escapeCsv(msg.conversationProviderId || ''),
         escapeCsv(msg.messageType || msg.type),
         escapeCsv(direction),
         escapeCsv(msg.status),
@@ -622,7 +634,7 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
 function messagesToCSV_enriched(messages, includeHeader = true) {
   let header = '';
   if (includeHeader) {
-    header = 'Date,LocalTimeOfDelivery,ConversationID,ContactID,ContactFirstName,ContactLastName,ContactPhone,ContactState,ContactTimezone,ContactType,AttributionSource,MessageType,Direction,Status,From,To,Message,Attachments,Source\n';
+    header = 'Date,LocalTimeOfDelivery,ConversationID,ContactID,ConversationProviderId,ContactFirstName,ContactLastName,ContactPhone,ContactState,ContactCountry,ContactTimezone,ContactType,ContactSource,AttributionSource,MessageType,Direction,Status,From,To,Message,Attachments,Source\n';
   }
 
   const rows = messages.map(msg => {
@@ -642,12 +654,15 @@ function messagesToCSV_enriched(messages, includeHeader = true) {
       escapeCsv(localTime),
       escapeCsv(msg.conversationId),
       escapeCsv(msg.contactId),
+      escapeCsv(msg.conversationProviderId || ''),
       escapeCsv(contact.firstName),
       escapeCsv(contact.lastName),
       escapeCsv(contact.phone),
       escapeCsv(contact.state),
+      escapeCsv(contact.country),
       escapeCsv(contact.timezone),
       escapeCsv(contact.type),
+      escapeCsv(contact.source),
       escapeCsv(contact.attributionSource),
       escapeCsv(msg.messageType || msg.type),
       escapeCsv(direction),
@@ -1783,24 +1798,42 @@ exports.handler = async (event, context) => {
 
       if (toFetch.length > 0) {
         log('Fetching contacts for enrichment', { toFetch: toFetch.length, alreadyCached: uniqueContactIds.length - toFetch.length });
-        // Fetch one by one with rate limit safety
+        let fetchSuccess = 0;
+        let fetchFailed = 0;
         for (const cId of toFetch) {
           try {
-            contactCache[cId] = await fetchContact(cId, accessToken);
+            const contactInfo = await fetchContact(cId, accessToken);
+            contactCache[cId] = contactInfo;
+            fetchSuccess++;
+            if (fetchSuccess === 1) log('First contact fetched successfully', { contactId: cId, info: contactInfo });
           } catch (err) {
+            fetchFailed++;
+            log('Contact fetch error', { contactId: cId, status: err.response?.status, error: err.message });
             if (err.response?.status === 401) {
               await refreshAndUpdateToken();
-              try { contactCache[cId] = await fetchContact(cId, accessToken); } catch (e) { /* skip */ }
+              try {
+                const contactInfo = await fetchContact(cId, accessToken);
+                contactCache[cId] = contactInfo;
+                fetchSuccess++;
+                fetchFailed--;
+              } catch (e) {
+                log('Contact fetch retry failed after 401', { contactId: cId, error: e.message });
+              }
             } else if (err.response?.status === 429) {
               await sleep(2000);
-              try { contactCache[cId] = await fetchContact(cId, accessToken); } catch (e) { /* skip */ }
-            } else {
-              log('Contact fetch failed, skipping', { contactId: cId, error: err.message });
+              try {
+                const contactInfo = await fetchContact(cId, accessToken);
+                contactCache[cId] = contactInfo;
+                fetchSuccess++;
+                fetchFailed--;
+              } catch (e) {
+                log('Contact fetch retry failed after 429', { contactId: cId, error: e.message });
+              }
             }
           }
-          await sleep(100); // Rate limit: ~10 req/sec
+          await sleep(100);
         }
-        log('Contact fetch done', { fetched: toFetch.length, cacheSize: Object.keys(contactCache).length });
+        log('Contact fetch done', { fetchSuccess, fetchFailed, cacheSize: Object.keys(contactCache).length });
       }
 
       // Enrich each message record
