@@ -255,8 +255,7 @@ export default function MessagesTab() {
           ? dayjs(filters.endDate).endOf('day').valueOf()
           : defaultEndDate.valueOf(),
         contactId: filters.contactId || undefined,
-        conversationId: filters.conversationId || undefined,
-        estimatedTotal: estimate?.itemCounts?.total || undefined
+        conversationId: filters.conversationId || undefined
       };
 
       const response = await billingAPI.chargeAndExport(
