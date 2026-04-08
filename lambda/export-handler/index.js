@@ -20,7 +20,8 @@ const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
 const GHL_APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
 const NOTES_TASKS_METER_ID = '69864aed1265653fdd7c0620';
 const NOTES_TASKS_UNIT_PRICE = 0.015;
-const INTERNAL_TESTING_COMPANY_IDS = ['PG9VJ27QFRumQrOGB2Ee', '7IlT9P1bafOCnq2JV00t', 
+const INTERNAL_TESTING_COMPANY_IDS = ['PG9VJ27QFRumQrOGB2Ee', '7IlT9P1bafOCnq2JV00t',
+  "7eCKyMQq7PfdMP5X6gSe" 
 ];
 
 // Brevo Email configuration
@@ -30,7 +31,7 @@ const EMAIL_FROM_NAME = 'VaultSuite';
 const EMAIL_FROM_ADDRESS = 'support@vaultsuite.store';
 
 // Batch processing configuration
-const BATCH_SIZE = 10000;           // Records per Lambda invocation
+const BATCH_SIZE = 5000;            // Records per Lambda invocation
 const API_PAGE_SIZE = 100;          // Records per GHL API call
 const API_MESSAGES_PAGE_SIZE = 500;
 const API_CALL_LOGS_PAGE_SIZE = 50; // Max pageSize for Voice AI call logs API
@@ -1817,38 +1818,45 @@ exports.handler = async (event, context) => {
         log('Fetching contacts for enrichment', { toFetch: toFetch.length, alreadyCached: uniqueContactIds.length - toFetch.length });
         let fetchSuccess = 0;
         let fetchFailed = 0;
-        for (const cId of toFetch) {
-          try {
-            const contactInfo = await fetchContact(cId, accessToken);
-            contactCache[cId] = contactInfo;
-            fetchSuccess++;
-            if (fetchSuccess === 1) log('First contact fetched successfully', { contactId: cId, info: contactInfo });
-          } catch (err) {
-            fetchFailed++;
-            log('Contact fetch error', { contactId: cId, status: err.response?.status, error: err.message });
-            if (err.response?.status === 401) {
-              await refreshAndUpdateToken();
-              try {
+        const PARALLEL_LIMIT = 5;
+
+        for (let i = 0; i < toFetch.length; i += PARALLEL_LIMIT) {
+          const batch = toFetch.slice(i, i + PARALLEL_LIMIT);
+
+          const results = await Promise.allSettled(batch.map(async (cId) => {
+            try {
+              const contactInfo = await fetchContact(cId, accessToken);
+              return { cId, contactInfo };
+            } catch (err) {
+              if (err.response?.status === 401) {
+                await refreshAndUpdateToken();
                 const contactInfo = await fetchContact(cId, accessToken);
-                contactCache[cId] = contactInfo;
-                fetchSuccess++;
-                fetchFailed--;
-              } catch (e) {
-                log('Contact fetch retry failed after 401', { contactId: cId, error: e.message });
-              }
-            } else if (err.response?.status === 429) {
-              await sleep(2000);
-              try {
+                return { cId, contactInfo };
+              } else if (err.response?.status === 429) {
+                await sleep(2000);
                 const contactInfo = await fetchContact(cId, accessToken);
-                contactCache[cId] = contactInfo;
-                fetchSuccess++;
-                fetchFailed--;
-              } catch (e) {
-                log('Contact fetch retry failed after 429', { contactId: cId, error: e.message });
+                return { cId, contactInfo };
               }
+              throw { cId, err };
+            }
+          }));
+
+          for (const result of results) {
+            if (result.status === 'fulfilled') {
+              contactCache[result.value.cId] = result.value.contactInfo;
+              fetchSuccess++;
+              if (fetchSuccess === 1) log('First contact fetched successfully', { contactId: result.value.cId, info: result.value.contactInfo });
+            } else {
+              fetchFailed++;
+              const { cId, err } = result.reason || {};
+              log('Contact fetch error', { contactId: cId, status: err?.response?.status, error: err?.message });
             }
           }
-          await sleep(100);
+
+          // Rate limiting between batches
+          if (i + PARALLEL_LIMIT < toFetch.length) {
+            await sleep(100);
+          }
         }
         log('Contact fetch done', { fetchSuccess, fetchFailed, cacheSize: Object.keys(contactCache).length });
       }

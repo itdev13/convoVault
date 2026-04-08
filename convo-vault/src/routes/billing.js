@@ -516,12 +516,21 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       counts.templates = totalItems;
 
     } else {
+      // Use estimatedTotal from the estimate step if available (avoids GHL returning a different count)
+      if (filters?.estimatedTotal) {
+        totalItems = filters.estimatedTotal;
+        logger.info('Using estimatedTotal from frontend', { estimatedTotal: totalItems });
+      }
+
       const result = await ghlService.exportMessages(locationId, {
         ...filters,
         limit: 100
       });
       const messages = result.messages || [];
-      totalItems = result.total || messages.length;
+
+      if (!totalItems) {
+        totalItems = result.total || messages.length;
+      }
 
       // Count types from sample and extrapolate
       // Email = TYPE_EMAIL or type 3, everything else = text message
@@ -679,6 +688,23 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     const isSpecialLocation = SPECIAL_LOCATION_IDS.includes(locationId);
 
+    // For special locations, reuse contactCache from the most recent export job for this location
+    let seedContactCache = undefined;
+    if (isSpecialLocation) {
+      const previousJob = await ExportJob.findOne(
+        { locationId, contactCache: { $exists: true, $ne: {} } },
+        { contactCache: 1 }
+      ).sort({ createdAt: -1 }).lean();
+
+      if (previousJob && previousJob.contactCache) {
+        seedContactCache = previousJob.contactCache;
+        logger.info('Seeding contactCache from previous job', {
+          previousJobId: previousJob._id,
+          cacheSize: Object.keys(seedContactCache).length
+        });
+      }
+    }
+
     const exportJob = await ExportJob.create({
       locationId,
       companyId,
@@ -690,7 +716,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       status: 'pending',
       notificationEmail: notificationEmail || null,
       userId,
-      ...(isSpecialLocation && { specialLocation: true })
+      ...(isSpecialLocation && { specialLocation: true }),
+      ...(seedContactCache && { contactCache: seedContactCache })
     });
 
     console.log("jobfilters: ", jobFilters)
