@@ -31,7 +31,7 @@ const MAX_DATE_RANGE_MS = 6 * 31 * 24 * 60 * 60 * 1000;
 const MAX_DATE_RANGE_MS_SPECIAL = 5 * 365 * 24 * 60 * 60 * 1000; // 5 years
 
 // Special locations with extended features (compliance exports etc.)
-const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I', "WHspQgeC5SqFU8i55G7L"];
+const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I'];
 
 /**
  * Validate date range doesn't exceed 6 months

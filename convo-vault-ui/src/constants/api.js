@@ -19,5 +19,5 @@ export const OAUTH_AUTHORIZE_URL = `https://marketplace.gohighlevel.com/integrat
 export const API_DOCS_BASE_URL = `${API_BASE_URL}/api/docs`;
 
 // Special locations with extended features (5-year date range, enriched exports)
-export const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I', "WHspQgeC5SqFU8i55G7L"];
+export const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I'];
 
