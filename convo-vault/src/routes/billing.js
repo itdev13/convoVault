@@ -516,12 +516,21 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       counts.templates = totalItems;
 
     } else {
+      // Use estimatedTotal from the estimate step if available (avoids GHL returning a different count)
+      if (filters?.estimatedTotal) {
+        totalItems = filters.estimatedTotal;
+        logger.info('Using estimatedTotal from frontend', { estimatedTotal: totalItems });
+      }
+
       const result = await ghlService.exportMessages(locationId, {
         ...filters,
         limit: 100
       });
       const messages = result.messages || [];
-      totalItems = result.total || messages.length;
+
+      if (!totalItems) {
+        totalItems = result.total || messages.length;
+      }
 
       // Count types from sample and extrapolate
       // Email = TYPE_EMAIL or type 3, everything else = text message
