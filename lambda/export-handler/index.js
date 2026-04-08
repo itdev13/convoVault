@@ -21,7 +21,6 @@ const GHL_APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
 const NOTES_TASKS_METER_ID = '69864aed1265653fdd7c0620';
 const NOTES_TASKS_UNIT_PRICE = 0.015;
 const INTERNAL_TESTING_COMPANY_IDS = ['PG9VJ27QFRumQrOGB2Ee', '7IlT9P1bafOCnq2JV00t', 
-'7eCKyMQq7PfdMP5X6gSe'
 ];
 
 // Brevo Email configuration
@@ -1342,8 +1341,6 @@ exports.handler = async (event, context) => {
     let records = [];
     let recordsFetched = 0;
     let hasMoreData = true;
-    // Keep contactCache at handler scope so it can be saved on error
-    let contactCache = job.contactCache || {};
 
     log('Starting batch', { cursor, skip, alreadyProcessed: job.processedItems || 0 });
 
@@ -1808,6 +1805,7 @@ exports.handler = async (event, context) => {
 
     // Special location: enrich messages with contact info (lazy cache using GET /contacts/:id)
     if (job.specialLocation && records.length > 0 && !['notes', 'tasks', 'conversations', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'].includes(job.exportType)) {
+      const contactCache = job.contactCache || {};
       let cacheHits = 0;
       let cacheMisses = 0;
 
@@ -1853,10 +1851,6 @@ exports.handler = async (event, context) => {
           await sleep(100);
         }
         log('Contact fetch done', { fetchSuccess, fetchFailed, cacheSize: Object.keys(contactCache).length });
-
-        // Save contactCache to job immediately after fetching — survives failures in later steps
-        await updateJob(db, exportJobId, { contactCache });
-        log('ContactCache saved to job after fetch', { cacheSize: Object.keys(contactCache).length });
       }
 
       // Enrich each message record
@@ -1871,6 +1865,7 @@ exports.handler = async (event, context) => {
       }
 
       log('Contact enrichment done', { cacheHits, cacheMisses, totalCacheSize: Object.keys(contactCache).length });
+      await updateJob(db, exportJobId, { contactCache });
     }
 
     // Convert to format and upload
@@ -2166,9 +2161,9 @@ exports.handler = async (event, context) => {
 
     // Preserve contactCache on failure so retries can reuse already-fetched contacts
     const updateFields = {};
-    if (job.specialLocation && contactCache && Object.keys(contactCache).length > 0) {
-      updateFields.contactCache = contactCache;
-      log('Preserving contactCache for retry', { cacheSize: Object.keys(contactCache).length });
+    if (job.specialLocation && job.contactCache && Object.keys(job.contactCache).length > 0) {
+      updateFields.contactCache = job.contactCache;
+      log('Preserving contactCache for retry', { cacheSize: Object.keys(job.contactCache).length });
     }
 
     // If 400 error, reset cursor so retry starts fresh (cursor likely expired)
