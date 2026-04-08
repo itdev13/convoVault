@@ -169,7 +169,7 @@ class BillingService {
 
     // Use provided prices or defaults
     const unitPrices = prices || DEFAULT_UNIT_PRICES;
-
+    console.log('unitPrices', unitPrices);
     // Calculate discountable amounts (conversations + messages + opportunities + formSubmissions + links + socialPosts)
     const conversationsCost = conversations * unitPrices.conversations;
     const textMessagesCost = smsMessages * unitPrices.smsWhatsapp;

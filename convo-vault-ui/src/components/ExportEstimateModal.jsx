@@ -423,7 +423,7 @@ export default function ExportEstimateModal({
                   </div>
                   {isSpecialLocation && (
                     <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
-                      Enriched export — includes contact details (state, timezone, name, type, attribution)
+                    Enriched export — includes contact details (state, timezone, name, type, attribution)
                     </div>
                   )}
                 </>
