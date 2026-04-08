@@ -679,6 +679,23 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     const isSpecialLocation = SPECIAL_LOCATION_IDS.includes(locationId);
 
+    // For special locations, reuse contactCache from the most recent export job for this location
+    let seedContactCache = undefined;
+    if (isSpecialLocation) {
+      const previousJob = await ExportJob.findOne(
+        { locationId, contactCache: { $exists: true, $ne: {} } },
+        { contactCache: 1 }
+      ).sort({ createdAt: -1 }).lean();
+
+      if (previousJob && previousJob.contactCache) {
+        seedContactCache = previousJob.contactCache;
+        logger.info('Seeding contactCache from previous job', {
+          previousJobId: previousJob._id,
+          cacheSize: Object.keys(seedContactCache).length
+        });
+      }
+    }
+
     const exportJob = await ExportJob.create({
       locationId,
       companyId,
@@ -690,7 +707,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       status: 'pending',
       notificationEmail: notificationEmail || null,
       userId,
-      ...(isSpecialLocation && { specialLocation: true })
+      ...(isSpecialLocation && { specialLocation: true }),
+      ...(seedContactCache && { contactCache: seedContactCache })
     });
 
     console.log("jobfilters: ", jobFilters)
