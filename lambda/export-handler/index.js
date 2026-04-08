@@ -118,11 +118,19 @@ async function fetchConversationsPage(locationId, accessToken, filters, skip) {
  * Fetch a single page of messages
  */
 async function fetchMessagesPage(locationId, accessToken, filters, cursor) {
+  // Only pass valid GHL message export params — exclude internal fields
   const params = {
     locationId,
     limit: API_MESSAGES_PAGE_SIZE,
-    ...filters
   };
+  if (filters.channel) params.channel = filters.channel;
+  if (filters.startDate) params.startDate = filters.startDate;
+  if (filters.endDate) params.endDate = filters.endDate;
+  if (filters.contactId) params.contactId = filters.contactId;
+  if (filters.conversationId) params.conversationId = filters.conversationId;
+  if (filters.query) params.query = filters.query;
+  if (filters.id) params.id = filters.id;
+  if (filters.direction) params.direction = filters.direction;
 
   // Convert date filters to ISO strings (start of day / end of day)
   if (params.startDate) {
@@ -1752,6 +1760,15 @@ exports.handler = async (event, context) => {
             } else {
               pageResult = await fetchMessagesPage(job.locationId, accessToken, job.filters || {}, cursor);
             }
+          } else if (fetchError.response?.status === 400 && cursor) {
+            // 400 likely means expired/invalid cursor — retry without cursor
+            log('Got 400 with cursor, retrying without cursor (fresh start)', { cursor });
+            cursor = null;
+            if (job.exportType === 'conversations') {
+              pageResult = await fetchConversationsPage(job.locationId, accessToken, job.filters || {}, 0);
+            } else {
+              pageResult = await fetchMessagesPage(job.locationId, accessToken, job.filters || {}, null);
+            }
           } else {
             throw fetchError;
           }
@@ -2142,14 +2159,28 @@ exports.handler = async (event, context) => {
   } catch (error) {
     logError('Export batch failed', { error: error.message, stack: error.stack });
 
+    // Preserve contactCache on failure so retries can reuse already-fetched contacts
+    const updateFields = {};
+    if (job.specialLocation && job.contactCache && Object.keys(job.contactCache).length > 0) {
+      updateFields.contactCache = job.contactCache;
+      log('Preserving contactCache for retry', { cacheSize: Object.keys(job.contactCache).length });
+    }
+
+    // If 400 error, reset cursor so retry starts fresh (cursor likely expired)
+    if (error.response?.status === 400) {
+      updateFields.cursor = null;
+      log('Resetting cursor due to 400 error');
+    }
+
     // Increment retry count
     const retryCount = (job.retryCount || 0) + 1;
+    updateFields.retryCount = retryCount;
 
     if (retryCount < (job.maxRetries || 3)) {
       // Retry - invoke self again
       log('Retrying...', { attempt: retryCount + 1, maxRetries: job.maxRetries || 3 });
 
-      await updateJob(db, exportJobId, { retryCount });
+      await updateJob(db, exportJobId, updateFields);
 
       // Wait a bit before retry
       await sleep(5000);
