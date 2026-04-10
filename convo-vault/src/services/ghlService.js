@@ -692,8 +692,7 @@ class GHLService {
 
     logger.info('Messages response RAW', {
       conversationId,
-      resultType: typeof result,
-      topKeys: result ? Object.keys(result) : 'null',
+      topKeys: result?.messages ? Object.keys(result?.messages) : 'null',
       messageCount: result?.messages?.messages?.length || 0,
     });
 
