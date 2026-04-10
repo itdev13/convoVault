@@ -42,7 +42,7 @@ export default function SpecialMessagesTab() {
   const [activeJob, setActiveJob] = useState(null);
 
   // Filters
-  const [chatType, setChatType] = useState([]);
+  const [chatType, setChatType] = useState('');
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
 
@@ -67,8 +67,7 @@ export default function SpecialMessagesTab() {
 
   const buildExportFilters = () => {
     const f = {};
-    // Empty array = all types, otherwise comma-separated
-    if (chatType.length > 0) f.type = chatType.join(',');
+    if (chatType) f.type = chatType;
     if (startDate) f.startDate = dayjs(startDate).startOf('day').valueOf();
     if (endDate) f.endDate = dayjs(endDate).endOf('day').valueOf();
     return f;
