@@ -369,29 +369,27 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             while (true) {
               const msgOptions = { limit: 100 };
               if (cursor) msgOptions.lastMessageId = cursor;
-              logger.info('Special Messages: fetched page', { lastMessageId: cursor });
               if (typeFilter) msgOptions.type = typeFilter;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               const pageMsgs = result.messages || [];
               msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
-              if (result.messages?.length == 100) {
-                logger.info("cursor1: ", result.messages?.lastMessageId, result.messages?.nextPage);
-              }
-              if (!result.messages?.nextPage || result.messages?.length < 100){   
-                break;
-              }
-              if (result.messages?.length == 100) {
-                logger.info("cursor2: ", result.messages?.lastMessageId, result.messages?.nextPage);
-              }
-              cursor = result.messages?.lastMessageId;
+              logger.info('Special Messages: page done', { conversationId: cId, pageCount: pageMsgs.length, totalMsgs: msgs.length, nextPage: result.nextPage, lastMessageId: result.lastMessageId });
+              if (pageMsgs.length < 100 || !result.nextPage) break;
+              cursor = result.lastMessageId;
             }
             return msgs;
           })
         );
-        logger.info("fix ", results?.[0])
+        let batchTotal = 0;
         for (const r of results) {
-          if (r.status === 'fulfilled') allMessages.push(...r.value);
+          if (r.status === 'fulfilled') {
+            batchTotal += r.value.length;
+            allMessages.push(...r.value);
+          } else {
+            logger.error('Special Messages: conversation failed', { error: r.reason?.message || r.reason });
+          }
         }
+        logger.info('Special Messages: batch done', { batchIndex: i, batchTotal, allMessagesTotal: allMessages.length });
       }
 
       logger.info('Special Messages: fetched', { totalMessages: allMessages.length, type: typeFilter });
