@@ -374,18 +374,21 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               const pageMsgs = result.messages || [];
               msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
+              if (result.messages?.length == 100) {
+                logger.info("cursor1: ", result.messages?.lastMessageId, result.messages?.nextPage);
+              }
               if (!result.messages?.nextPage || result.messages?.length < 100){   
                 break;
               }
               if (result.messages?.length == 100) {
-                logger.info("cursor: ", result.messages?.lastMessageId);
+                logger.info("cursor2: ", result.messages?.lastMessageId, result.messages?.nextPage);
               }
               cursor = result.messages?.lastMessageId;
             }
             return msgs;
           })
         );
-        logger.info("fix ", allMessages?.[0])
+        logger.info("fix ", results?.[0])
         for (const r of results) {
           if (r.status === 'fulfilled') allMessages.push(...r.value);
         }
