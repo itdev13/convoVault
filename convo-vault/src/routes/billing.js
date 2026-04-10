@@ -30,11 +30,12 @@ const LAMBDA_FUNCTION_NAME = process.env.EXPORT_LAMBDA_FUNCTION_NAME || 'convo-v
 
 // Maximum date range for exports (6 months in milliseconds)
 const MAX_DATE_RANGE_MS = 6 * 31 * 24 * 60 * 60 * 1000;
+const MAX_DATE_RANGE_MS_SPECIAL_TAB = 365 * 24 * 60 * 60 * 1000; // 1 year
 
 /**
  * Validate date range doesn't exceed 6 months
  */
-function validateDateRange(startDate, endDate, locationId) {
+function validateDateRange(startDate, endDate, maxRange = MAX_DATE_RANGE_MS) {
   if (!startDate || !endDate) return { valid: true };
 
   const start = new Date(startDate);
@@ -44,8 +45,8 @@ function validateDateRange(startDate, endDate, locationId) {
     return { valid: false, error: 'Invalid date format' };
   }
 
-  if (end - start > MAX_DATE_RANGE_MS) {
-    return { valid: false, error: 'Date range cannot exceed 6 months' };
+  if (end - start > maxRange) {
+    return { valid: false, error: maxRange === MAX_DATE_RANGE_MS ? 'Date range cannot exceed 6 months' : 'Date range cannot exceed 1 year' };
   }
 
   if (end < start) {
@@ -83,7 +84,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
     // Validate date range (not applicable for notes/links/templates)
     if (!['notes', 'links', 'templates'].includes(exportType)) {
-      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, locationId);
+      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, exportType === 'specialTabMessages' ? MAX_DATE_RANGE_MS_SPECIAL_TAB : MAX_DATE_RANGE_MS);
       if (!dateValidation.valid) {
         return res.status(400).json({
           success: false,
@@ -366,15 +367,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             const msgs = [];
             let lastMessageId = undefined;
             while (true) {
-              const result = await withRetry(() => ghlService.getMessages(locationId, cId, { limit: 100, lastMessageId }));
+              const result = await withRetry(() => ghlService.getMessages(locationId, cId, { limit: 100, lastMessageId, type: typeFilter }));
               const pageMsgs = result.messages || [];
-              const typesInPage = [...new Set(pageMsgs.map(m => m.type || m.messageType))];
-              logger.info('Special Messages: page types', { conversationId: cId, totalInPage: pageMsgs.length, typesInPage, filteringFor: typeFilter });
-              const filtered = pageMsgs
-                .filter(m => m.type === typeFilter || m.messageType === typeFilter)
-                .map(m => ({ ...m, conversationId: cId }));
-              logger.info('Special Messages: filtered', { conversationId: cId, matched: filtered.length });
-              msgs.push(...filtered);
+              logger.info('Special Messages: fetched page', { conversationId: cId, count: pageMsgs.length, type: typeFilter });
+              msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
               if (pageMsgs.length < 100) break;
               lastMessageId = pageMsgs[pageMsgs.length - 1].id;
             }
@@ -502,7 +498,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     // Validate date range (not applicable for notes/links/templates)
     if (!['notes', 'links', 'templates'].includes(exportType)) {
-      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, locationId);
+      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, exportType === 'specialTabMessages' ? MAX_DATE_RANGE_MS_SPECIAL_TAB : MAX_DATE_RANGE_MS);
       if (!dateValidation.valid) {
         return res.status(400).json({
           success: false,

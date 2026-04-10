@@ -671,6 +671,11 @@ class GHLService {
       params.sortOrder = options.sortOrder; // 'asc' or 'desc'
     }
 
+    // Add type filter
+    if (options.type) {
+      params.type = options.type;
+    }
+
     logger.info('Fetching messages', {
       url: `/conversations/${conversationId}/messages`,
       conversationId,
