@@ -319,7 +319,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       // Special Messages: fetch ALL conversations, then fetch + store messages matching the type
       const typeFilter = filters?.type;
       let allConversationIds = [];
-      let lastId = undefined;
+      let startAfterDate = undefined;
 
       // Helper: retry on 429 with exponential backoff
       const withRetry = async (fn, maxRetries = 3) => {
@@ -338,16 +338,20 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
       };
 
-      // Paginate through ALL conversations (no type filter — type is on messages)
+      // Paginate through ALL conversations with date filter
+      // GHL search uses startAfterDate (timestamp) for cursor pagination
       while (true) {
         const searchParams = { locationId, limit: 100 };
-        if (lastId) searchParams.startAfterId = lastId;
+        if (filters?.startDate) searchParams.startDate = filters.startDate;
+        if (filters?.endDate) searchParams.endDate = filters.endDate;
+        if (startAfterDate) searchParams.startAfterDate = startAfterDate;
         const result = await withRetry(() => ghlService.searchConversations(locationId, searchParams));
         const convos = result.conversations || [];
         if (convos.length === 0) break;
         allConversationIds.push(...convos.map(c => c.id));
         if (convos.length < 100) break;
-        lastId = convos[convos.length - 1].id;
+        const lastConvo = convos[convos.length - 1];
+        startAfterDate = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
       }
 
       logger.info('Special Messages: conversations fetched', { count: allConversationIds.length });

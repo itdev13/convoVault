@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
-import { Button, Select, message as antMessage } from 'antd';
+import { Button, Select, DatePicker, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
+import dayjs from 'dayjs';
 
 const MESSAGE_TYPES = [
   { value: 'TYPE_CALL', label: 'Call' },
@@ -37,6 +38,8 @@ export default function SpecialMessagesTab() {
 
   // Filters
   const [chatType, setChatType] = useState('TYPE_LIVE_CHAT');
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
 
   // Poll active job status
   useEffect(() => {
@@ -58,7 +61,10 @@ export default function SpecialMessagesTab() {
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
   const buildExportFilters = () => {
-    return { type: chatType || 'TYPE_LIVE_CHAT' };
+    const f = { type: chatType || 'TYPE_LIVE_CHAT' };
+    if (startDate) f.startDate = dayjs(startDate).startOf('day').valueOf();
+    if (endDate) f.endDate = dayjs(endDate).endOf('day').valueOf();
+    return f;
   };
 
   const handleGetEstimate = async () => {
@@ -156,7 +162,7 @@ export default function SpecialMessagesTab() {
           <span className="text-lg font-semibold text-gray-900">Filters</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Message Type</label>
             <Select
@@ -168,6 +174,28 @@ export default function SpecialMessagesTab() {
               showSearch
               optionFilterProp="label"
               placeholder="Select message type"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+            <DatePicker
+              value={startDate ? dayjs(startDate) : null}
+              onChange={(date) => setStartDate(date ? date.toDate() : null)}
+              className="w-full"
+              size="large"
+              placeholder="Select start date"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+            <DatePicker
+              value={endDate ? dayjs(endDate) : null}
+              onChange={(date) => setEndDate(date ? date.toDate() : null)}
+              className="w-full"
+              size="large"
+              placeholder="Select end date"
             />
           </div>
 
