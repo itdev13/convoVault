@@ -1,5 +1,6 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
+const AppConfig = require('../models/AppConfig');
 
 /**
  * Billing Service - Handle pricing calculations and GHL Marketplace billing
@@ -7,13 +8,6 @@ const logger = require('../utils/logger');
 
 // App ID for rebilling config
 const APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
-
-// Internal testing company IDs - skip billing for these
-const INTERNAL_TESTING_COMPANY_IDS = [
-  'PG9VJ27QFRumQrOGB2Ee',
-  '7IlT9P1bafOCnq2JV00t',
-  "7eCKyMQq7PfdMP5X6gSe"
-];
 
 // Meter IDs for GHL Marketplace billing
 const METER_IDS = {
@@ -44,14 +38,6 @@ const DEFAULT_UNIT_PRICES = {
   templates: 0.015         // 0.015 cents per template (with volume discounts)
 };
 
-// Special location pricing (enriched exports)
-const SPECIAL_LOCATION_IDS = ['2yb4B4EdJMYLgOu7mZ9I'];
-const SPECIAL_UNIT_PRICES = {
-  ...DEFAULT_UNIT_PRICES,
-  conversations: 0.025,
-  smsWhatsapp: 0.025,
-  email: 0.075
-};
 
 // Cached prices from GHL API
 let cachedPrices = null;
@@ -293,11 +279,7 @@ class BillingService {
    * @returns {Object} Pricing estimate with actual GHL prices
    */
   async calculateEstimateWithPrices(counts, accessToken, locationId) {
-    let prices = await this.fetchMeterPrices(accessToken, locationId);
-    // Override with special pricing for special locations
-    if (SPECIAL_LOCATION_IDS.includes(locationId)) {
-      prices = { ...prices, ...SPECIAL_UNIT_PRICES };
-    }
+    const prices = await this.fetchMeterPrices(accessToken, locationId);
     return this.calculateEstimate(counts, prices);
   }
 
@@ -308,7 +290,7 @@ class BillingService {
    * @returns {boolean} Whether wallet has funds
    */
   async hasFunds(companyId, accessToken) {
-    if (INTERNAL_TESTING_COMPANY_IDS.includes(companyId)) {
+    if (await AppConfig.hasValue('internalTestingCompanyIds', companyId)) {
       logger.info('Internal testing company - skipping funds check', { companyId });
       return true;
     }
@@ -357,7 +339,7 @@ class BillingService {
       // Silent fail
     }
 
-    if (INTERNAL_TESTING_COMPANY_IDS.includes(companyId)) {
+    if (await AppConfig.hasValue('internalTestingCompanyIds', companyId)) {
       logger.info('Internal testing company - skipping charge', { companyId, meterCharges });
       try {
         const Referral = require('../models/Referral');
@@ -560,20 +542,13 @@ class BillingService {
    * Get unit prices (returns cached prices if available, otherwise defaults)
    */
   getUnitPrices(locationId) {
-    const base = cachedPrices ? { ...cachedPrices } : { ...DEFAULT_UNIT_PRICES };
-    if (locationId && SPECIAL_LOCATION_IDS.includes(locationId)) {
-      return { ...base, ...SPECIAL_UNIT_PRICES };
-    }
-    return base;
+    return cachedPrices ? { ...cachedPrices } : { ...DEFAULT_UNIT_PRICES };
   }
 
   /**
    * Get default unit prices (always returns the configured defaults, ignoring cache)
    */
   getDefaultUnitPrices(locationId) {
-    if (locationId && SPECIAL_LOCATION_IDS.includes(locationId)) {
-      return { ...SPECIAL_UNIT_PRICES };
-    }
     return { ...DEFAULT_UNIT_PRICES };
   }
 }

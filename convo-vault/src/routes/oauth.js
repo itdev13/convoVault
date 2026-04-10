@@ -6,13 +6,7 @@ const CompanyLocation = require('../models/CompanyLocation');
 const Referral = require('../models/Referral');
 const logger = require('../utils/logger');
 const { logError } = require('../utils/errorLogger');
-
-// Internal testing company IDs
-const INTERNAL_TESTING_COMPANY_IDS = [
-  'PG9VJ27QFRumQrOGB2Ee',
-  '7IlT9P1bafOCnq2JV00t',
-  "7eCKyMQq7PfdMP5X6gSe"
-];
+const AppConfig = require('../models/AppConfig');
 
 /**
  * OAuth Routes - Simple Implementation
@@ -149,7 +143,7 @@ router.get('/callback', async (req, res) => {
               locationId: tokenData.locationId,
               campaign: referralCampaign,
               status: 'installed',
-              testing: INTERNAL_TESTING_COMPANY_IDS.includes(tokenData.companyId),
+              testing: await AppConfig.hasValue('internalTestingCompanyIds', tokenData.companyId),
               installedAt: new Date()
             },
             { upsert: true, new: true }
@@ -208,7 +202,7 @@ router.get('/callback', async (req, res) => {
               companyId: tokenData.companyId,
               campaign: referralCampaign,
               status: 'installed',
-              testing: INTERNAL_TESTING_COMPANY_IDS.includes(tokenData.companyId),
+              testing: await AppConfig.hasValue('internalTestingCompanyIds', tokenData.companyId),
               installedAt: new Date()
             },
             { upsert: true, new: true }

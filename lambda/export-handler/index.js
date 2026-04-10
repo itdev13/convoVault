@@ -16,14 +16,6 @@ const GHL_OAUTH_URL = process.env.GHL_OAUTH_URL || 'https://services.leadconnect
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
 
-// Post-export billing constants (notes/tasks all-contacts)
-const GHL_APP_ID = process.env.GHL_APP_ID || '694f93f8a6babf0c821b1356';
-const NOTES_TASKS_METER_ID = '69864aed1265653fdd7c0620';
-const NOTES_TASKS_UNIT_PRICE = 0.015;
-const INTERNAL_TESTING_COMPANY_IDS = ['PG9VJ27QFRumQrOGB2Ee', '7IlT9P1bafOCnq2JV00t',
-  "7eCKyMQq7PfdMP5X6gSe" 
-];
-
 // Brevo Email configuration
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
@@ -166,30 +158,6 @@ async function fetchMessagesPage(locationId, accessToken, filters, cursor) {
 
 
 
-/**
- * Fetch a single contact by ID (fallback for enriched exports)
- */
-async function fetchContact(contactId, accessToken) {
-  const response = await axios.get(`${GHL_API_URL}/contacts/${contactId}`, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'Version': '2021-07-28'
-    }
-  });
-  const c = response.data?.contact || response.data || {};
-  return {
-    firstName: c.firstName || '',
-    lastName: c.lastName || '',
-    phone: c.phone || '',
-    state: c.state || '',
-    country: c.country || '',
-    timezone: c.timezone || '',
-    type: c.type || c.contactType || '',
-    source: c.source || '',
-    attributionSource: c.attributionSource?.medium || ''
-  };
-}
 
 
 /**
@@ -637,55 +605,6 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
   return header + rows + (rows.length > 0 ? '\n' : '');
 }
 
-/**
- * Convert messages to enriched CSV format (special location — includes contact details)
- */
-function messagesToCSV_enriched(messages, includeHeader = true) {
-  let header = '';
-  if (includeHeader) {
-    header = 'Date,LocalTimeOfDelivery,ConversationID,ContactID,ConversationProviderId,ContactFirstName,ContactLastName,ContactPhone,ContactState,ContactCountry,ContactTimezone,ContactType,ContactSource,AttributionSource,MessageType,Direction,Status,From,To,Message,Attachments,Source\n';
-  }
-
-  const rows = messages.map(msg => {
-    const direction = msg.direction || 'outbound';
-    const contact = msg._contactInfo || {};
-
-    // Compute local time from timezone
-    let localTime = '';
-    if (msg.dateAdded && contact.timezone) {
-      try {
-        localTime = new Date(msg.dateAdded).toLocaleString('en-US', { timeZone: contact.timezone });
-      } catch { localTime = ''; }
-    }
-
-    return [
-      escapeCsv(formatDate(msg.dateAdded)),
-      escapeCsv(localTime),
-      escapeCsv(msg.conversationId),
-      escapeCsv(msg.contactId),
-      escapeCsv(msg.conversationProviderId || ''),
-      escapeCsv(contact.firstName),
-      escapeCsv(contact.lastName),
-      escapeCsv(contact.phone),
-      escapeCsv(contact.state),
-      escapeCsv(contact.country),
-      escapeCsv(contact.timezone),
-      escapeCsv(contact.type),
-      escapeCsv(contact.source),
-      escapeCsv(contact.attributionSource),
-      escapeCsv(msg.messageType || msg.type),
-      escapeCsv(direction),
-      escapeCsv(msg.status),
-      escapeCsv(msg.meta?.email?.from || msg.from || ''),
-      escapeCsv(msg.meta?.email?.to?.join('; ') || msg.to || msg.phone || ''),
-      escapeCsv(msg.body || msg.message || ''),
-      escapeCsv((msg.attachments || []).map(a => a.url || a).join('; ')),
-      escapeCsv(msg.source || '')
-    ].join(',');
-  }).join('\n');
-
-  return header + rows + (rows.length > 0 ? '\n' : '');
-}
 
 /**
  * Convert notes to CSV format
@@ -1070,64 +989,6 @@ async function sendEmail(email, downloadUrl, jobDetails) {
   }
 }
 
-/**
- * Charge GHL wallet after export completes (post-export billing for notes/tasks all-contacts)
- */
-async function chargePostExport(db, job, actualCount, accessToken) {
-  if (INTERNAL_TESTING_COMPANY_IDS.includes(job.companyId)) {
-    console.log('[PostExportBilling] Internal testing company - skipping charge', { companyId: job.companyId });
-    await db.collection('billingtransactions').updateOne(
-      { _id: new ObjectId(job.billingTransactionId.toString()) },
-      { $set: {
-        status: 'tested',
-        internalTesting: true,
-        paymentIgnored: true,
-        [`itemCounts.${job.exportType}`]: actualCount,
-        'itemCounts.total': actualCount,
-        'pricing.finalAmount': actualCount * NOTES_TASKS_UNIT_PRICE,
-        'pricing.baseAmount': actualCount * NOTES_TASKS_UNIT_PRICE
-      }}
-    );
-    return;
-  }
-
-  const finalAmount = actualCount * NOTES_TASKS_UNIT_PRICE;
-  const transactionId = job.billingTransactionId.toString();
-
-
-  const response = await axios.post(
-    `${GHL_API_URL}/marketplace/billing/charges`,
-    {
-      companyId: job.companyId,
-      meterId: NOTES_TASKS_METER_ID,
-      units: actualCount,
-      price: NOTES_TASKS_UNIT_PRICE,
-      appId: GHL_APP_ID,
-      eventId: transactionId,
-      locationId: job.locationId,
-      description: 'Exported Data ' + '_' + new Date().toDateString()
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'Version': '2021-07-28'
-      }
-    }
-  );
-
-  await db.collection('billingtransactions').updateOne(
-    { _id: new ObjectId(transactionId) },
-    { $set: {
-      status: 'charged',
-      ghlChargeId: response.data?.chargeId || response.data?.id || null,
-      [`itemCounts.${job.exportType}`]: actualCount,
-      'itemCounts.total': actualCount,
-      'pricing.finalAmount': finalAmount,
-      'pricing.baseAmount': finalAmount
-    }}
-  );
-}
 
 /**
  * Extract exportJobId from event (handles both normal and durable execution formats)
@@ -1804,114 +1665,6 @@ exports.handler = async (event, context) => {
 
     log('Batch complete', { processedItems: job.processedItems,  batchRecords: records.length, cursor: cursor, hasMore: hasMoreData || !!cursor });
 
-    // Special location: enrich messages with contact info (lazy cache using GET /contacts/:id)
-    if (job.specialLocation && records.length > 0 && !['notes', 'tasks', 'conversations', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'].includes(job.exportType)) {
-      const contactCache = job.contactCache || {};
-      let cacheHits = 0;
-      let cacheMisses = 0;
-
-      // Only fetch contacts we haven't seen before
-      const uniqueContactIds = [...new Set(records.map(r => r.contactId).filter(Boolean))];
-      const toFetch = uniqueContactIds.filter(id => !contactCache[id]);
-
-      if (toFetch.length > 0) {
-        log('Fetching contacts for enrichment', { toFetch: toFetch.length, alreadyCached: uniqueContactIds.length - toFetch.length });
-        let fetchSuccess = 0;
-        let fetchFailed = 0;
-        const PARALLEL_LIMIT = 5;
-        let contactTimeoutHit = false;
-
-        for (let i = 0; i < toFetch.length; i += PARALLEL_LIMIT) {
-          // Check timeout before each parallel batch
-          const remaining = context.getRemainingTimeInMillis();
-          if (remaining < TIMEOUT_BUFFER_MS) {
-            log('Approaching timeout during contact fetch, saving cache and will continue next invocation', {
-              remainingMs: remaining, fetched: fetchSuccess, remaining: toFetch.length - i
-            });
-            contactTimeoutHit = true;
-            break;
-          }
-
-          const batch = toFetch.slice(i, i + PARALLEL_LIMIT);
-
-          const results = await Promise.allSettled(batch.map(async (cId) => {
-            try {
-              const contactInfo = await fetchContact(cId, accessToken);
-              return { cId, contactInfo };
-            } catch (err) {
-              if (err.response?.status === 401) {
-                await refreshAndUpdateToken();
-                const contactInfo = await fetchContact(cId, accessToken);
-                return { cId, contactInfo };
-              } else if (err.response?.status === 429) {
-                await sleep(2000);
-                const contactInfo = await fetchContact(cId, accessToken);
-                return { cId, contactInfo };
-              }
-              throw { cId, err };
-            }
-          }));
-
-          for (const result of results) {
-            if (result.status === 'fulfilled') {
-              contactCache[result.value.cId] = result.value.contactInfo;
-              fetchSuccess++;
-              if (fetchSuccess === 1) log('First contact fetched successfully', { contactId: result.value.cId, info: result.value.contactInfo });
-            } else {
-              fetchFailed++;
-              const { cId, err } = result.reason || {};
-              log('Contact fetch error', { contactId: cId, status: err?.response?.status, error: err?.message });
-            }
-          }
-
-          // Rate limiting between batches
-          if (i + PARALLEL_LIMIT < toFetch.length) {
-            await sleep(100);
-          }
-        }
-        log('Contact fetch done', { fetchSuccess, fetchFailed, cacheSize: Object.keys(contactCache).length });
-
-        // Save contactCache to job immediately — survives timeout or failures in later steps
-        await updateJob(db, exportJobId, { contactCache });
-        log('ContactCache saved to job', { cacheSize: Object.keys(contactCache).length });
-
-        // If we hit timeout during contact fetch, save progress and re-invoke
-        // Don't process records this round — next invocation will re-fetch same messages
-        // but contacts will be cached so enrichment will be fast
-        if (contactTimeoutHit) {
-          log('Re-invoking Lambda to continue after contact fetch timeout');
-          await lambda.send(new InvokeCommand({
-            FunctionName: context.functionName,
-            InvocationType: 'Event',
-            Qualifier: '$LATEST',
-            Payload: JSON.stringify({ exportJobId })
-          }));
-          return {
-            statusCode: 200,
-            body: JSON.stringify({
-              success: true,
-              message: 'Contact fetch timeout, re-invoking to continue',
-              contactsCached: Object.keys(contactCache).length
-            })
-          };
-        }
-      }
-
-      // Enrich each message record
-      for (const record of records) {
-        if (record.contactId && contactCache[record.contactId]) {
-          record._contactInfo = contactCache[record.contactId];
-          cacheHits++;
-        } else {
-          record._contactInfo = {};
-          cacheMisses++;
-        }
-      }
-
-      log('Contact enrichment done', { cacheHits, cacheMisses, totalCacheSize: Object.keys(contactCache).length });
-      await updateJob(db, exportJobId, { contactCache });
-    }
-
     // Convert to format and upload
     const hasPendingBuffer = !!(job.s3Upload?.pendingBuffer);
     const isFirstContent = parts.length === 0 && !hasPendingBuffer;
@@ -1944,8 +1697,6 @@ exports.handler = async (event, context) => {
         content = callLogsToCSV(records, isFirstContent);
       } else if (job.exportType === 'templates') {
         content = templatesToCSV(records, isFirstContent);
-      } else if (job.specialLocation) {
-        content = messagesToCSV_enriched(records, isFirstContent);
       } else {
         content = messagesToCSV(records, isFirstContent, job.filters?.channel || '');
       }
@@ -2163,16 +1914,6 @@ exports.handler = async (event, context) => {
         totalBatches: currentBatch
       });
 
-      // Post-export billing: charge actual count for notes/tasks all-contacts exports
-      if (job.postExportBilling && processedItems > 0) {
-        try {
-          await chargePostExport(db, job, processedItems, accessToken);
-          log('Post-export billing completed', { qty: processedItems, amount: processedItems * NOTES_TASKS_UNIT_PRICE });
-        } catch (billingError) {
-          log('Post-export billing failed (export still successful)', { error: billingError.message });
-        }
-      }
-
       // Send email notification
       let emailSent = false;
       if (job.notificationEmail) {
@@ -2203,12 +1944,7 @@ exports.handler = async (event, context) => {
   } catch (error) {
     logError('Export batch failed', { error: error.message, stack: error.stack });
 
-    // Preserve contactCache on failure so retries can reuse already-fetched contacts
     const updateFields = {};
-    if (job.specialLocation && job.contactCache && Object.keys(job.contactCache).length > 0) {
-      updateFields.contactCache = job.contactCache;
-      log('Preserving contactCache for retry', { cacheSize: Object.keys(job.contactCache).length });
-    }
 
     // If 400 error, reset cursor so retry starts fresh (cursor likely expired)
     if (error.response?.status === 400) {

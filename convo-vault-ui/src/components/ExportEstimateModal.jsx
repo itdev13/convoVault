@@ -16,7 +16,6 @@ export default function ExportEstimateModal({
   usingDefaultDates = false,
   postExportBilling = false,
   estimatingMessage = null,
-  isSpecialLocation = false
 }) {
   console.log('estimate modal props', estimate, exportType, postExportBilling);
   const [email, setEmail] = useState('');
@@ -417,15 +416,10 @@ export default function ExportEstimateModal({
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Price per Credit</span>
                     <span className="font-medium flex items-center gap-2">
-                      {!isSpecialLocation && <span className="line-through text-gray-400 text-xs">{formatUnitPrice(OLD_UNIT_PRICES.conversations)}</span>}
-                      <span className={isSpecialLocation ? "text-gray-800" : "text-green-600"}>{formatUnitPrice(getPricePerCredit(estimate))}</span>
+                      <span className="line-through text-gray-400 text-xs">{formatUnitPrice(OLD_UNIT_PRICES.conversations)}</span>
+                      <span className="text-green-600">{formatUnitPrice(getPricePerCredit(estimate))}</span>
                     </span>
                   </div>
-                  {isSpecialLocation && (
-                    <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
-                    Enriched export — includes contact details (state, timezone, name, type, attribution)
-                    </div>
-                  )}
                 </>
               )}
 
@@ -439,8 +433,8 @@ export default function ExportEstimateModal({
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Price per Credit</span>
                     <span className="font-medium flex items-center gap-2">
-                      {!isSpecialLocation && <span className="line-through text-gray-400 text-xs">${OLD_UNIT_PRICES.notesAndTasks}</span>}
-                      <span className={isSpecialLocation ? "text-gray-800" : "text-green-600"}>${UNIT_PRICES.notesAndTasks}</span>
+                      <span className="line-through text-gray-400 text-xs">${OLD_UNIT_PRICES.notesAndTasks}</span>
+                      <span className="text-green-600">${UNIT_PRICES.notesAndTasks}</span>
                     </span>
                   </div>
                 </>

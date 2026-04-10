@@ -36,14 +36,6 @@ export const DISCOUNT_TIERS = [
   { min: 30000, max: Infinity, discount: 70 },
 ];
 
-// Special location pricing (higher rates for enriched exports)
-export const SPECIAL_UNIT_PRICES = {
-  ...UNIT_PRICES,
-  conversations: 0.025,    // 2.5 cents per conversation
-  smsWhatsapp: 0.025,      // 2.5 cents per SMS/WhatsApp message
-  email: 0.075,            // 7.5 cents per email (3x base)
-};
-
 // Format a unit price for display (e.g. "$0.0150")
 export const formatUnitPrice = (price) => {
   const num = Number(price) || 0;

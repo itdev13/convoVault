@@ -12,7 +12,6 @@ import ExportProgress from '../ExportProgress';
 import { getMessageTypeDisplay, getMessageTypeIcon } from '../../utils/messageTypes';
 import { copyToClipboard } from '../../utils/clipboard';
 import dayjs from 'dayjs';
-import { SPECIAL_LOCATION_IDS } from '../../constants/api';
 
 // Default date range: 6 months
 const getDefaultDates = () => ({
@@ -48,9 +47,6 @@ export default function MessagesTab() {
   const [estimateError, setEstimateError] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
-  // Special location flag (extended date range, enriched export)
-  const isSpecialLocation = SPECIAL_LOCATION_IDS.includes(location?.id);
-
   // Contacts (for Contact filter)
   const [contactOptions, setContactOptions] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -312,7 +308,6 @@ export default function MessagesTab() {
         error={estimateError}
         exportType="messages"
         usingDefaultDates={usingDefaultDates}
-        isSpecialLocation={isSpecialLocation}
       />
 
       {/* Header with Stats */}
@@ -432,14 +427,6 @@ export default function MessagesTab() {
               placeholder="Select end date"
             />
           </div>
-          {isSpecialLocation && (
-            <div className="col-span-full">
-              <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-3 py-1.5">
-                Extended date range enabled — you can export up to 5 years of data. Export will include enriched contact details (state, timezone, name, type, attribution).
-              </p>
-            </div>
-          )}
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Contact</label>
             <Select
