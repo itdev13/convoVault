@@ -373,9 +373,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               if (typeFilter) msgOptions.type = typeFilter;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               const pageMsgs = result.messages || [];
-              logger.info('Special Messages: fetched page', { conversationId: cId, count: pageMsgs.length, type: typeFilter, lastMessageId: result.messages?.lastMessageId });
               msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
-              if (pageMsgs.length < 100 || !result.lastMessageId) break;
+              if (!result.messages?.nextPage || result.messages?.length < 100) break;
               cursor = result.messages?.lastMessageId;
             }
             return msgs;
