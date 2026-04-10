@@ -385,6 +385,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             return msgs;
           })
         );
+        logger.info("fix ", allMessages?.[0])
         for (const r of results) {
           if (r.status === 'fulfilled') allMessages.push(...r.value);
         }
