@@ -368,9 +368,12 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             while (true) {
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, { limit: 100, lastMessageId }));
               const pageMsgs = result.messages || [];
+              const typesInPage = [...new Set(pageMsgs.map(m => m.type || m.messageType))];
+              logger.info('Special Messages: page types', { conversationId: cId, totalInPage: pageMsgs.length, typesInPage, filteringFor: typeFilter });
               const filtered = pageMsgs
                 .filter(m => m.type === typeFilter || m.messageType === typeFilter)
                 .map(m => ({ ...m, conversationId: cId }));
+              logger.info('Special Messages: filtered', { conversationId: cId, matched: filtered.length });
               msgs.push(...filtered);
               if (pageMsgs.length < 100) break;
               lastMessageId = pageMsgs[pageMsgs.length - 1].id;

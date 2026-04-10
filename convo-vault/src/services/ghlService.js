@@ -671,13 +671,28 @@ class GHLService {
       params.sortOrder = options.sortOrder; // 'asc' or 'desc'
     }
 
-    return await this.apiRequest(
+    logger.info('Fetching messages', {
+      url: `/conversations/${conversationId}/messages`,
+      conversationId,
+      params: JSON.stringify(params)
+    });
+
+    const result = await this.apiRequest(
       'GET',
       `/conversations/${conversationId}/messages`,
       locationId,
       null,
       params
     );
+
+    logger.info('Messages response', {
+      conversationId,
+      messageCount: result.messages?.length || 0,
+      messageTypes: (result.messages || []).slice(0, 3).map(m => m.type || m.messageType),
+      lastMessageId: result.lastMessageId || null
+    });
+
+    return result;
   }
 
   /**
