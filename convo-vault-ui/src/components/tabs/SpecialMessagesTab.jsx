@@ -19,7 +19,7 @@ const MESSAGE_TYPES = [
   { value: 'TYPE_ACTIVITY_INVOICE', label: 'Invoice Activity' },
   { value: 'TYPE_ACTIVITY_PAYMENT', label: 'Payment Activity' },
   { value: 'TYPE_ACTIVITY_OPPORTUNITY', label: 'Opportunity Activity' },
-  { value: 'TYPE_LIVE_CHAT', label: 'Live Chat' },
+  { value: 'TYPE_LIVE_CHAT,TYPE_LIVE_CHAT_INFO_MESSAGE', label: 'Live Chat' },
   { value: 'TYPE_INTERNAL_COMMENTS', label: 'Internal Comments' },
   { value: 'TYPE_ACTIVITY_EMPLOYEE_ACTION_LOG', label: 'Employee Action Log' },
 ];

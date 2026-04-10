@@ -690,11 +690,12 @@ class GHLService {
       params
     );
 
-    logger.info('Messages response', {
+    logger.info('Messages response RAW', {
       conversationId,
-      messageCount: result.messages?.length || 0,
-      messageTypes: (result.messages || []).slice(0, 3).map(m => m.type || m.messageType),
-      lastMessageId: result.lastMessageId || null
+      resultType: typeof result,
+      topKeys: result ? Object.keys(result) : 'null',
+      messageCount: result?.messages?.length ?? 'no messages key',
+      firstMsg: result?.messages?.[0] ? JSON.stringify(result.messages[0]).slice(0, 300) : 'none'
     });
 
     return result;
