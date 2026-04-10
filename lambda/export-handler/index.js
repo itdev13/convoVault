@@ -873,6 +873,34 @@ function callLogsToCSV(callLogs, includeHeader = true) {
 }
 
 /**
+ * Convert live chat messages to CSV format
+ */
+function specialMessagesToCSV(messages, includeHeader = true) {
+  const header = includeHeader
+    ? 'Date,ConversationID,ContactID,MessageType,Direction,Status,From,To,Message,Attachments,Source\n'
+    : '';
+
+  const rows = messages.map(msg => {
+    const direction = msg.direction || 'outbound';
+    return [
+      escapeCsv(formatDate(msg.dateAdded)),
+      escapeCsv(msg.conversationId || ''),
+      escapeCsv(msg.contactId || ''),
+      escapeCsv(msg.messageType || msg.type || ''),
+      escapeCsv(direction),
+      escapeCsv(msg.status || ''),
+      escapeCsv(msg.meta?.email?.from || msg.from || ''),
+      escapeCsv(msg.meta?.email?.to?.join('; ') || msg.to || msg.phone || ''),
+      escapeCsv(msg.body || msg.message || ''),
+      escapeCsv((msg.attachments || []).map(a => a.url || a).join('; ')),
+      escapeCsv(msg.source || '')
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
  * Convert to JSON format
  */
 function toJSON(data, exportType, isFirst, isLast) {
@@ -936,7 +964,8 @@ async function sendEmail(email, downloadUrl, jobDetails) {
         jobDetails.exportType === 'links' ? 'Links' :
         jobDetails.exportType === 'socialPosts' ? 'Social Posts' :
         jobDetails.exportType === 'callLogs' ? 'Call Logs' :
-        jobDetails.exportType === 'templates' ? 'Templates' : 'Messages'
+        jobDetails.exportType === 'templates' ? 'Templates' :
+        jobDetails.exportType === 'specialTabMessages' ? 'Special Messages' : 'Messages'
       } Export is Ready`,
       htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1583,6 +1612,37 @@ exports.handler = async (event, context) => {
 
       cursor = hasMoreData ? String(currentSkip) : null;
 
+    } else if (job.exportType === 'specialTabMessages') {
+      // === SPECIAL MESSAGES: Read pre-fetched messages from specialexports collection ===
+      // Try by exportJobId first, then fall back to latest ready export for this location
+      let specialExport = await db.collection('specialexports').findOne({
+        exportJobId: new ObjectId(exportJobId),
+        status: 'ready'
+      });
+      if (!specialExport) {
+        specialExport = await db.collection('specialexports').findOne({
+          locationId: job.locationId,
+          status: 'ready'
+        }, { sort: { createdAt: -1 } });
+      }
+
+      if (!specialExport || !specialExport.messages || specialExport.messages.length === 0) {
+        throw new Error('No pre-fetched messages found in specialexports for this job');
+      }
+
+      // Read messages in batches from the pre-fetched collection
+      const startIdx = job.processedItems || 0;
+      const endIdx = Math.min(startIdx + BATCH_SIZE, specialExport.messages.length);
+      records = specialExport.messages.slice(startIdx, endIdx);
+      recordsFetched = records.length;
+      hasMoreData = endIdx < specialExport.messages.length;
+      cursor = hasMoreData ? String(endIdx) : null;
+
+      log('Special Messages batch from specialexports', {
+        startIdx, endIdx, batchSize: records.length,
+        totalStored: specialExport.messages.length, hasMoreData
+      });
+
     } else {
       // === CONVERSATIONS/MESSAGES: Standard pagination ===
       while (recordsFetched < BATCH_SIZE && hasMoreData) {
@@ -1697,6 +1757,8 @@ exports.handler = async (event, context) => {
         content = callLogsToCSV(records, isFirstContent);
       } else if (job.exportType === 'templates') {
         content = templatesToCSV(records, isFirstContent);
+      } else if (job.exportType === 'specialTabMessages') {
+        content = specialMessagesToCSV(records, isFirstContent);
       } else {
         content = messagesToCSV(records, isFirstContent, job.filters?.channel || '');
       }

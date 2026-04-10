@@ -440,6 +440,22 @@ export default function ExportEstimateModal({
                 </>
               )}
 
+              {exportType === 'specialTabMessages' && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Total Messages</span>
+                    <span className="font-medium">{formatNumber(estimate.itemCounts?.total)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Price per Message</span>
+                    <span className="font-medium text-gray-800">$0.05</span>
+                  </div>
+                  <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
+                    Custom-built export — no volume discounts apply
+                  </div>
+                </>
+              )}
+
               {estimate.discountPercent > 0 && (
                 <div className="flex justify-between items-center text-green-600">
                   <span className="flex items-center gap-1">

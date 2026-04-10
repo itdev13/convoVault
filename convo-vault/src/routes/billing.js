@@ -10,6 +10,8 @@ const CompanyLocation = require('../models/CompanyLocation');
 const logger = require('../utils/logger');
 const { logError, getUserFriendlyMessage } = require('../utils/errorLogger');
 const { authenticateSession } = require('../middleware/auth');
+const SpecialExport = require('../models/SpecialExport');
+const AppConfig = require('../models/AppConfig');
 
 // Initialize AWS Lambda client
 const lambda = new LambdaClient({
@@ -71,7 +73,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -312,6 +314,101 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         limit: '1'
       });
       counts.templates = result.total || 0;
+
+    } else if (exportType === 'specialTabMessages') {
+      // Special Messages: fetch ALL conversations, then fetch + store messages matching the type
+      const typeFilter = filters?.type;
+      let allConversationIds = [];
+      let lastId = undefined;
+
+      // Helper: retry on 429 with exponential backoff
+      const withRetry = async (fn, maxRetries = 3) => {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            return await fn();
+          } catch (err) {
+            if (err.response?.status === 429 && attempt < maxRetries) {
+              const delay = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+              logger.warn('Rate limited (429), retrying...', { attempt: attempt + 1, delay });
+              await new Promise(r => setTimeout(r, delay));
+            } else {
+              throw err;
+            }
+          }
+        }
+      };
+
+      // Paginate through ALL conversations (no type filter — type is on messages)
+      while (true) {
+        const searchParams = { locationId, limit: 100 };
+        if (lastId) searchParams.startAfterId = lastId;
+        const result = await withRetry(() => ghlService.searchConversations(locationId, searchParams));
+        const convos = result.conversations || [];
+        if (convos.length === 0) break;
+        allConversationIds.push(...convos.map(c => c.id));
+        if (convos.length < 100) break;
+        lastId = convos[convos.length - 1].id;
+      }
+
+      logger.info('Special Messages: conversations fetched', { count: allConversationIds.length });
+
+      // Fetch ALL messages, filter by type, collect them
+      const allMessages = [];
+      const PARALLEL = 5;
+      for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
+        const batch = allConversationIds.slice(i, i + PARALLEL);
+        const results = await Promise.allSettled(
+          batch.map(async (cId) => {
+            const msgs = [];
+            let lastMessageId = undefined;
+            while (true) {
+              const result = await withRetry(() => ghlService.getMessages(locationId, cId, { limit: 100, lastMessageId }));
+              const pageMsgs = result.messages || [];
+              const filtered = pageMsgs
+                .filter(m => m.type === typeFilter || m.messageType === typeFilter)
+                .map(m => ({ ...m, conversationId: cId }));
+              msgs.push(...filtered);
+              if (pageMsgs.length < 100) break;
+              lastMessageId = pageMsgs[pageMsgs.length - 1].id;
+            }
+            return msgs;
+          })
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') allMessages.push(...r.value);
+        }
+      }
+
+      logger.info('Special Messages: fetched', { totalMessages: allMessages.length, type: typeFilter });
+
+      // Save to SpecialExport so charge-and-export can reuse without re-fetching
+      const specialExport = await SpecialExport.create({
+        locationId,
+        filters: { type: typeFilter },
+        messages: allMessages,
+        totalMessages: allMessages.length,
+        totalConversations: allConversationIds.length,
+        status: 'ready'
+      });
+
+      const total = allMessages.length;
+      const unitPrice = 0.05;
+      const finalAmount = total * unitPrice;
+      return res.json({
+        success: true,
+        data: {
+          estimate: {
+            itemCounts: { specialTabMessages: total, total },
+            baseAmount: finalAmount,
+            discountPercent: 0,
+            discountAmount: 0,
+            finalAmount
+          },
+          filters,
+          exportType,
+          specialExportId: specialExport._id
+        }
+      });
     }
 
     // Get access token to fetch actual prices from GHL
@@ -371,7 +468,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -508,6 +605,10 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       totalItems = result.total || 0;
       counts.templates = totalItems;
 
+    } else if (exportType === 'specialTabMessages') {
+      // LiveChat: use estimatedTotal from frontend (already counted during estimate)
+      totalItems = filters?.estimatedTotal || 0;
+
     } else {
       // Use estimatedTotal from the estimate step if available (avoids GHL returning a different count)
       if (filters?.estimatedTotal) {
@@ -555,8 +656,19 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
     const tokenData = await ghlService.getValidToken(locationId);
     const accessToken = tokenData.accessToken || tokenData;
 
-    // Step 3: Calculate pricing with actual GHL meter prices
-    const estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
+    // LiveChat: standalone billing (flat $0.05/msg, single meter charge, no discount)
+    let estimate, meterCharges;
+    if (exportType === 'specialTabMessages') {
+      const unitPrice = 0.05;
+      const finalAmount = totalItems * unitPrice;
+      estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
+      meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];
+    } else {
+      // Step 3: Calculate pricing with actual GHL meter prices
+      estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
+      // Step 5: Build meter charges
+      meterCharges = billingService.buildMeterCharges(counts);
+    }
 
     // Step 4: Check wallet funds
     const hasFunds = await billingService.hasFunds(companyId, accessToken);
@@ -567,9 +679,6 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         message: 'Please add funds to your GHL wallet to continue'
       });
   }
-
-    // Step 5: Create billing transaction (pending)
-    const meterCharges = billingService.buildMeterCharges(counts);
 
     const transaction = await BillingTransaction.create({
       locationId,
@@ -677,6 +786,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       unAssigned: filters?.unAssigned != null ? filters?.unAssigned : null,
       // Tag filter for notes export
       tags: filters?.tags || null,
+      // LiveChat-specific filters
+      specialTabType: filters?.type || null,
     };
 
     const exportJob = await ExportJob.create({
@@ -696,6 +807,18 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
     // Update transaction with job reference
     transaction.exportJobId = exportJob._id;
     await transaction.save();
+
+    // Step 9a: For specialTabMessages, link the existing SpecialExport (created during estimate) to this job
+    if (exportType === 'specialTabMessages' && filters?.specialExportId) {
+      try {
+        await SpecialExport.findByIdAndUpdate(filters.specialExportId, {
+          exportJobId: exportJob._id
+        });
+        logger.info('Linked SpecialExport to job', { specialExportId: filters.specialExportId, jobId: exportJob._id });
+      } catch (linkError) {
+        logger.error('Failed to link SpecialExport', { error: linkError.message });
+      }
+    }
 
     // Step 9: Trigger Lambda function
     try {
@@ -901,13 +1024,16 @@ router.get('/export-history', authenticateSession, async (req, res) => {
  */
 router.get('/pricing', async (req, res) => {
   const locationId = req.query?.locationId;
+  const specialTabLocationIds = await AppConfig.getValues('specialTabLocationIds');
+  const specialTabEnabled = locationId ? specialTabLocationIds.includes(locationId) : false;
   res.json({
     success: true,
     data: {
       unitPrices: billingService.getUnitPrices(locationId),
       discountTiers: billingService.getDiscountTiers(),
       maxDateRange: '1 month',
-      maxDateRangeMonths: 6
+      maxDateRangeMonths: 6,
+      specialTabEnabled
     }
   });
 });

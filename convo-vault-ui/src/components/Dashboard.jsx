@@ -15,23 +15,35 @@ import LinksTab from './tabs/LinksTab';
 import SocialPostsTab from './tabs/SocialPostsTab';
 import CallLogsTab from './tabs/CallLogsTab';
 import TemplatesTab from './tabs/TemplatesTab';
+import SpecialMessagesTab from './tabs/SpecialMessagesTab';
 import ConversationMessages from './ConversationMessages';
+import { billingAPI } from '../api/billing';
 
 export default function Dashboard() {
   const { location } = useAuth();
-  
+
   // Get saved tab from localStorage or default to 'conversations'
   const savedTab = localStorage.getItem('activeTab') || 'messages';
   const [activeTab, setActiveTab] = useState(savedTab);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [showConversationView, setShowConversationView] = useState(false);
+  const [specialTabEnabled, setSpecialTabEnabled] = useState(false);
 
   // Save active tab to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
 
-  const tabs = [
+  // Check if Special Messages tab is enabled for this location
+  useEffect(() => {
+    if (!location?.id) return;
+    billingAPI.getPricing(location.id).then(res => {
+      if (res?.data?.specialTabEnabled) setSpecialTabEnabled(true);
+      else setSpecialTabEnabled(false);
+    }).catch(() => {});
+  }, [location?.id]);
+
+  const baseTabs = [
     { id: 'messages', label: 'Messages', icon: '📊' },
     { id: 'conversations', label: 'Conversations', icon: '💬' },
     { id: 'templates', label: 'Templates', icon: '📄' },
@@ -43,6 +55,10 @@ export default function Dashboard() {
     { id: 'socialPosts', label: 'Social Posts', icon: '📱' },
     { id: 'callLogs', label: 'Voice AI', icon: '📞' },
   ];
+
+  const tabs = specialTabEnabled
+    ? [...baseTabs, { id: 'specialTabMessages', label: 'Special Messages', icon: '💎' }]
+    : baseTabs;
 
   const handleConversationSelect = (conversation) => {
     setSelectedConversation(conversation);
@@ -153,6 +169,7 @@ export default function Dashboard() {
               {activeTab === 'socialPosts' && <SocialPostsTab />}
               {activeTab === 'callLogs' && <CallLogsTab />}
               {activeTab === 'templates' && <TemplatesTab />}
+              {activeTab === 'specialTabMessages' && specialTabEnabled && <SpecialMessagesTab />}
               {activeTab === 'exports' && <ExportTab />}
               {activeTab === 'import' && <ImportTab />}
               {activeTab === 'support' && <SupportTab />}
