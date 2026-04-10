@@ -33,7 +33,7 @@ export default function ExportEstimateModal({
     return (Number(num) || 0).toLocaleString();
   };
 
-  // Format unit price for display (price is in dollars, e.g., 0.05 = $0.05)
+  // Format unit price for display (price is in dollars, e.g., 0.05 = $0.02)
   const formatUnitPrice = (price) => {
     const num = Number(price) || 0;
     return `$${num.toFixed(4)}`;
@@ -448,7 +448,7 @@ export default function ExportEstimateModal({
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Price per Message</span>
-                    <span className="font-medium text-gray-800">$0.05</span>
+                    <span className="font-medium text-gray-800">$0.02</span>
                   </div>
                   <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
                     Custom-built export — no volume discounts apply

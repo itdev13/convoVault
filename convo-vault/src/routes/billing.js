@@ -365,17 +365,18 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         const results = await Promise.allSettled(
           batch.map(async (cId) => {
             const msgs = [];
-            let lastMessageId = undefined;
+            let cursor = undefined;
             while (true) {
               const msgOptions = { limit: 100 };
-              if (lastMessageId) msgOptions.lastMessageId = lastMessageId;
+              if (cursor) msgOptions.lastMessageId = cursor;
+              logger.info('Special Messages: fetched page', { lastMessageId: cursor });
               if (typeFilter) msgOptions.type = typeFilter;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               const pageMsgs = result.messages || [];
-              logger.info('Special Messages: fetched page', { conversationId: cId, count: pageMsgs.length, type: typeFilter });
-              msgs.push(...pageMsgs?.messages?.map(m => ({ ...m, conversationId: cId })));
-              if (pageMsgs?.messages?.length < 100) break;
-              lastMessageId = pageMsgs?.messages?.lastMessageId;
+              logger.info('Special Messages: fetched page', { conversationId: cId, count: pageMsgs.length, type: typeFilter, lastMessageId: result.messages?.lastMessageId });
+              msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
+              if (pageMsgs.length < 100 || !result.lastMessageId) break;
+              cursor = result.messages?.lastMessageId;
             }
             return msgs;
           })
@@ -398,7 +399,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
 
       const total = allMessages.length;
-      const unitPrice = 0.05;
+      const unitPrice = 0.02;
       const finalAmount = total * unitPrice;
       return res.json({
         success: true,
@@ -662,10 +663,10 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
     const tokenData = await ghlService.getValidToken(locationId);
     const accessToken = tokenData.accessToken || tokenData;
 
-    // LiveChat: standalone billing (flat $0.05/msg, single meter charge, no discount)
+    // Special Messages: standalone billing (flat $0.025/msg, single meter charge, no discount)
     let estimate, meterCharges;
     if (exportType === 'specialTabMessages') {
-      const unitPrice = 0.05;
+      const unitPrice = 0.02;
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];

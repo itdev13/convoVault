@@ -226,7 +226,7 @@ export default function SpecialMessagesTab() {
               ? <> for <strong>{MESSAGE_TYPES.find(t => t.value === chatType)?.label || chatType}</strong> messages</>
               : <> and fetch <strong>all message types</strong></>
             }, then export as CSV. This is a custom-built export — data fetching may take some time.
-            Pricing: <strong>$0.05 per message</strong> (no volume discount).
+            Pricing: <strong>$0.02 per message</strong> (no volume discount).
           </p>
         </div>
       </div>
