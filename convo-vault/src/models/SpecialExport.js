@@ -12,7 +12,7 @@ const specialExportSchema = new mongoose.Schema({
   exportJobId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ExportJob',
-    required: true,
+    required: false,
     index: true
   },
   locationId: {
