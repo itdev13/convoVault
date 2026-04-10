@@ -371,25 +371,20 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               if (cursor) msgOptions.lastMessageId = cursor;
               if (typeFilter) msgOptions.type = typeFilter;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
-              const pageMsgs = result.messages || [];
+              // GHL response: { messages: { lastMessageId, nextPage, messages: [...] } }
+              const wrapper = result.messages || {};
+              const pageMsgs = wrapper.messages || [];
               msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
-              logger.info('Special Messages: page done', { conversationId: cId, pageCount: pageMsgs.length, totalMsgs: msgs.length, nextPage: result.nextPage, lastMessageId: result.lastMessageId });
-              if (pageMsgs.length < 100 || !result.nextPage) break;
-              cursor = result.lastMessageId;
+              logger.info('Special Messages: page done', { conversationId: cId, pageCount: pageMsgs.length, totalMsgs: msgs.length, nextPage: wrapper.nextPage, lastMessageId: wrapper.lastMessageId });
+              if (pageMsgs.length < 100 || !wrapper.nextPage) break;
+              cursor = wrapper.lastMessageId;
             }
             return msgs;
           })
         );
-        let batchTotal = 0;
         for (const r of results) {
-          if (r.status === 'fulfilled') {
-            batchTotal += r.value.length;
-            allMessages.push(...r.value);
-          } else {
-            logger.error('Special Messages: conversation failed', { error: r.reason?.message || r.reason });
-          }
+          if (r.status === 'fulfilled') allMessages.push(...r.value);
         }
-        logger.info('Special Messages: batch done', { batchIndex: i, batchTotal, allMessagesTotal: allMessages.length });
       }
 
       logger.info('Special Messages: fetched', { totalMessages: allMessages.length, type: typeFilter });
