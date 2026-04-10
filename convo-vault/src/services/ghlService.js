@@ -694,8 +694,7 @@ class GHLService {
       conversationId,
       resultType: typeof result,
       topKeys: result ? Object.keys(result) : 'null',
-      messageCount: result?.messages?.length ?? 'no messages key',
-      firstMsg: result?.messages?.[0] ? JSON.stringify(result.messages[0]).slice(0, 300) : 'none'
+      messageCount: result?.messages?.messages?.length || 0,
     });
 
     return result;

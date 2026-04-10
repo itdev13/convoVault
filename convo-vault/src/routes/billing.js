@@ -357,40 +357,35 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
       logger.info('Special Messages: conversations fetched', { count: allConversationIds.length });
 
-      // Fetch messages — GHL API accepts one type at a time
-      // If typeFilter has multiple (comma-separated), call per type; if empty, fetch all
-      const types = typeFilter ? typeFilter.split(',').map(t => t.trim()) : [null];
+      // Fetch messages for each conversation (5 parallel), pass type filter to API
       const allMessages = [];
       const PARALLEL = 5;
-
-      for (const singleType of types) {
-        for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
-          const batch = allConversationIds.slice(i, i + PARALLEL);
-          const results = await Promise.allSettled(
-            batch.map(async (cId) => {
-              const msgs = [];
-              let lastMessageId = undefined;
-              while (true) {
-                const msgOptions = { limit: 100 };
-                if (lastMessageId) msgOptions.lastMessageId = lastMessageId;
-                if (singleType) msgOptions.type = singleType;
-                const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
-                const pageMsgs = result.messages || [];
-                logger.info('Special Messages: fetched page', { conversationId: cId, count: pageMsgs.length, type: singleType });
-                msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
-                if (pageMsgs.length < 100) break;
-                lastMessageId = pageMsgs[pageMsgs.length - 1].id;
-              }
-              return msgs;
-            })
-          );
-          for (const r of results) {
-            if (r.status === 'fulfilled') allMessages.push(...r.value);
-          }
+      for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
+        const batch = allConversationIds.slice(i, i + PARALLEL);
+        const results = await Promise.allSettled(
+          batch.map(async (cId) => {
+            const msgs = [];
+            let lastMessageId = undefined;
+            while (true) {
+              const msgOptions = { limit: 100 };
+              if (lastMessageId) msgOptions.lastMessageId = lastMessageId;
+              if (typeFilter) msgOptions.type = typeFilter;
+              const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
+              const pageMsgs = result.messages || [];
+              logger.info('Special Messages: fetched page', { conversationId: cId, count: pageMsgs.length, type: typeFilter });
+              msgs.push(...pageMsgs?.messages?.map(m => ({ ...m, conversationId: cId })));
+              if (pageMsgs?.messages?.length < 100) break;
+              lastMessageId = pageMsgs?.messages?.lastMessageId;
+            }
+            return msgs;
+          })
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') allMessages.push(...r.value);
         }
       }
 
-      logger.info('Special Messages: fetched', { totalMessages: allMessages.length, types });
+      logger.info('Special Messages: fetched', { totalMessages: allMessages.length, type: typeFilter });
 
       // Save to SpecialExport so charge-and-export can reuse without re-fetching
       const specialExport = await SpecialExport.create({

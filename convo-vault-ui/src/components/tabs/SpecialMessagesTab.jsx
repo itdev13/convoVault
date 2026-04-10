@@ -172,17 +172,15 @@ export default function SpecialMessagesTab() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Message Type</label>
             <Select
-              mode="multiple"
-              value={chatType}
-              onChange={(val) => setChatType(val)}
+              value={chatType || undefined}
+              onChange={(val) => setChatType(val || '')}
               options={MESSAGE_TYPES}
               className="w-full"
               size="large"
               showSearch
               optionFilterProp="label"
-              placeholder="All types (leave empty for all)"
+              placeholder="Select message type"
               allowClear
-              maxTagCount="responsive"
             />
           </div>
 
@@ -224,8 +222,8 @@ export default function SpecialMessagesTab() {
 
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
-            This will search all conversations{chatType.length > 0
-              ? <> for <strong>{chatType.map(t => MESSAGE_TYPES.find(mt => mt.value === t)?.label || t).join(', ')}</strong> messages</>
+            This will search all conversations{chatType
+              ? <> for <strong>{MESSAGE_TYPES.find(t => t.value === chatType)?.label || chatType}</strong> messages</>
               : <> and fetch <strong>all message types</strong></>
             }, then export as CSV. This is a custom-built export — data fetching may take some time.
             Pricing: <strong>$0.05 per message</strong> (no volume discount).
