@@ -1976,6 +1976,19 @@ exports.handler = async (event, context) => {
         totalBatches: currentBatch
       });
 
+      // Clean up the pre-fetched messages for specialTabMessages — the CSV is now on S3, we don't need to hold the raw messages.
+      // TTL index is the safety net if this delete fails.
+      if (job.exportType === 'specialTabMessages') {
+        try {
+          const { deletedCount } = await db.collection('specialexports').deleteOne({
+            exportJobId: new ObjectId(exportJobId)
+          });
+          log('SpecialExport cleanup', { deletedCount });
+        } catch (cleanupErr) {
+          log('SpecialExport cleanup failed (TTL will handle it)', { error: cleanupErr.message });
+        }
+      }
+
       // Send email notification
       let emailSent = false;
       if (job.notificationEmail) {
