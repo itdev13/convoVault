@@ -401,7 +401,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
 
       const total = allMessages.length;
-      const unitPrice = 0.02;
+      const unitPrice = 0.01;
       const finalAmount = total * unitPrice;
       return res.json({
         success: true,
@@ -665,10 +665,10 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
     const tokenData = await ghlService.getValidToken(locationId);
     const accessToken = tokenData.accessToken || tokenData;
 
-    // Special Messages: standalone billing (flat $0.025/msg, single meter charge, no discount)
+    // Special Messages: standalone billing (flat $0.01/msg, single meter charge, no discount)
     let estimate, meterCharges;
     if (exportType === 'specialTabMessages') {
-      const unitPrice = 0.02;
+      const unitPrice = 0.01;
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];
