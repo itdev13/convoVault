@@ -744,15 +744,31 @@ class GHLService {
         params.conversationId = options.conversationId;
       }
 
-      const response = await this.apiRequest(
-        'GET',
-        '/conversations/messages/export',
-        locationId,
-        null,
-        params
-      );
-
-      return response;
+      // Retry on PIT-overload (GHL returns 500 "Search infrastructure is temporarily overloaded...")
+      // Why: the user's Search/Export call fails transiently; without retry they have to click again.
+      const MAX_ATTEMPTS = 3;
+      let lastError;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          return await this.apiRequest(
+            'GET',
+            '/conversations/messages/export',
+            locationId,
+            null,
+            params
+          );
+        } catch (error) {
+          lastError = error;
+          const msg = error.response?.data?.message || '';
+          const isPitOverload = error.response?.status === 500 &&
+            (msg.includes('search contexts') || msg.includes('temporarily overloaded'));
+          if (!isPitOverload || attempt === MAX_ATTEMPTS) break;
+          const delay = 1500 * attempt; // 1.5s, 3s
+          logger.warn('PIT overload, retrying exportMessages', { attempt, delay, locationId });
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+      throw lastError;
     } catch (error) {
       logger.error('Export failed:', error);
       throw error;

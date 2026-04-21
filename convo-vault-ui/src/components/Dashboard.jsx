@@ -104,7 +104,7 @@ export default function Dashboard() {
         {/* Tab Navigation */}
         <div className="bg-white rounded-xl shadow-lg mb-6 overflow-x-auto">
           <div className="border-b border-gray-200">
-            <nav className="flex -mb-px">
+            <nav className="flex -mb-px justify-around">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
