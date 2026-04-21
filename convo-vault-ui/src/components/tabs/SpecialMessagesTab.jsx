@@ -10,7 +10,6 @@ const MESSAGE_TYPES = [
   { value: 'TYPE_CALL', label: 'Call' },
   { value: 'TYPE_SMS', label: 'SMS' },
   { value: 'TYPE_RCS', label: 'RCS' },
-  { value: 'TYPE_EMAIL', label: 'Email' },
   { value: 'TYPE_FACEBOOK', label: 'Facebook' },
   { value: 'TYPE_GMB', label: 'Google My Business' },
   { value: 'TYPE_INSTAGRAM', label: 'Instagram' },
@@ -226,7 +225,7 @@ export default function SpecialMessagesTab() {
               ? <> for <strong>{MESSAGE_TYPES.find(t => t.value === chatType)?.label || chatType}</strong> messages</>
               : <> and fetch <strong>all message types</strong></>
             }, then export as CSV. Slower than the standard Messages export, but the most accurate —
-            we walk every conversation so nothing is missed. Pricing: <strong>$0.01 per message</strong> (no volume discount).
+            we walk every conversation so nothing is missed. Pricing: <strong>$0.018 per message</strong> (no volume discount).
           </p>
         </div>
       </div>
