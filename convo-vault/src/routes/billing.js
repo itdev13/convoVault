@@ -366,8 +366,9 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           batch.map(async (cId) => {
             const msgs = [];
             let cursor = undefined;
+            const PAGE_SIZE = 300;
             while (true) {
-              const msgOptions = { limit: 100 };
+              const msgOptions = { limit: PAGE_SIZE };
               if (cursor) msgOptions.lastMessageId = cursor;
               if (typeFilter) msgOptions.type = typeFilter;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
@@ -376,7 +377,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               const pageMsgs = wrapper.messages || [];
               msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
               logger.info('Special Messages: page done', { conversationId: cId, pageCount: pageMsgs.length, totalMsgs: msgs.length, nextPage: wrapper.nextPage, lastMessageId: wrapper.lastMessageId });
-              if (pageMsgs.length < 100 || !wrapper.nextPage) break;
+              if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
               cursor = wrapper.lastMessageId;
             }
             return msgs;
