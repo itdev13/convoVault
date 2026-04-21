@@ -367,6 +367,11 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             const msgs = [];
             let cursor = undefined;
             const PAGE_SIZE = 300;
+            // Email is priced separately on the standard Messages tab; never include it here regardless of type filter.
+            const isEmail = (m) => {
+              const t = String(m?.type || '').toLowerCase();
+              return t === 'type_email' || t === '3' || t.includes('email');
+            };
             while (true) {
               const msgOptions = { limit: PAGE_SIZE };
               if (cursor) msgOptions.lastMessageId = cursor;
@@ -375,8 +380,11 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               // GHL response: { messages: { lastMessageId, nextPage, messages: [...] } }
               const wrapper = result.messages || {};
               const pageMsgs = wrapper.messages || [];
-              msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
-              logger.info('Special Messages: page done', { conversationId: cId, pageCount: pageMsgs.length, totalMsgs: msgs.length, nextPage: wrapper.nextPage, lastMessageId: wrapper.lastMessageId });
+              const filtered = pageMsgs
+                .filter(m => !isEmail(m))
+                .map(m => ({ ...m, conversationId: cId }));
+              msgs.push(...filtered);
+              logger.info('Special Messages: page done', { conversationId: cId, pageCount: pageMsgs.length, keptAfterEmailFilter: filtered.length, totalMsgs: msgs.length, nextPage: wrapper.nextPage, lastMessageId: wrapper.lastMessageId });
               if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
               cursor = wrapper.lastMessageId;
             }

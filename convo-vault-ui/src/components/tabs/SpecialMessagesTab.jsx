@@ -223,7 +223,7 @@ export default function SpecialMessagesTab() {
           <p className="text-sm text-blue-800">
             This will search all conversations{chatType
               ? <> for <strong>{MESSAGE_TYPES.find(t => t.value === chatType)?.label || chatType}</strong> messages</>
-              : <> and fetch <strong>all message types</strong></>
+              : <> and fetch <strong>all message types (except email)</strong></>
             }, then export as CSV. Slower than the standard Messages export, but the most accurate —
             we walk every conversation so nothing is missed. Pricing: <strong>$0.018 per message</strong> (no volume discount).
           </p>
