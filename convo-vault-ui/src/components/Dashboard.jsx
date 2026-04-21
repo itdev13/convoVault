@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Header from './Header';
-import UpdatesBanner from './UpdatesBanner';
 import ConversationsTab from './tabs/ConversationsTab';
 import MessagesTab from './tabs/MessagesTab';
 import ImportTab from './tabs/ImportTab';
@@ -12,15 +11,18 @@ import TasksTab from './tabs/TasksTab';
 import OpportunitiesTab from './tabs/OpportunitiesTab';
 import FormSubmissionsTab from './tabs/FormSubmissionsTab';
 import LinksTab from './tabs/LinksTab';
-import SocialPostsTab from './tabs/SocialPostsTab';
 import CallLogsTab from './tabs/CallLogsTab';
 import TemplatesTab from './tabs/TemplatesTab';
 import SpecialMessagesTab from './tabs/SpecialMessagesTab';
 import ConversationMessages from './ConversationMessages';
 import { billingAPI } from '../api/billing';
+import CustomChargeTab from './tabs/CustomChargeTab';
+
+const CUSTOM_CHARGE_LOCATION_ID = 'WHspQgeC5SqFU8i55G7L';
 
 export default function Dashboard() {
   const { location } = useAuth();
+  const isCustomChargeLocation = location?.id === CUSTOM_CHARGE_LOCATION_ID;
 
   // Get saved tab from localStorage or default to 'conversations'
   const savedTab = localStorage.getItem('activeTab') || 'messages';
@@ -43,22 +45,19 @@ export default function Dashboard() {
     }).catch(() => {});
   }, [location?.id]);
 
-  const baseTabs = [
+  const tabs = [
     { id: 'messages', label: 'Messages', icon: '📊' },
-    { id: 'conversations', label: 'Conversations', icon: '💬' },
+    ...(specialTabEnabled ? [{ id: 'specialTabMessages', label: 'Complete Messages', icon: '💎' }] : []),
+    { id: 'conversations', label: 'Conversation Threads', icon: '💬' },
     { id: 'templates', label: 'Templates', icon: '📄' },
     { id: 'notes', label: 'Notes', icon: '📝' },
     { id: 'tasks', label: 'Tasks', icon: '✅' },
     { id: 'opportunities', label: 'Opportunities', icon: '💰' },
     { id: 'formSubmissions', label: 'Forms', icon: '📋' },
     { id: 'links', label: 'Links', icon: '🔗' },
-    { id: 'socialPosts', label: 'Social Posts', icon: '📱' },
     { id: 'callLogs', label: 'Voice AI', icon: '📞' },
+    ...(isCustomChargeLocation ? [{ id: 'customCharge', label: 'Charge', icon: '💳' }] : []),
   ];
-
-  const tabs = specialTabEnabled
-    ? [...baseTabs, { id: 'specialTabMessages', label: 'Special Messages', icon: '💎' }]
-    : baseTabs;
 
   const handleConversationSelect = (conversation) => {
     setSelectedConversation(conversation);
@@ -141,7 +140,7 @@ export default function Dashboard() {
                 onClick={() => setShowConversationView(false)}
                 className="hover:text-blue-600 transition-colors font-medium"
               >
-                Conversations
+                Conversation Threads
               </button>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -166,13 +165,13 @@ export default function Dashboard() {
               {activeTab === 'opportunities' && <OpportunitiesTab />}
               {activeTab === 'formSubmissions' && <FormSubmissionsTab />}
               {activeTab === 'links' && <LinksTab />}
-              {activeTab === 'socialPosts' && <SocialPostsTab />}
               {activeTab === 'callLogs' && <CallLogsTab />}
               {activeTab === 'templates' && <TemplatesTab />}
               {activeTab === 'specialTabMessages' && specialTabEnabled && <SpecialMessagesTab />}
               {activeTab === 'exports' && <ExportTab />}
               {activeTab === 'import' && <ImportTab />}
               {activeTab === 'support' && <SupportTab />}
+              {activeTab === 'customCharge' && isCustomChargeLocation && <CustomChargeTab />}
             </>
           )}
         </div>

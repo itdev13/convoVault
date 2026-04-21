@@ -305,8 +305,8 @@ export default function ConversationsTab({ onSelectConversation }) {
       {/* Header with Stats */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Conversations</h2>
-          <p className="text-sm text-gray-500 mt-1">View and manage your conversations</p>
+          <h2 className="text-2xl font-bold text-gray-900">Conversation Threads</h2>
+          <p className="text-sm text-gray-500 mt-1">Browse conversation threads (metadata only — to export messages, use the Messages tab)</p>
         </div>
         <div className="flex items-center gap-3">
         {data?.data && (

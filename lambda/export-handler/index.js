@@ -25,7 +25,7 @@ const EMAIL_FROM_ADDRESS = 'support@vaultsuite.store';
 // Batch processing configuration
 const BATCH_SIZE = 5000;            // Records per Lambda invocation
 const API_PAGE_SIZE = 100;          // Records per GHL API call
-const API_MESSAGES_PAGE_SIZE = 500;
+const API_MESSAGES_PAGE_SIZE = 1000;
 const API_CALL_LOGS_PAGE_SIZE = 50; // Max pageSize for Voice AI call logs API
 const TIMEOUT_BUFFER_MS = 13 * 60 * 1000;  // 14 min buffer before timeout
 

@@ -186,5 +186,10 @@ export const billingAPI = {
       params: { locationId, query }
     });
     return response;
-  }
+  },
+
+  customCharge: async (locationId, amount) => {
+    const response = await apiClient.post('/billing/custom-charge', { locationId, amount });
+    return response;
+  },
 };

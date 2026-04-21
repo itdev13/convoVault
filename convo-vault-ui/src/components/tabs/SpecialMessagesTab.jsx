@@ -143,8 +143,8 @@ export default function SpecialMessagesTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Special Messages</h2>
-          <p className="text-sm text-gray-500 mt-1">Custom-built export — select a message type, fetch all conversations and their messages, then export as CSV</p>
+          <h2 className="text-2xl font-bold text-gray-900">Complete Messages</h2>
+          <p className="text-sm text-gray-500 mt-1">Most accurate export — we walk every conversation for the selected message type so nothing is missed. Takes a bit longer than the standard Messages export.</p>
         </div>
       </div>
 
@@ -225,8 +225,8 @@ export default function SpecialMessagesTab() {
             This will search all conversations{chatType
               ? <> for <strong>{MESSAGE_TYPES.find(t => t.value === chatType)?.label || chatType}</strong> messages</>
               : <> and fetch <strong>all message types</strong></>
-            }, then export as CSV. This is a custom-built export — data fetching may take some time.
-            Pricing: <strong>$0.02 per message</strong> (no volume discount).
+            }, then export as CSV. Slower than the standard Messages export, but the most accurate —
+            we walk every conversation so nothing is missed. Pricing: <strong>$0.02 per message</strong> (no volume discount).
           </p>
         </div>
       </div>

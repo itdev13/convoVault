@@ -1033,7 +1033,10 @@ router.get('/export-history', authenticateSession, async (req, res) => {
 router.get('/pricing', async (req, res) => {
   const locationId = req.query?.locationId;
   const specialTabLocationIds = await AppConfig.getValues('specialTabLocationIds');
-  const specialTabEnabled = locationId ? specialTabLocationIds.includes(locationId) : false;
+  // "*" in values = show to all locations (global kill-switch)
+  const specialTabEnabled = locationId
+    ? (specialTabLocationIds.includes('*') || specialTabLocationIds.includes(locationId))
+    : false;
   res.json({
     success: true,
     data: {
@@ -1450,6 +1453,70 @@ router.get('/contacts/search', authenticateSession, async (req, res) => {
   } catch (error) {
     logError('Search contacts error', error, { locationId: req.query?.locationId });
     res.status(500).json({ success: false, error: 'Failed to search contacts' });
+  }
+});
+
+// Location allowed to use the custom charge tab
+const CUSTOM_CHARGE_LOCATION_ID = '2yb4B4EdJMYLgOu7mZ9I';
+
+/**
+ * @route POST /api/billing/custom-charge
+ * @desc Charge a specific location a custom amount directly
+ */
+router.post('/custom-charge', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, amount } = req.body;
+    const { companyId, userId } = req.user;
+
+    if (locationId !== CUSTOM_CHARGE_LOCATION_ID) {
+      return res.status(403).json({ success: false, error: 'Not authorized for this location' });
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Valid amount greater than 0 is required' });
+    }
+
+    const tokenData = await ghlService.getValidToken(locationId);
+    const accessToken = tokenData.accessToken || tokenData;
+
+    const hasFunds = await billingService.hasFunds(companyId, accessToken);
+    if (!hasFunds) {
+      return res.status(402).json({ success: false, error: 'Insufficient wallet balance' });
+    }
+
+    const meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: 1, description: `Custom charge $${parsedAmount}` }];
+
+    const transaction = await BillingTransaction.create({
+      locationId,
+      companyId,
+      type: 'custom_charge',
+      itemCounts: { total: 1 },
+      pricing: { baseAmount: parsedAmount, discountPercent: 0, discountAmount: 0, finalAmount: parsedAmount },
+      meterCharges,
+      status: 'pending',
+      userId,
+    });
+
+    try {
+      const chargeResult = await billingService.chargeWallet(companyId, accessToken, meterCharges, locationId, transaction._id.toString(), parsedAmount);
+      transaction.ghlChargeId = chargeResult?.charges?.map(c => c?.chargeId).join(',');
+      transaction.referralCode = chargeResult.referralCode || null;
+      transaction.status = chargeResult.internalTesting ? 'tested' : 'charged';
+      transaction.internalTesting = !!chargeResult.internalTesting;
+      transaction.paymentIgnored = !!chargeResult.internalTesting;
+      await transaction.save();
+
+      return res.json({ success: true, chargeId: transaction.ghlChargeId, amount: parsedAmount });
+    } catch (chargeError) {
+      transaction.status = 'failed';
+      transaction.errorMessage = chargeError.message;
+      await transaction.save();
+      return res.status(402).json({ success: false, error: chargeError.message });
+    }
+  } catch (error) {
+    logError('Custom charge error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Custom charge failed' });
   }
 });
 
