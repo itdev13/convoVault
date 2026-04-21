@@ -18,11 +18,8 @@ import ConversationMessages from './ConversationMessages';
 import { billingAPI } from '../api/billing';
 import CustomChargeTab from './tabs/CustomChargeTab';
 
-const CUSTOM_CHARGE_LOCATION_ID = 'WHspQgeC5SqFU8i55G7L';
-
 export default function Dashboard() {
   const { location } = useAuth();
-  const isCustomChargeLocation = location?.id === CUSTOM_CHARGE_LOCATION_ID;
 
   // Get saved tab from localStorage or default to 'conversations'
   const savedTab = localStorage.getItem('activeTab') || 'messages';
@@ -30,18 +27,19 @@ export default function Dashboard() {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [showConversationView, setShowConversationView] = useState(false);
   const [specialTabEnabled, setSpecialTabEnabled] = useState(false);
+  const [customChargeEnabled, setCustomChargeEnabled] = useState(false);
 
   // Save active tab to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
 
-  // Check if Special Messages tab is enabled for this location
+  // Check which gated tabs are enabled for this location (driven by AppConfig in Mongo)
   useEffect(() => {
     if (!location?.id) return;
     billingAPI.getPricing(location.id).then(res => {
-      if (res?.data?.specialTabEnabled) setSpecialTabEnabled(true);
-      else setSpecialTabEnabled(false);
+      setSpecialTabEnabled(!!res?.data?.specialTabEnabled);
+      setCustomChargeEnabled(!!res?.data?.customChargeEnabled);
     }).catch(() => {});
   }, [location?.id]);
 
@@ -56,7 +54,7 @@ export default function Dashboard() {
     { id: 'formSubmissions', label: 'Forms', icon: '📋' },
     { id: 'links', label: 'Links', icon: '🔗' },
     { id: 'callLogs', label: 'Voice AI', icon: '📞' },
-    ...(isCustomChargeLocation ? [{ id: 'customCharge', label: 'Charge', icon: '💳' }] : []),
+    ...(customChargeEnabled ? [{ id: 'customCharge', label: 'Charge', icon: '💳' }] : []),
   ];
 
   const handleConversationSelect = (conversation) => {
@@ -171,7 +169,7 @@ export default function Dashboard() {
               {activeTab === 'exports' && <ExportTab />}
               {activeTab === 'import' && <ImportTab />}
               {activeTab === 'support' && <SupportTab />}
-              {activeTab === 'customCharge' && isCustomChargeLocation && <CustomChargeTab />}
+              {activeTab === 'customCharge' && customChargeEnabled && <CustomChargeTab />}
             </>
           )}
         </div>

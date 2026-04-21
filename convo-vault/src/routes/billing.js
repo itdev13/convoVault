@@ -1041,10 +1041,16 @@ router.get('/export-history', authenticateSession, async (req, res) => {
  */
 router.get('/pricing', async (req, res) => {
   const locationId = req.query?.locationId;
-  const specialTabLocationIds = await AppConfig.getValues('specialTabLocationIds');
+  const [specialTabLocationIds, customChargeLocationIds] = await Promise.all([
+    AppConfig.getValues('specialTabLocationIds'),
+    AppConfig.getValues('customChargeLocationIds')
+  ]);
   // "*" in values = show to all locations (global kill-switch)
   const specialTabEnabled = locationId
     ? (specialTabLocationIds.includes('*') || specialTabLocationIds.includes(locationId))
+    : false;
+  const customChargeEnabled = locationId
+    ? (customChargeLocationIds.includes('*') || customChargeLocationIds.includes(locationId))
     : false;
   res.json({
     success: true,
@@ -1053,7 +1059,8 @@ router.get('/pricing', async (req, res) => {
       discountTiers: billingService.getDiscountTiers(),
       maxDateRange: '1 month',
       maxDateRangeMonths: 6,
-      specialTabEnabled
+      specialTabEnabled,
+      customChargeEnabled
     }
   });
 });
@@ -1465,9 +1472,6 @@ router.get('/contacts/search', authenticateSession, async (req, res) => {
   }
 });
 
-// Location allowed to use the custom charge tab
-const CUSTOM_CHARGE_LOCATION_ID = '2yb4B4EdJMYLgOu7mZ9I';
-
 /**
  * @route POST /api/billing/custom-charge
  * @desc Charge a specific location a custom amount directly
@@ -1477,7 +1481,9 @@ router.post('/custom-charge', authenticateSession, async (req, res) => {
     const { locationId, amount } = req.body;
     const { companyId, userId } = req.user;
 
-    if (locationId !== CUSTOM_CHARGE_LOCATION_ID) {
+    const customChargeLocationIds = await AppConfig.getValues('customChargeLocationIds');
+    const isAllowed = customChargeLocationIds.includes('*') || customChargeLocationIds.includes(locationId);
+    if (!isAllowed) {
       return res.status(403).json({ success: false, error: 'Not authorized for this location' });
     }
 
