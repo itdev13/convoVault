@@ -115,15 +115,20 @@ export default function ExportEstimateModal({
       )}
 
       {/* Error State */}
-      {error && !estimating && (
-        <Alert
-          type="error"
-          message="Error"
-          description={error}
-          className="mb-4"
-          showIcon
-        />
-      )}
+      {error && !estimating && (() => {
+        // Backend "no data" responses are expected outcomes of the user's filter choice,
+        // not failures — render them as an info alert instead of a red error.
+        const isNoData = /^No (items|notes|billable)/i.test(String(error));
+        return (
+          <Alert
+            type={isNoData ? 'info' : 'error'}
+            message={isNoData ? 'No data to export' : 'Error'}
+            description={isNoData ? 'We couldn\'t find any data for the selected filters. This can sometimes happen due to system load — please try once more. If it still shows no data, adjust your filters and try again.' : error}
+            className="mb-4"
+            showIcon
+          />
+        );
+      })()}
 
       {/* Post-Export Billing State (notes/tasks all-contacts) */}
       {postExportBilling && !estimating && !error && (
