@@ -523,149 +523,163 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     logger.info('Starting charge-and-export', { locationId, exportType, companyId });
 
+    // Notes require contacts — validate before any counting
+    if (exportType === 'notes' && !filters?.contactId && !filters?.contactIds?.length) {
+      return res.status(400).json({ success: false, error: 'Please select contacts or enter a tag to export notes' });
+    }
+
     // Step 1: Get counts for billing
-    let counts = {
-      conversations: 0,
-      smsMessages: 0,
-      emailMessages: 0,
-      notes: 0,
-      tasks: 0,
-      opportunities: 0,
-      formSubmissions: 0,
-      links: 0,
-      socialPosts: 0,
-      callLogs: 0,
-      templates: 0
-    };
-    let totalItems = 0;
+    const fetchCounts = async () => {
+      const counts = {
+        conversations: 0,
+        smsMessages: 0,
+        emailMessages: 0,
+        notes: 0,
+        tasks: 0,
+        opportunities: 0,
+        formSubmissions: 0,
+        links: 0,
+        socialPosts: 0,
+        callLogs: 0,
+        templates: 0
+      };
+      let totalItems = 0;
 
-    if (exportType === 'conversations') {
-      const result = await ghlService.searchConversations(locationId, {
-        ...filters,
-        limit: 100
-      });
-      totalItems = result.total || result.conversations?.length || 0;
-      counts.conversations = totalItems;
-    } else if (exportType === 'notes') {
-      // Notes: contactIds already resolved during estimate, count passed from frontend
-      if (!filters?.contactId && !filters?.contactIds?.length) {
-        return res.status(400).json({ success: false, error: 'Please select contacts or enter a tag to export notes' });
-      }
-      totalItems = filters?.estimatedNoteCount || 0;
-      if (totalItems === 0) {
-        return res.status(400).json({ success: false, error: 'No notes found for the selected contacts' });
-      }
-      counts.notes = totalItems;
+      if (exportType === 'conversations') {
+        const result = await ghlService.searchConversations(locationId, {
+          ...filters,
+          limit: 100
+        });
+        totalItems = result.total || result.conversations?.length || 0;
+        counts.conversations = totalItems;
+      } else if (exportType === 'notes') {
+        // Notes: contactIds already resolved during estimate, count passed from frontend
+        totalItems = filters?.estimatedNoteCount || 0;
+        counts.notes = totalItems;
 
-    } else if (exportType === 'tasks') {
-      // Tasks: location-level search API — always upfront billing
-      const result = await ghlService.getLocationTasks(locationId, {
-        contactIds: filters?.contactIds || [],
-        assignedTo: filters?.assignedTo,
-        completed: filters?.completed,
-        overdue: filters?.overdue,
-        query: filters?.query,
-        dueDate: filters?.dueDate,
-        sortKey: filters?.sortKey,
-        sortDirection: filters?.sortDirection,
-        limit: 1
-      });
-      totalItems = result.total || 0;
-      counts.tasks = totalItems;
+      } else if (exportType === 'tasks') {
+        // Tasks: location-level search API — always upfront billing
+        const result = await ghlService.getLocationTasks(locationId, {
+          contactIds: filters?.contactIds || [],
+          assignedTo: filters?.assignedTo,
+          completed: filters?.completed,
+          overdue: filters?.overdue,
+          query: filters?.query,
+          dueDate: filters?.dueDate,
+          sortKey: filters?.sortKey,
+          sortDirection: filters?.sortDirection,
+          limit: 1
+        });
+        totalItems = result.total || 0;
+        counts.tasks = totalItems;
 
-    } else if (exportType === 'opportunities') {
-      // Opportunities: location-level search API returns total directly
-      const result = await ghlService.searchOpportunities(locationId, {
-        ...filters,
-        limit: 1
-      });
-      totalItems = result.total || 0;
-      counts.opportunities = totalItems;
+      } else if (exportType === 'opportunities') {
+        // Opportunities: location-level search API returns total directly
+        const result = await ghlService.searchOpportunities(locationId, {
+          ...filters,
+          limit: 1
+        });
+        totalItems = result.total || 0;
+        counts.opportunities = totalItems;
 
-    } else if (exportType === 'formSubmissions') {
-      const result = await ghlService.getFormSubmissions(locationId, {
-        formId: filters?.formId,
-        q: filters?.query,
-        startAt: filters?.startDate,
-        endAt: filters?.endDate,
-        limit: 1
-      });
-      totalItems = result.total || 0;
-      counts.formSubmissions = totalItems;
+      } else if (exportType === 'formSubmissions') {
+        const result = await ghlService.getFormSubmissions(locationId, {
+          formId: filters?.formId,
+          q: filters?.query,
+          startAt: filters?.startDate,
+          endAt: filters?.endDate,
+          limit: 1
+        });
+        totalItems = result.total || 0;
+        counts.formSubmissions = totalItems;
 
-    } else if (exportType === 'links') {
-      const result = await ghlService.getLinks(locationId, { query: filters?.query, limit: 1000 });
-      totalItems = result.total || result.links?.length || 0;
-      counts.links = totalItems;
+      } else if (exportType === 'links') {
+        const result = await ghlService.getLinks(locationId, { query: filters?.query, limit: 1000 });
+        totalItems = result.total || result.links?.length || 0;
+        counts.links = totalItems;
 
-    } else if (exportType === 'socialPosts') {
-      const result = await ghlService.getSocialPosts(locationId, {
-        ...filters,
-        limit: 1
-      });
-      totalItems = result.total || 0;
-      counts.socialPosts = totalItems;
+      } else if (exportType === 'socialPosts') {
+        const result = await ghlService.getSocialPosts(locationId, {
+          ...filters,
+          limit: 1
+        });
+        totalItems = result.total || 0;
+        counts.socialPosts = totalItems;
 
-    } else if (exportType === 'callLogs') {
-      const result = await ghlService.getCallLogs(locationId, {
-        ...filters,
-        pageSize: 1
-      });
-      totalItems = result.total || 0;
-      counts.callLogs = totalItems;
+      } else if (exportType === 'callLogs') {
+        const result = await ghlService.getCallLogs(locationId, {
+          ...filters,
+          pageSize: 1
+        });
+        totalItems = result.total || 0;
+        counts.callLogs = totalItems;
 
-    } else if (exportType === 'templates') {
-      const result = await ghlService.getTemplates(locationId, {
-        type: filters?.type,
-        limit: '1'
-      });
-      totalItems = result.total || 0;
-      counts.templates = totalItems;
+      } else if (exportType === 'templates') {
+        const result = await ghlService.getTemplates(locationId, {
+          type: filters?.type,
+          limit: '1'
+        });
+        totalItems = result.total || 0;
+        counts.templates = totalItems;
 
-    } else if (exportType === 'specialTabMessages') {
-      // LiveChat: use estimatedTotal from frontend (already counted during estimate)
-      totalItems = filters?.estimatedTotal || 0;
+      } else if (exportType === 'specialTabMessages') {
+        // LiveChat: use estimatedTotal from frontend (already counted during estimate)
+        totalItems = filters?.estimatedTotal || 0;
 
-    } else {
-      // Use estimatedTotal from the estimate step if available (avoids GHL returning a different count)
-      if (filters?.estimatedTotal) {
-        totalItems = filters.estimatedTotal;
-        logger.info('Using estimatedTotal from frontend', { estimatedTotal: totalItems });
-      }
-
-      const result = await ghlService.exportMessages(locationId, {
-        ...filters,
-        limit: 100
-      });
-      const messages = result.messages || [];
-
-      if (!totalItems) {
-        totalItems = result.total || messages.length;
-      }
-
-      // Count types from sample and extrapolate
-      // Email = TYPE_EMAIL or type 3, everything else = text message
-      let textCount = 0, emailCount = 0;
-      messages.forEach(msg => {
-        const type = String(msg.type || '').toLowerCase();
-        if (type.includes('email') || type === '3' || type === 'type_email') emailCount++;
-        else textCount++; // SMS, WhatsApp, Call, GMB, FB, etc.
-      });
-
-      if (messages.length > 0 && totalItems > messages.length) {
-        const ratio = totalItems / messages.length;
-        counts.smsMessages = Math.round(textCount * ratio);
-        counts.emailMessages = Math.round(emailCount * ratio);
       } else {
-        counts.smsMessages = textCount;
-        counts.emailMessages = emailCount;
+        // Use estimatedTotal from the estimate step if available (avoids GHL returning a different count)
+        if (filters?.estimatedTotal) {
+          totalItems = filters.estimatedTotal;
+          logger.info('Using estimatedTotal from frontend', { estimatedTotal: totalItems });
+        }
+
+        const result = await ghlService.exportMessages(locationId, {
+          ...filters,
+          limit: 100
+        });
+        const messages = result.messages || [];
+
+        if (!totalItems) {
+          totalItems = result.total || messages.length;
+        }
+
+        // Count types from sample and extrapolate
+        // Email = TYPE_EMAIL or type 3, everything else = text message
+        let textCount = 0, emailCount = 0;
+        messages.forEach(msg => {
+          const type = String(msg.type || '').toLowerCase();
+          if (type.includes('email') || type === '3' || type === 'type_email') emailCount++;
+          else textCount++; // SMS, WhatsApp, Call, GMB, FB, etc.
+        });
+
+        if (messages.length > 0 && totalItems > messages.length) {
+          const ratio = totalItems / messages.length;
+          counts.smsMessages = Math.round(textCount * ratio);
+          counts.emailMessages = Math.round(emailCount * ratio);
+        } else {
+          counts.smsMessages = textCount;
+          counts.emailMessages = emailCount;
+        }
       }
+
+      return { counts, totalItems };
+    };
+
+    let { counts, totalItems } = await fetchCounts();
+
+    // If first fetch returns 0, retry once to guard against transient empty results
+    if (totalItems === 0) {
+      logger.warn('totalItems=0 on first fetch, retrying once before declaring no data', { locationId, exportType });
+      ({ counts, totalItems } = await fetchCounts());
     }
 
     if (totalItems === 0) {
+      const noDataError = exportType === 'notes'
+        ? 'No notes found for the selected contacts'
+        : 'No items found matching the filters';
       return res.status(400).json({
         success: false,
-        error: 'No items found matching the filters'
+        error: noDataError
       });
     }
 
@@ -685,6 +699,18 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
       // Step 5: Build meter charges
       meterCharges = billingService.buildMeterCharges(counts);
+    }
+
+    // Safety net: if billing resolved to $0 despite totalItems>0, the counts used for
+    // billing are out of sync with the export count — block instead of exporting for free.
+    if (estimate.finalAmount === 0) {
+      logger.warn('Billing calculated $0 — blocking export to prevent free charge', {
+        locationId, exportType, totalItems, counts
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'No billable items found. Please adjust your filters and try again.'
+      });
     }
 
     // Step 4: Check wallet funds
