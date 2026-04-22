@@ -46,7 +46,7 @@ export default function Dashboard() {
   const tabs = [
     { id: 'messages', label: 'Messages', icon: '📊' },
     ...(specialTabEnabled ? [{ id: 'specialTabMessages', label: 'Complete Messages', icon: '💎' }] : []),
-    { id: 'conversations', label: 'Conversation Threads', icon: '💬' },
+    // { id: 'conversations', label: 'Conversation Threads', icon: '💬' },
     { id: 'templates', label: 'Templates', icon: '📄' },
     { id: 'notes', label: 'Notes', icon: '📝' },
     { id: 'tasks', label: 'Tasks', icon: '✅' },
