@@ -81,9 +81,14 @@ export default function Dashboard() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <div>
-              <p className="text-white font-semibold text-sm">Need custom work or AI agents?</p>
-              <p className="text-purple-100 text-xs">I build custom integrations, automations, and AI agents at low cost. Let's talk.</p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-white font-semibold text-sm">Hire a former HighLevel developer</p>
+                <span className="hidden sm:inline-flex items-center gap-1 bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/30">
+                  Ex-HighLevel · 5+ yrs
+                </span>
+              </div>
+              <p className="text-purple-100 text-xs mt-0.5">Custom GHL apps, integrations, automations & AI agents — quality work at low cost. Need something built? Let's talk.</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
