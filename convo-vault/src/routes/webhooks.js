@@ -193,11 +193,17 @@ async function handleInstall(data) {
       });
     }
     
-    // REFERRAL PROPAGATION: If locationId install and company has a referral,
-    // create a location-level referral record and stamp referralCode on installation
+    // REFERRAL PROPAGATION: If locationId install and company has an ACTIVE referral,
+    // create a location-level referral record and stamp referralCode on installation.
+    // We filter by status='installed' so soft-deleted (uninstalled) referrals don't
+    // get re-attributed when a company reinstalls without a referral link.
     if (locationId && companyId) {
       try {
-        const companyReferral = await Referral.findOne({ companyId, locationId: { $exists: false } });
+        const companyReferral = await Referral.findOne({
+          companyId,
+          locationId: { $exists: false },
+          status: 'installed'
+        });
         if (companyReferral) {
           await Referral.findOneAndUpdate(
             { locationId },
@@ -221,8 +227,8 @@ async function handleInstall(data) {
             locationId
           });
         } else {
-          // Check if location already has a direct referral (installed via referral link)
-          const locationReferral = await Referral.findOne({ locationId });
+          // Fallback: only stamp installation.referralCode if there's an ACTIVE location-level referral
+          const locationReferral = await Referral.findOne({ locationId, status: 'installed' });
           if (locationReferral?.referralCode && !installation.referralCode) {
             installation.referralCode = locationReferral.referralCode;
             await installation.save();
@@ -301,16 +307,13 @@ async function handleUninstall(data) {
     // Keeps audit trail while preventing access
     await archiveAndDeleteTokens(locationId, companyId, installation._id, data);
 
-    // Soft-delete referral record on uninstall
+    // Hard-delete referral record on uninstall so reinstalls don't inherit stale attribution
     try {
       const referralQuery = locationId ? { locationId } : { companyId, locationId: { $exists: false } };
-      await Referral.findOneAndUpdate(
-        referralQuery,
-        { status: 'uninstalled', uninstalledAt: new Date() }
-      );
-      logger.info('✅ Referral marked as uninstalled', { locationId, companyId });
+      const result = await Referral.deleteOne(referralQuery);
+      logger.info('✅ Referral deleted on uninstall', { locationId, companyId, deletedCount: result.deletedCount });
     } catch (refErr) {
-      logger.warn('Failed to soft-delete referral on uninstall (non-blocking):', refErr.message);
+      logger.warn('Failed to delete referral on uninstall (non-blocking):', refErr.message);
     }
 
     return installation;
