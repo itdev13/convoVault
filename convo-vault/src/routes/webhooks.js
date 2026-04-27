@@ -7,6 +7,9 @@ const Referral = require('../models/Referral');
 const logger = require('../utils/logger');
 const { authenticateSession } = require('../middleware/auth');
 const GHLService = require('../services/ghlService');
+const ThrottleQueue = require('../utils/throttleQueue');
+
+const tokenGenQueue = new ThrottleQueue({ name: 'proactive-token-gen', delayMs: 350 });
 
 /**
  * Webhook Endpoints for GHL Events
@@ -133,63 +136,61 @@ async function handleInstall(data) {
       });
     }
     
-    // PROACTIVE TOKEN GENERATION: If we have a locationId and company token,
-    // generate location token immediately (avoids first-call delay)
+    // PROACTIVE TOKEN GENERATION: queue this so bulk installs (e.g. agency
+    // installing on 50+ locations at once) don't hammer GHL and trigger 429s.
+    // Webhook returns immediately; token gen happens in background at ~3/sec.
     if (locationId && companyId) {
-      try {
-        // Check if location token already exists
-        const existingLocationToken = await OAuthToken.findOne({
-          locationId,
-          tokenType: 'location',
-          isActive: true
-        });
-        if (!existingLocationToken) {
-          logger.info('🔄 Proactively generating location token for new installation');
+      tokenGenQueue.push(async () => {
+        try {
+          const existingLocationToken = await OAuthToken.findOne({
+            locationId,
+            tokenType: 'location',
+            isActive: true
+          });
+          if (existingLocationToken) {
+            logger.info('ℹ️ Location token already exists - skipping generation', { locationId });
+            return;
+          }
 
-          // Check if company token exists
           const companyToken = await OAuthToken.findOne({
             companyId,
             tokenType: 'company',
             isActive: true
           });
-
-          if (companyToken) {            
-            // Generate location token from company token
-            const locationToken = await GHLService.getLocationTokenFromCompany(
-              companyId,
-              locationId
-            );
-
-            // Store location token in database
-            await OAuthToken.findOneAndUpdate(
-              { locationId, tokenType: 'location' },
-              {
-                locationId,
-                companyId,
-                tokenType: 'location',
-                accessToken: locationToken.accessToken,
-                refreshToken: locationToken.refreshToken,
-                expiresAt: new Date(Date.now() + locationToken.expiresIn * 1000),
-                isActive: true
-              },
-              { upsert: true, new: true }
-            );
-
-            logger.info('✅ Location token generated and stored proactively');
-          } else {
-            logger.info('ℹ️ No company token found - skipping proactive location token generation');
+          if (!companyToken) {
+            logger.info('ℹ️ No company token found - skipping proactive location token generation', { locationId });
+            return;
           }
-        } else {
-          logger.info('ℹ️ Location token already exists - skipping generation');
+
+          logger.info('🔄 Proactively generating location token for new installation', { locationId, queueSize: tokenGenQueue.size() });
+
+          const locationToken = await GHLService.getLocationTokenFromCompany(companyId, locationId);
+
+          await OAuthToken.findOneAndUpdate(
+            { locationId, tokenType: 'location' },
+            {
+              locationId,
+              companyId,
+              tokenType: 'location',
+              accessToken: locationToken.accessToken,
+              refreshToken: locationToken.refreshToken,
+              expiresAt: new Date(Date.now() + locationToken.expiresIn * 1000),
+              isActive: true
+            },
+            { upsert: true, new: true }
+          );
+
+          logger.info('✅ Location token generated and stored proactively', { locationId });
+        } catch (tokenError) {
+          // Non-critical: token will be lazily generated on first API call
+          logger.error('⚠️ Failed to generate location token proactively (non-critical):', {
+            locationId,
+            message: tokenError.message,
+            status: tokenError.response?.status,
+            data: tokenError.response?.data
+          });
         }
-      } catch (tokenError) {
-        // Don't fail the installation if token generation fails
-        logger.error('⚠️ Failed to generate location token proactively (non-critical):', {
-          message: tokenError.message,
-          status: tokenError.response?.status,
-          data: tokenError.response?.data
-        });
-      }
+      });
     }
     
     // REFERRAL PROPAGATION: If locationId install and company has a referral,
