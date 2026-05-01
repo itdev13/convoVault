@@ -685,5 +685,5 @@ export default function NotesTab() {
         </div>
       </div>
     </div>
-  );
+  )
 }
