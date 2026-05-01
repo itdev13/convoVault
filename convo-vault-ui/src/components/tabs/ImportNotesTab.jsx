@@ -83,7 +83,7 @@ export default function ImportNotesTab() {
       const missing = REQUIRED_COLS.filter(c => !headers.includes(c));
       if (missing.length > 0) {
         setMissingCols(missing);
-        setParseError(`File is missing required columns: ${missing.join(', ')}. Make sure you're using a notes export from this app.`);
+        setParseError(`File is missing required columns: ${missing.join(', ')}.`);
         return;
       }
 
@@ -174,8 +174,14 @@ export default function ImportNotesTab() {
     <div>
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-1">Import Notes</h2>
-        <p className="text-gray-600 text-sm">
-          Upload a notes CSV previously exported from this app. We'll create the contacts (matched by email/phone) and re-attach the notes.
+        <p className="text-gray-600 text-sm mb-2">
+          Upload a CSV to bulk-create contacts and attach notes. Contacts are matched by email or phone.
+        </p>
+        <p className="text-gray-500 text-xs">
+          Required columns: <code className="bg-gray-100 px-1.5 py-0.5 rounded">ContactName</code>,
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded ml-1">ContactEmail</code> or
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded ml-1">ContactPhone</code>, and
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded ml-1">Body</code>.
         </p>
       </div>
 
