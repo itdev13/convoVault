@@ -11,6 +11,10 @@ const { logError, logWarning } = require('../utils/errorLogger');
 const ImportJob = require('../models/ImportJob');
 const { authenticateSession } = require('../middleware/auth');
 const ThrottleQueue = require('../utils/throttleQueue');
+const billingService = require('../services/billingService');
+const BillingTransaction = require('../models/BillingTransaction');
+
+const IMPORT_NOTES_METER_ID = '69864aed1265653fdd7c0620'; // shared meter, same as exports
 
 /**
  * FEATURE 3: Import from CSV/Excel to Conversations
@@ -618,6 +622,7 @@ const MAX_NOTES_PER_IMPORT = 5000;
 router.post('/notes', authenticateSession, async (req, res) => {
   try {
     const { locationId, rows } = req.body || {};
+    const { companyId, userId } = req.user;
 
     if (!locationId) {
       return res.status(400).json({ success: false, error: 'locationId is required' });
@@ -632,10 +637,68 @@ router.post('/notes', authenticateSession, async (req, res) => {
       });
     }
 
+    // Pricing: flat $0.018 per row, no discounts
+    const unitPrices = billingService.getUnitPrices(locationId);
+    const unitPrice = unitPrices.importNotes ?? 0.018;
+    const totalRows = rows.length;
+    const finalAmount = Number((totalRows * unitPrice).toFixed(4));
+
+    // Get OAuth token + verify wallet funds (same pattern as charge-and-export)
+    const tokenData = await ghlService.getValidToken(locationId);
+    const accessToken = tokenData.accessToken || tokenData;
+
+    const hasFunds = await billingService.hasFunds(companyId, accessToken);
+    if (!hasFunds) {
+      return res.status(402).json({
+        success: false,
+        error: 'Insufficient wallet balance',
+        message: 'Please add funds to your GHL wallet to continue'
+      });
+    }
+
+    const meterCharges = [{ meterId: IMPORT_NOTES_METER_ID, qty: totalRows, description: 'Notes import' }];
+
+    const transaction = await BillingTransaction.create({
+      locationId,
+      companyId,
+      type: 'import_notes',
+      itemCounts: { notes: totalRows, total: totalRows },
+      pricing: { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount },
+      meterCharges,
+      status: 'pending',
+      userId
+    });
+
+    // Charge wallet before starting work — failure here aborts the import
+    try {
+      const chargeResult = await billingService.chargeWallet(
+        companyId, accessToken, meterCharges, locationId, transaction._id.toString(), finalAmount
+      );
+      transaction.ghlChargeId = chargeResult?.charges?.map(c => c?.chargeId).join(',');
+      transaction.referralCode = chargeResult.referralCode || null;
+      if (chargeResult.internalTesting) {
+        transaction.status = 'tested';
+        transaction.internalTesting = true;
+        transaction.paymentIgnored = true;
+      } else {
+        transaction.status = 'charged';
+      }
+      await transaction.save();
+    } catch (chargeError) {
+      transaction.status = 'failed';
+      transaction.errorMessage = chargeError.message;
+      await transaction.save();
+      return res.status(402).json({
+        success: false,
+        error: 'Payment failed',
+        message: chargeError.message
+      });
+    }
+
     const job = await ImportJob.create({
       locationId,
       fileName: req.body.fileName || 'notes-import.csv',
-      totalRows: rows.length,
+      totalRows,
       status: 'pending'
     });
 
@@ -645,7 +708,13 @@ router.post('/notes', authenticateSession, async (req, res) => {
     res.json({
       success: true,
       message: 'Notes import started',
-      data: { jobId: job._id, totalRows: rows.length, status: 'processing' }
+      data: {
+        jobId: job._id,
+        totalRows,
+        status: 'processing',
+        amountCharged: finalAmount,
+        transactionId: transaction._id
+      }
     });
   } catch (error) {
     logError('Notes import error', error, { locationId: req.body?.locationId });

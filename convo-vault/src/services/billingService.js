@@ -35,7 +35,8 @@ const DEFAULT_UNIT_PRICES = {
   links: 0.015,            // 0.015 cents per link (with volume discounts)
   socialPosts: 0.015,      // 0.015 cents per social post (with volume discounts)
   callLogs: 0.015,         // 0.015 cents per call log (with volume discounts)
-  templates: 0.015         // 0.015 cents per template (with volume discounts)
+  templates: 0.015,        // 0.015 cents per template (with volume discounts)
+  importNotes: 0.018       // 1.8 cents per imported note (no discounts)
 };
 
 

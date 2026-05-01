@@ -1,7 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Table, Alert, Progress, message as antMessage } from 'antd';
 import { importAPI } from '../../api/import';
+import ExportEstimateModal from '../ExportEstimateModal';
+
+const IMPORT_NOTES_UNIT_PRICE = 0.018; // mirrors backend billingService DEFAULT_UNIT_PRICES.importNotes
 
 // Columns produced by the notes export (lambda/export-handler/index.js notesToCSV)
 const REQUIRED_COLS = ['Body']; // BodyText is fallback
@@ -58,6 +61,7 @@ export default function ImportNotesTab() {
   const [missingCols, setMissingCols] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
+  const [estimateVisible, setEstimateVisible] = useState(false);
 
   const handleFile = async (file) => {
     setParseError(null);
@@ -96,7 +100,12 @@ export default function ImportNotesTab() {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
+    if (!location?.id || parsedRows.length === 0) return;
+    setEstimateVisible(true);
+  };
+
+  const handleConfirmCharge = async () => {
     if (!location?.id || parsedRows.length === 0) return;
     setSubmitting(true);
     try {
@@ -110,7 +119,8 @@ export default function ImportNotesTab() {
       const res = await importAPI.importNotes(location.id, rows, fileName);
       if (res.success) {
         setActiveJob({ jobId: res.data.jobId, totalRows: res.data.totalRows, status: 'processing', processed: 0 });
-        antMessage.success('Import started. Processing in background.');
+        setEstimateVisible(false);
+        antMessage.success(`Charged $${Number(res.data.amountCharged || 0).toFixed(2)}. Import processing in background.`);
       } else {
         antMessage.error(res.error || 'Failed to start import');
       }
@@ -120,6 +130,8 @@ export default function ImportNotesTab() {
       setSubmitting(false);
     }
   };
+
+  const totalAmount = (parsedRows.length * IMPORT_NOTES_UNIT_PRICE);
 
   // Poll job status
   useEffect(() => {
@@ -217,6 +229,30 @@ export default function ImportNotesTab() {
           </div>
         </>
       )}
+
+      <ExportEstimateModal
+        visible={estimateVisible}
+        onCancel={() => !submitting && setEstimateVisible(false)}
+        onConfirm={handleConfirmCharge}
+        loading={submitting}
+        estimating={false}
+        exportType="notes"
+        importMode={true}
+        estimate={{
+          itemCounts: { notes: parsedRows.length, total: parsedRows.length },
+          breakdown: {
+            notes: {
+              count: parsedRows.length,
+              unitPrice: IMPORT_NOTES_UNIT_PRICE,
+              subtotal: totalAmount
+            }
+          },
+          baseAmount: totalAmount,
+          discountPercent: 0,
+          discountAmount: 0,
+          finalAmount: totalAmount
+        }}
+      />
 
       {activeJob && (
         <div className="border border-gray-200 rounded-lg p-5 bg-gray-50">

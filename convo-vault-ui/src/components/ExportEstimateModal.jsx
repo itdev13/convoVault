@@ -16,6 +16,11 @@ export default function ExportEstimateModal({
   usingDefaultDates = false,
   postExportBilling = false,
   estimatingMessage = null,
+  // When true, this modal is reused for the Import Notes flow:
+  //   - hides email field + format selector
+  //   - changes title/button copy
+  //   - onConfirm() is invoked with no args (no email/format)
+  importMode = false,
 }) {
   console.log('estimate modal props', estimate, exportType, postExportBilling);
   const [email, setEmail] = useState('');
@@ -79,6 +84,10 @@ export default function ExportEstimateModal({
   };
 
   const handleConfirm = () => {
+    if (importMode) {
+      onConfirm();
+      return;
+    }
     if (!isValidEmail(email)) {
       return; // Button should be disabled anyway
     }
@@ -97,8 +106,8 @@ export default function ExportEstimateModal({
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Export Estimate</h3>
-            <p className="text-sm text-gray-500">Review your export cost</p>
+            <h3 className="text-lg font-bold text-gray-900">{importMode ? 'Import Estimate' : 'Export Estimate'}</h3>
+            <p className="text-sm text-gray-500">{importMode ? 'Review your import cost' : 'Review your export cost'}</p>
           </div>
         </div>
       }
@@ -428,8 +437,22 @@ export default function ExportEstimateModal({
                 </>
               )}
 
+              {/* Import Notes mode — flat per-note pricing, no discount tiers */}
+              {importMode && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Notes to import</span>
+                    <span className="font-medium">{formatNumber(estimate.itemCounts?.total)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Price per Note</span>
+                    <span className="font-medium text-gray-800">{formatUnitPrice(estimate.breakdown?.notes?.unitPrice ?? 0)}</span>
+                  </div>
+                </>
+              )}
+
               {/* Show credit-based pricing for notes/tasks/opportunities/formSubmissions/links/socialPosts/templates (1 item = 1 credit) */}
-              {(['notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'].includes(exportType)) && (
+              {!importMode && (['notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'].includes(exportType)) && (
                 <>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Credits</span>
@@ -549,7 +572,8 @@ export default function ExportEstimateModal({
           </Collapse>
           )}
 
-          {/* Email Notification - Required */}
+          {/* Email Notification - Required (export only) */}
+          {!importMode && (
           <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -581,8 +605,10 @@ export default function ExportEstimateModal({
               We'll send you the download link when your export is ready. Download links expire after 1 week.
             </p>
           </div>
+          )}
 
-          {/* Export Format */}
+          {/* Export Format (export only) */}
+          {!importMode && (
           <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -598,6 +624,7 @@ export default function ExportEstimateModal({
               {exportFormat === 'csv' ? 'Spreadsheet-friendly format. Opens in Excel, Google Sheets, etc.' : 'Structured data format. Ideal for developers and integrations.'}
             </p>
           </div>
+          )}
 
           {/* Payment Info */}
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
@@ -622,7 +649,7 @@ export default function ExportEstimateModal({
               type="primary"
               onClick={handleConfirm}
               loading={loading}
-              disabled={!isValidEmail(email)}
+              disabled={importMode ? false : !isValidEmail(email)}
               className="flex-1 h-11 bg-green-600 hover:bg-green-700 border-green-600 hover:border-green-700 disabled:bg-gray-400 disabled:border-gray-400"
               icon={
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -630,7 +657,7 @@ export default function ExportEstimateModal({
                 </svg>
               }
             >
-              {loading ? 'Processing...' : `Export`}
+              {loading ? 'Processing...' : (importMode ? 'Charge & Import' : 'Export')}
             </Button>
           </div>
         </div>
