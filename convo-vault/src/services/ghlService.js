@@ -998,6 +998,32 @@ class GHLService {
   }
 
   /**
+   * Create a note for a contact
+   * POST /contacts/:contactId/notes
+   * https://marketplace.gohighlevel.com/docs/ghl/contacts/create-note
+   */
+  async createNote(locationId, contactId, { body, userId }) {
+    try {
+      const requestBody = { body };
+      if (userId) requestBody.userId = userId;
+      const response = await this.apiRequest(
+        'POST',
+        `/contacts/${contactId}/notes`,
+        locationId,
+        requestBody
+      );
+      return response.note || response;
+    } catch (error) {
+      logger.error('Create note failed:', {
+        contactId,
+        status: error.response?.status,
+        message: error.response?.data?.message || error.message
+      });
+      throw new Error(`Failed to create note: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  /**
    * Get all tasks for a contact
    * GET /contacts/:contactId/tasks
    */

@@ -98,6 +98,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
     // For notes: track resolved contacts from tag lookup to return to frontend
     let resolvedContactIds = null;
     let resolvedContactNames = null;
+    let resolvedContactsMeta = null;
 
     let counts = {
       conversations: 0,
@@ -160,6 +161,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       // Resolve contactIds: either direct selection or by tag
       resolvedContactIds = [];
       resolvedContactNames = filters?.contactNames || {};
+      resolvedContactsMeta = filters?.contactsMeta ? { ...filters.contactsMeta } : {};
 
       if (filters?.contactId) {
         resolvedContactIds = [filters.contactId];
@@ -182,6 +184,9 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             resolvedContactIds.push(c.id);
             if (!resolvedContactNames[c.id]) {
               resolvedContactNames[c.id] = c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown';
+            }
+            if (!resolvedContactsMeta[c.id]) {
+              resolvedContactsMeta[c.id] = { email: c.email || '', phone: c.phone || '' };
             }
           }
           if (contacts.length < 100) {
@@ -451,6 +456,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
     if (exportType === 'notes' && resolvedContactIds && resolvedContactIds.length > 0) {
       responseData.resolvedContactIds = resolvedContactIds;
       responseData.resolvedContactNames = resolvedContactNames;
+      responseData.resolvedContactsMeta = resolvedContactsMeta || {};
     }
 
     res.json({ success: true, data: responseData });
@@ -821,6 +827,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       callSort: filters?.sort || null,
       // Notes/Tasks contact name map { contactId: "Name" }
       contactNames: filters?.contactNames || null,
+      // Notes contact meta map { contactId: { email, phone } } — enriches the exported CSV
+      contactsMeta: filters?.contactsMeta || null,
       // Task-specific filters
       dueDate: filters?.dueDate ? { gt: filters.dueDate.gt || null, lte: filters.dueDate.lte || null } : null,
       businessId: filters?.businessId || null,
@@ -1067,9 +1075,10 @@ router.get('/export-history', authenticateSession, async (req, res) => {
  */
 router.get('/pricing', async (req, res) => {
   const locationId = req.query?.locationId;
-  const [specialTabLocationIds, customChargeLocationIds] = await Promise.all([
+  const [specialTabLocationIds, customChargeLocationIds, importNotesLocationIds] = await Promise.all([
     AppConfig.getValues('specialTabLocationIds'),
-    AppConfig.getValues('customChargeLocationIds')
+    AppConfig.getValues('customChargeLocationIds'),
+    AppConfig.getValues('importNotesLocationIds')
   ]);
   // "*" in values = show to all locations (global kill-switch)
   const specialTabEnabled = locationId
@@ -1077,6 +1086,9 @@ router.get('/pricing', async (req, res) => {
     : false;
   const customChargeEnabled = locationId
     ? (customChargeLocationIds.includes('*') || customChargeLocationIds.includes(locationId))
+    : false;
+  const importNotesEnabled = locationId
+    ? (importNotesLocationIds.includes('*') || importNotesLocationIds.includes(locationId))
     : false;
   res.json({
     success: true,
@@ -1086,7 +1098,8 @@ router.get('/pricing', async (req, res) => {
       maxDateRange: '1 month',
       maxDateRangeMonths: 6,
       specialTabEnabled,
-      customChargeEnabled
+      customChargeEnabled,
+      importNotesEnabled
     }
   });
 });

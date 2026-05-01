@@ -78,6 +78,8 @@ const exportJobSchema = new mongoose.Schema({
     callSort: { type: String, default: null },
     // Notes/Tasks contact name lookup map { contactId: "Name" }
     contactNames: { type: mongoose.Schema.Types.Mixed, default: null },
+    // Notes contact meta map { contactId: { email, phone } } — for enriched CSV export
+    contactsMeta: { type: mongoose.Schema.Types.Mixed, default: null },
     // Task-specific filters
     dueDate: {
       gt: { type: String, default: null },

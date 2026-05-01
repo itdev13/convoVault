@@ -17,6 +17,7 @@ import SpecialMessagesTab from './tabs/SpecialMessagesTab';
 import ConversationMessages from './ConversationMessages';
 import { billingAPI } from '../api/billing';
 import CustomChargeTab from './tabs/CustomChargeTab';
+import ImportNotesTab from './tabs/ImportNotesTab';
 
 export default function Dashboard() {
   const { location } = useAuth();
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [showConversationView, setShowConversationView] = useState(false);
   const [specialTabEnabled, setSpecialTabEnabled] = useState(false);
   const [customChargeEnabled, setCustomChargeEnabled] = useState(false);
+  const [importNotesEnabled, setImportNotesEnabled] = useState(false);
 
   // Save active tab to localStorage whenever it changes
   useEffect(() => {
@@ -40,6 +42,7 @@ export default function Dashboard() {
     billingAPI.getPricing(location.id).then(res => {
       setSpecialTabEnabled(!!res?.data?.specialTabEnabled);
       setCustomChargeEnabled(!!res?.data?.customChargeEnabled);
+      setImportNotesEnabled(!!res?.data?.importNotesEnabled);
     }).catch(() => {});
   }, [location?.id]);
 
@@ -49,6 +52,7 @@ export default function Dashboard() {
     // { id: 'conversations', label: 'Conversation Threads', icon: '💬' },
     { id: 'templates', label: 'Templates', icon: '📄' },
     { id: 'notes', label: 'Notes', icon: '📝' },
+    ...(importNotesEnabled ? [{ id: 'importNotes', label: 'Import Notes', icon: '📥' }] : []),
     { id: 'tasks', label: 'Tasks', icon: '✅' },
     { id: 'opportunities', label: 'Opportunities', icon: '💰' },
     { id: 'formSubmissions', label: 'Forms', icon: '📋' },
@@ -175,6 +179,7 @@ export default function Dashboard() {
               )}
               {activeTab === 'messages' && <MessagesTab />}
               {activeTab === 'notes' && <NotesTab />}
+              {activeTab === 'importNotes' && importNotesEnabled && <ImportNotesTab />}
               {activeTab === 'tasks' && <TasksTab />}
               {activeTab === 'opportunities' && <OpportunitiesTab />}
               {activeTab === 'formSubmissions' && <FormSubmissionsTab />}

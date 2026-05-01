@@ -38,6 +38,14 @@ export const importAPI = {
   },
 
   /**
+   * Import notes from parsed CSV rows
+   */
+  importNotes: async (locationId, rows, fileName) => {
+    const response = await apiClient.post('/import/notes', { locationId, rows, fileName });
+    return response;
+  },
+
+  /**
    * Download CSV template
    */
   downloadTemplate: async () => {

@@ -208,8 +208,12 @@ export default function NotesTab() {
     }
     if (selectedContacts.length === 0) return {};
     const contactNames = Object.fromEntries(selectedContacts.map(c => [c.id, c.name]));
-    if (selectedContacts.length === 1) return { contactId: selectedContacts[0].id, contactNames };
-    return { contactIds: selectedContacts.map(c => c.id), contactNames };
+    // contactsMeta carries email/phone for the import-notes round-trip (lambda enriches CSV rows)
+    const contactsMeta = Object.fromEntries(
+      selectedContacts.map(c => [c.id, { email: c.email || '', phone: c.phone || '' }])
+    );
+    if (selectedContacts.length === 1) return { contactId: selectedContacts[0].id, contactNames, contactsMeta };
+    return { contactIds: selectedContacts.map(c => c.id), contactNames, contactsMeta };
   };
 
   // For export: use resolved contactIds from estimate if available (avoids re-resolving tags)
@@ -217,8 +221,9 @@ export default function NotesTab() {
     if (resolvedFromEstimate) {
       const ids = resolvedFromEstimate.contactIds;
       const names = resolvedFromEstimate.contactNames;
-      if (ids.length === 1) return { contactId: ids[0], contactNames: names };
-      return { contactIds: ids, contactNames: names };
+      const meta = resolvedFromEstimate.contactsMeta || {};
+      if (ids.length === 1) return { contactId: ids[0], contactNames: names, contactsMeta: meta };
+      return { contactIds: ids, contactNames: names, contactsMeta: meta };
     }
     return getFilters();
   };
@@ -258,7 +263,8 @@ export default function NotesTab() {
           if (res.data.resolvedContactIds) {
             setResolvedFromEstimate({
               contactIds: res.data.resolvedContactIds,
-              contactNames: res.data.resolvedContactNames
+              contactNames: res.data.resolvedContactNames,
+              contactsMeta: res.data.resolvedContactsMeta || {}
             });
           }
         } else {

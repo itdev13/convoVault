@@ -10,6 +10,7 @@ const logger = require('../utils/logger');
 const { logError, logWarning } = require('../utils/errorLogger');
 const ImportJob = require('../models/ImportJob');
 const { authenticateSession } = require('../middleware/auth');
+const ThrottleQueue = require('../utils/throttleQueue');
 
 /**
  * FEATURE 3: Import from CSV/Excel to Conversations
@@ -604,6 +605,141 @@ router.get('/jobs', authenticateSession, async (req, res) => {
     });
   }
 });
+
+// ════════════════════════════════════════════════════════════════════════
+// NOTES IMPORT — re-import notes from a previously exported CSV.
+// Frontend parses the CSV and POSTs JSON rows to /api/import/notes.
+// We upsert each contact (using ContactEmail/ContactPhone for dedup)
+// and create the note body against that contact, throttled to avoid 429s.
+// ════════════════════════════════════════════════════════════════════════
+
+const MAX_NOTES_PER_IMPORT = 5000;
+
+router.post('/notes', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, rows } = req.body || {};
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'rows must be a non-empty array' });
+    }
+    if (rows.length > MAX_NOTES_PER_IMPORT) {
+      return res.status(400).json({
+        success: false,
+        error: `Too many rows (${rows.length}). Max ${MAX_NOTES_PER_IMPORT} per import — please split the file.`
+      });
+    }
+
+    const job = await ImportJob.create({
+      locationId,
+      fileName: req.body.fileName || 'notes-import.csv',
+      totalRows: rows.length,
+      status: 'pending'
+    });
+
+    // Fire-and-forget: process in background, frontend polls /status/:jobId
+    processNotesImportAsync(job._id, locationId, rows);
+
+    res.json({
+      success: true,
+      message: 'Notes import started',
+      data: { jobId: job._id, totalRows: rows.length, status: 'processing' }
+    });
+  } catch (error) {
+    logError('Notes import error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: error.message || 'Failed to start notes import' });
+  }
+});
+
+async function processNotesImportAsync(jobId, locationId, rows) {
+  await ImportJob.findByIdAndUpdate(jobId, { status: 'processing', startedAt: new Date() });
+
+  let successful = 0;
+  let failed = 0;
+  let skipped = 0;
+  const importErrors = [];
+
+  // Throttle ~3 req/sec — each row makes 2 GHL calls (upsert + create note),
+  // so effective rate is ~6 calls/sec, well under typical GHL rate limits.
+  const queue = new ThrottleQueue({ name: `notes-import-${jobId}`, delayMs: 350 });
+
+  let processed = 0;
+  const total = rows.length;
+
+  // Wrap each row in a queued job and await all completions
+  const jobs = rows.map((row, idx) => new Promise((resolve) => {
+    queue.push(async () => {
+      try {
+        const body = (row.body || row.Body || '').toString();
+        const bodyText = (row.bodyText || row.BodyText || '').toString();
+        const contactName = (row.contactName || row.ContactName || '').toString().trim();
+        const contactEmail = (row.contactEmail || row.ContactEmail || '').toString().trim();
+        const contactPhone = (row.contactPhone || row.ContactPhone || '').toString().trim();
+
+        // Skip rows with no usable note content and no contact info
+        if (!body && !bodyText) {
+          skipped++;
+          importErrors.push({ row: idx + 2, error: 'No body content', data: { contactName } });
+          return;
+        }
+        if (!contactEmail && !contactPhone && !contactName) {
+          skipped++;
+          importErrors.push({ row: idx + 2, error: 'No contact identifier (email/phone/name)', data: {} });
+          return;
+        }
+
+        // 1) Upsert contact — email/phone are the dedup keys for GHL
+        const [firstName, ...rest] = contactName.split(/\s+/);
+        const contactPayload = {
+          firstName: firstName || undefined,
+          lastName: rest.join(' ') || undefined,
+          name: contactName || undefined,
+          email: contactEmail || undefined,
+          phone: contactPhone || undefined
+        };
+        const contact = await ghlService.upsertContact(locationId, contactPayload);
+        const contactId = contact?.id || contact?.contactId;
+        if (!contactId) throw new Error('Upsert returned no contactId');
+
+        // 2) Create note (HTML body preferred, falls back to plain text)
+        await ghlService.createNote(locationId, contactId, { body: body || bodyText });
+
+        successful++;
+      } catch (err) {
+        failed++;
+        importErrors.push({
+          row: idx + 2,
+          error: err.message || 'Unknown error',
+          data: { contactName: row.contactName || row.ContactName || '' }
+        });
+        logWarning('Notes import row failed', { row: idx + 2, error: err.message });
+      } finally {
+        processed++;
+        // Persist progress every 10 rows so the UI sees it
+        if (processed % 10 === 0 || processed === total) {
+          await ImportJob.findByIdAndUpdate(jobId, { processed, successful, failed, skipped }).catch(() => {});
+        }
+        resolve();
+      }
+    });
+  }));
+
+  await Promise.all(jobs);
+
+  await ImportJob.findByIdAndUpdate(jobId, {
+    status: 'completed',
+    processed,
+    successful,
+    failed,
+    skipped,
+    importErrors: importErrors.slice(0, 100), // cap stored errors
+    completedAt: new Date()
+  });
+
+  logger.info(`✅ Notes import ${jobId} done: ${successful} succeeded, ${skipped} skipped, ${failed} failed`);
+}
 
 module.exports = router;
 

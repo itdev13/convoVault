@@ -611,7 +611,7 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
  */
 function notesToCSV(notes, includeHeader = true) {
   const header = includeHeader
-    ? 'NoteID,ContactID,ContactName,Body,BodyText,UserID,DateAdded,Relations\n'
+    ? 'NoteID,ContactID,ContactName,ContactEmail,ContactPhone,Body,BodyText,UserID,DateAdded,Relations\n'
     : '';
 
   const serializeRelations = (relations) => {
@@ -624,6 +624,8 @@ function notesToCSV(notes, includeHeader = true) {
       escapeCsv(note.id),
       escapeCsv(note.contactId),
       escapeCsv(note.contactName || ''),
+      escapeCsv(note.contactEmail || ''),
+      escapeCsv(note.contactPhone || ''),
       escapeCsv(note.body || ''),
       escapeCsv(note.bodyText || ''),
       escapeCsv(note.userId || ''),
@@ -1248,7 +1250,13 @@ exports.handler = async (event, context) => {
           } else { throw fetchError; }
         }
         const singleName = (job.filters.contactNames || {})[job.filters.contactId] || '';
-        items.forEach(item => { item.contactId = job.filters.contactId; item.contactName = singleName; });
+        const singleMeta = (job.filters.contactsMeta || {})[job.filters.contactId] || {};
+        items.forEach(item => {
+          item.contactId = job.filters.contactId;
+          item.contactName = singleName;
+          item.contactEmail = singleMeta.email || '';
+          item.contactPhone = singleMeta.phone || '';
+        });
         records.push(...items);
         hasMoreData = false;
         cursor = null;
@@ -1300,7 +1308,13 @@ exports.handler = async (event, context) => {
             }
           }
           const cName = (job.filters.contactNames || {})[cId] || '';
-          items.forEach(item => { item.contactId = cId; item.contactName = cName; });
+          const cMeta = (job.filters.contactsMeta || {})[cId] || {};
+          items.forEach(item => {
+            item.contactId = cId;
+            item.contactName = cName;
+            item.contactEmail = cMeta.email || '';
+            item.contactPhone = cMeta.phone || '';
+          });
           records.push(...items);
           processedCount++;
           await sleep(150);
