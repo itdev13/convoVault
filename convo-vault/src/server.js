@@ -1,10 +1,10 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
 const logger = require('./utils/logger');
 const database = require('./config/database');
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 
 /**
  * Simple Conversations Manager App
