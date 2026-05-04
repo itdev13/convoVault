@@ -124,6 +124,9 @@ async function fetchMessagesPage(locationId, accessToken, filters, cursor) {
   if (filters.query) params.query = filters.query;
   if (filters.id) params.id = filters.id;
   if (filters.direction) params.direction = filters.direction;
+  if (Array.isArray(filters.userIds) && filters.userIds.length > 0) {
+    params.userIds = filters.userIds.filter(Boolean);
+  }
 
   // Convert date filters to ISO strings (start of day / end of day)
   if (params.startDate) {

@@ -47,6 +47,8 @@ const exportJobSchema = new mongoose.Schema({
     contactId: { type: String, default: null },
     // Notes/Tasks multi-contact export
     contactIds: { type: [String], default: [] },
+    // Messages export: filter by GHL user(s)
+    userIds: { type: [String], default: [] },
     // Conversation-specific filters
     query: { type: String, default: null },
     id: { type: String, default: null },

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { exportAPI } from '../../api/export';
 import { billingAPI } from '../../api/billing';
 import { contactsAPI } from '../../api/contacts';
+import { usersAPI } from '../../api/users';
 import { Button, Select, DatePicker, Input, Tooltip, message as antMessage } from 'antd';
 import { useErrorModal } from '../ErrorModal';
 import { useInfoModal } from '../InfoModal';
@@ -28,6 +29,7 @@ export default function MessagesTab() {
     endDate: defaultDates.endDate,
     contactId: '',
     conversationId: '',
+    userId: '',
     limit: 50
   });
   const [cursor, setCursor] = useState(null);
@@ -37,6 +39,7 @@ export default function MessagesTab() {
     endDate: defaultDates.endDate,
     contactId: '',
     conversationId: '',
+    userId: '',
     limit: 50
   }); // Filters actually used for API
   const [shouldFetch, setShouldFetch] = useState(true); // Trigger for initial load
@@ -51,6 +54,39 @@ export default function MessagesTab() {
   const [contactOptions, setContactOptions] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const contactSearchTimer = useRef(null);
+
+  // Users (for User filter)
+  const [userOptions, setUserOptions] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const userSearchTimer = useRef(null);
+
+  const handleUserSearch = useCallback((searchText) => {
+    if (userSearchTimer.current) clearTimeout(userSearchTimer.current);
+    userSearchTimer.current = setTimeout(async () => {
+      if (!location?.id) return;
+      setUsersLoading(true);
+      try {
+        const res = await usersAPI.search(location.id, searchText || '');
+        if (res.success) {
+          const list = res.data?.users || [];
+          setUserOptions(list.map(u => ({
+            id: u.id,
+            name: u.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || '(No name)',
+            email: u.email || '',
+          })));
+        }
+      } catch (err) {
+        console.error('User search failed:', err);
+      } finally {
+        setUsersLoading(false);
+      }
+    }, 300);
+  }, [location?.id]);
+
+  // Load users on mount
+  useEffect(() => {
+    if (location?.id) handleUserSearch('');
+  }, [location?.id]);
 
   const handleContactSearch = useCallback((searchText) => {
     if (contactSearchTimer.current) clearTimeout(contactSearchTimer.current);
@@ -93,6 +129,7 @@ export default function MessagesTab() {
         endDate: appliedFilters.endDate || undefined,
         contactId: appliedFilters.contactId || undefined,
         conversationId: appliedFilters.conversationId || undefined,
+        userIds: appliedFilters.userId ? [appliedFilters.userId] : undefined,
         limit: appliedFilters.limit,
         cursor: cursor || undefined
       });
@@ -216,7 +253,8 @@ export default function MessagesTab() {
           ? dayjs(filters.endDate).endOf('day').valueOf()
           : defaultEndDate.valueOf(),
         contactId: filters.contactId || undefined,
-        conversationId: filters.conversationId || undefined
+        conversationId: filters.conversationId || undefined,
+        userIds: filters.userId ? [filters.userId] : undefined
       };
 
       const response = await billingAPI.getEstimate(location.id, 'messages', exportFilters);
@@ -252,6 +290,7 @@ export default function MessagesTab() {
           : defaultEndDate.valueOf(),
         contactId: filters.contactId || undefined,
         conversationId: filters.conversationId || undefined,
+        userIds: filters.userId ? [filters.userId] : undefined,
         estimatedTotal: estimate?.itemCounts?.total || undefined
       };
 
@@ -463,6 +502,34 @@ export default function MessagesTab() {
               placeholder="Paste contact ID..."
               size="large"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">User</label>
+            <Select
+              showSearch
+              value={filters.userId || undefined}
+              onChange={(val) => setFilters({ ...filters, userId: val || '' })}
+              onSearch={handleUserSearch}
+              placeholder="Search users..."
+              allowClear
+              loading={usersLoading}
+              filterOption={false}
+              notFoundContent={usersLoading ? 'Searching...' : 'No users found'}
+              className="w-full"
+              size="large"
+            >
+              {userOptions.map(u => (
+                <Select.Option key={u.id} value={u.id}>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-sm">{u.name}</span>
+                    {u.email && (
+                      <span className="text-xs text-gray-400">{u.email}</span>
+                    )}
+                  </div>
+                </Select.Option>
+              ))}
+            </Select>
           </div>
 
           <div>

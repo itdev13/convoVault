@@ -744,6 +744,11 @@ class GHLService {
         params.conversationId = options.conversationId;
       }
 
+      // User filter (one or more) — sent as repeated query: userIds[]=...
+      if (Array.isArray(options.userIds) && options.userIds.length > 0) {
+        params.userIds = options.userIds.filter(Boolean);
+      }
+
       // Retry on PIT-overload (GHL returns 500 "Search infrastructure is temporarily overloaded...")
       // Why: the user's Search/Export call fails transiently; without retry they have to click again.
       const MAX_ATTEMPTS = 3;

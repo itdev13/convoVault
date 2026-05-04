@@ -796,6 +796,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       endDate: filters?.endDate ? new Date(filters.endDate) : null,
       contactId: filters?.contactId || null,
       contactIds: filters?.contactIds?.length > 0 ? filters.contactIds : [],
+      userIds: filters?.userIds?.length > 0 ? filters.userIds : [],
       // Conversation-specific filters
       query: filters?.query || null,
       id: filters?.id || null,

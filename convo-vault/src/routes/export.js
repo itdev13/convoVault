@@ -18,15 +18,16 @@ const { sanitizeLimit, isValidDate } = require('../utils/sanitize');
  */
 router.get('/messages', authenticateSession, async (req, res) => {
   try {
-    const { 
-      locationId, 
+    const {
+      locationId,
       channel,         // SMS, Email, WhatsApp, Call, etc. (optional)
       startDate,       // ISO date string
       endDate,         // ISO date string
       contactId,       // Specific contact
       conversationId,  // Specific conversation
       cursor,          // For pagination
-      limit      // Messages per page
+      limit,           // Messages per page
+      userIds          // Filter by GHL user(s); repeated query: userIds=a&userIds=b
     } = req.query;
 
     if (!locationId) {
@@ -77,6 +78,9 @@ router.get('/messages', authenticateSession, async (req, res) => {
     }
     if (contactId) options.contactId = contactId;
     if (conversationId) options.conversationId = conversationId; // Add conversationId filter
+    if (userIds) {
+      options.userIds = Array.isArray(userIds) ? userIds : [userIds];
+    }
     if (cursor) options.cursor = cursor;
     // Export messages using advanced endpoint
     const result = await ghlService.exportMessages(locationId, options);
