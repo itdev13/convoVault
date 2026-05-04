@@ -97,6 +97,7 @@ router.get('/messages', authenticateSession, async (req, res) => {
           id: msg.id,
           conversationId: msg.conversationId,  // ← Important for context!
           contactId: msg.contactId,
+          userId: msg.userId || null,
           type: msg.type,
           body: msg.body,
           direction: msg.direction || msg?.meta?.email?.direction || "outbound",
@@ -231,11 +232,11 @@ router.get('/csv', authenticateSession, async (req, res) => {
     const messages = await ghlService.exportAllMessages(locationId, filters);
 
     // Convert to CSV format
-    const csvHeaders = 'Date,ConversationID,ContactID,Type,Direction,Status,Message\n';
+    const csvHeaders = 'Date,ConversationID,ContactID,UserID,Type,Direction,Status,Message\n';
     const csvRows = messages.map(msg => {
       const date = new Date(msg.dateAdded).toISOString();
       const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
-      return `"${date}","${msg.conversationId}","${msg.contactId}","${msg.type}","${msg.direction}","${msg.status}","${message}"`;
+      return `"${date}","${msg.conversationId}","${msg.contactId}","${msg.userId || ''}","${msg.type}","${msg.direction}","${msg.status}","${message}"`;
     }).join('\n');
 
     const csv = csvHeaders + csvRows;

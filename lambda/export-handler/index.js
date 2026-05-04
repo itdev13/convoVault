@@ -527,10 +527,10 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
   if (includeHeader) {
     if (isEmailExport) {
       // Email-specific columns with Subject, CC, BCC
-      header = 'Date,ConversationID,ContactID,ConversationProviderId,MessageType,Direction,Status,From,To,Subject,CC,BCC,Message,Attachments,Source\n';
+      header = 'Date,ConversationID,ContactID,UserID,ConversationProviderId,MessageType,Direction,Status,From,To,Subject,CC,BCC,Message,Attachments,Source\n';
     } else {
       // Default for SMS, WhatsApp, Facebook, Instagram, Call, etc. - includes meta fields
-      header = 'Date,ConversationID,ContactID,ConversationProviderId,MessageType,Direction,Status,From,To,Message,Attachments,Source,CallDuration,CallStatus,FacebookPage,InstagramPage\n';
+      header = 'Date,ConversationID,ContactID,UserID,ConversationProviderId,MessageType,Direction,Status,From,To,Message,Attachments,Source,CallDuration,CallStatus,FacebookPage,InstagramPage\n';
     }
   }
 
@@ -569,6 +569,7 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
         escapeCsv(formatDate(msg.dateAdded)),
         escapeCsv(msg.conversationId),
         escapeCsv(msg.contactId),
+        escapeCsv(msg.userId || ''),
         escapeCsv(msg.conversationProviderId || ''),
         escapeCsv(msg.messageType || msg.type),
         escapeCsv(direction),
@@ -588,6 +589,7 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
         escapeCsv(formatDate(msg.dateAdded)),
         escapeCsv(msg.conversationId),
         escapeCsv(msg.contactId),
+        escapeCsv(msg.userId || ''),
         escapeCsv(msg.conversationProviderId || ''),
         escapeCsv(msg.messageType || msg.type),
         escapeCsv(direction),
