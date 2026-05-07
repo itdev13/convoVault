@@ -145,7 +145,7 @@ export default function CallTranscriptionsTab() {
           <p className="text-sm text-amber-800">
             <strong>Heavy task:</strong> we walk every conversation in this sub-account, find call &amp; voicemail
             messages, and fetch a transcription for each one that has a recording. Depending on volume this can take a while.
-            Pricing: <strong>$1.00 per transcription</strong> (no volume discount).
+            Pricing: <strong>$0.50 per transcription</strong> (no volume discount).
           </p>
         </div>
       </div>
