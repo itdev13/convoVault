@@ -666,7 +666,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       }
 
       const total = transcriptionRecords.length;
-      const unitPrice = 0.50;
+      const unitPrice = 0.05;
       const finalAmount = total * unitPrice;
       return res.json({
         success: true,
