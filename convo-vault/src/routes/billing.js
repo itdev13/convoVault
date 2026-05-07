@@ -547,45 +547,84 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
 
       // Step B — fetch the plain-text transcript per message.
-      // Skip messages whose recording isn't ready (400 / 404) or whose transcript came back empty.
+      // Per-message diagnostic logging so we can see exactly what GHL returns
+      // (which messages are 400/404, empty, or unavailable for some other reason).
       const transcriptionRecords = [];
-      let transcriptFailed = 0;
+      let emptyCount = 0;
+      let badRequestCount = 0;
+      let notFoundCount = 0;
+      let otherErrorCount = 0;
       for (let i = 0; i < transcribableMsgs.length; i += PARALLEL) {
         const batch = transcribableMsgs.slice(i, i + PARALLEL);
         const results = await Promise.allSettled(
           batch.map(async (m) => {
             try {
-              const transcript = (await withRetry(() => ghlService.getMessageTranscription(locationId, m.id))) || '';
-              if (!transcript.trim()) return null;
-              return {
+              const raw = (await withRetry(() => ghlService.getMessageTranscription(locationId, m.id))) || '';
+              const transcript = String(raw);
+              const preview = transcript.length > 200 ? transcript.slice(0, 200) + '…' : transcript;
+              logger.info('Transcription response', {
                 messageId: m.id,
                 conversationId: m.conversationId,
-                contactId: m.contactId || '',
-                userId: m.userId || '',
-                messageType: m.type || '',
-                direction: m.direction || '',
-                status: m.status || '',
-                dateAdded: m.dateAdded || null,
-                callDuration: m.meta?.callDuration || '',
-                callStatus: m.meta?.callStatus || '',
-                transcript
+                msgStatus: m.status,
+                bodyType: typeof raw,
+                length: transcript.length,
+                preview
+              });
+              if (!transcript.trim()) return { status: 'empty' };
+              return {
+                status: 'ok',
+                record: {
+                  messageId: m.id,
+                  conversationId: m.conversationId,
+                  contactId: m.contactId || '',
+                  userId: m.userId || '',
+                  messageType: m.type || '',
+                  direction: m.direction || '',
+                  status: m.status || '',
+                  dateAdded: m.dateAdded || null,
+                  callDuration: m.meta?.callDuration || '',
+                  callStatus: m.meta?.callStatus || '',
+                  transcript
+                }
               };
             } catch (err) {
-              const status = err.response?.status;
-              if (status === 400 || status === 404) return null;
-              transcriptFailed++;
-              logger.warn('Transcription fetch failed', { messageId: m.id, status, error: err.message });
-              return null;
+              const httpStatus = err.response?.status;
+              const body = err.response?.data;
+              const bodyPreview = typeof body === 'string'
+                ? (body.length > 200 ? body.slice(0, 200) + '…' : body)
+                : (body ? JSON.stringify(body).slice(0, 200) : '');
+              logger.warn('Transcription fetch error', {
+                messageId: m.id,
+                conversationId: m.conversationId,
+                msgStatus: m.status,
+                httpStatus,
+                error: err.message,
+                bodyPreview
+              });
+              return { status: 'error', httpStatus };
             }
           })
         );
         for (const r of results) {
-          if (r.status === 'fulfilled' && r.value) transcriptionRecords.push(r.value);
+          if (r.status !== 'fulfilled') continue;
+          const v = r.value;
+          if (v.status === 'ok') transcriptionRecords.push(v.record);
+          else if (v.status === 'empty') emptyCount++;
+          else if (v.status === 'error') {
+            if (v.httpStatus === 400) badRequestCount++;
+            else if (v.httpStatus === 404) notFoundCount++;
+            else otherErrorCount++;
+          }
         }
       }
 
       logger.info('Call Transcriptions: transcripts fetched', {
-        storedTranscriptions: transcriptionRecords.length, transcriptFailed
+        eligible: transcribableMsgs.length,
+        storedTranscriptions: transcriptionRecords.length,
+        emptyCount,
+        badRequestCount,
+        notFoundCount,
+        otherErrorCount
       });
 
       if (transcriptionRecords.length === 0) {
