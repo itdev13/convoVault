@@ -963,13 +963,12 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];
     } else if (exportType === 'callTranscriptions') {
-      // Call Transcriptions: standalone billing (flat $0.50/record, single meter charge, no discount)
-      // TODO: replace placeholder meterId with the real GHL meter ID for this product.
-      const CALL_TRANSCRIPTIONS_METER_ID = process.env.CALL_TRANSCRIPTIONS_METER_ID || 'CALL_TRANSCRIPTIONS_METER_ID_TODO';
+      // Call Transcriptions: standalone billing (flat $0.50/record, single meter charge, no discount).
+      // Reuses the same meter as specialTabMessages.
       const unitPrice = 0.50;
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
-      meterCharges = [{ meterId: CALL_TRANSCRIPTIONS_METER_ID, qty: totalItems, description: 'Call transcriptions export' }];
+      meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Call transcriptions export' }];
     } else {
       // Step 3: Calculate pricing with actual GHL meter prices
       estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
