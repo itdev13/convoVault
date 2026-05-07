@@ -298,8 +298,6 @@ class GHLService {
       );
 
       logger.info('✅ Location token created and saved to database');
-    } else {
-      logger.info('Using existing location token');
     }
 
     // STEP 3: Refresh if needed
@@ -676,12 +674,6 @@ class GHLService {
       params.type = options.type;
     }
 
-    logger.info('Fetching messages', {
-      url: `/conversations/${conversationId}/messages`,
-      conversationId,
-      params: JSON.stringify(params)
-    });
-
     const result = await this.apiRequest(
       'GET',
       `/conversations/${conversationId}/messages`,
@@ -689,12 +681,6 @@ class GHLService {
       null,
       params
     );
-
-    logger.info('Messages response RAW', {
-      conversationId,
-      topKeys: result?.messages ? Object.keys(result?.messages) : 'null',
-      messageCount: result?.messages?.messages?.length || 0,
-    });
 
     return result;
   }
