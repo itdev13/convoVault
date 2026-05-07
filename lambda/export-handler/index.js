@@ -1683,7 +1683,11 @@ exports.handler = async (event, context) => {
         throw new Error('No pre-fetched messages found in specialexports for this job');
       }
 
-      const totalMessages = rootExport.totalMessages || rootExport.messages.length;
+      // For callTranscriptions, the records live under `callTranscriptionsMessages`;
+      // specialTabMessages still uses `messages`.
+      const recordsField = job.exportType === 'callTranscriptions' ? 'callTranscriptionsMessages' : 'messages';
+      const rootRecords = rootExport[recordsField] || [];
+      const totalMessages = rootExport.totalMessages || rootRecords.length;
       const groupId = rootExport._id; // chunk 0 _id is the groupId for all other chunks
 
       // Load the correct chunk
@@ -1701,14 +1705,16 @@ exports.handler = async (event, context) => {
         }
       }
 
+      const chunkRecords = chunkDoc[recordsField] || [];
       const localOffset = startIdx % CHUNK_SIZE;
-      records = chunkDoc.messages.slice(localOffset);
+      records = chunkRecords.slice(localOffset);
       recordsFetched = records.length;
       const nextIdx = startIdx + recordsFetched;
       hasMoreData = nextIdx < totalMessages;
       cursor = hasMoreData ? String(nextIdx) : null;
 
-      log('Special Messages batch from specialexports', {
+      log('SpecialExport batch read', {
+        exportType: job.exportType, recordsField,
         startIdx, chunkIndex, localOffset, batchSize: records.length,
         totalMessages, hasMoreData
       });

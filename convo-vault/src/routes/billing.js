@@ -458,18 +458,27 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
       });
     } else if (exportType === 'callTranscriptions') {
-      // ESTIMATE-ONLY pass: count call messages with transcribable statuses.
-      // We do NOT fetch transcriptions or write to MongoDB here — that happens
-      // after the wallet charge in /charge-and-export.
-      const withRetry = async (fn, maxRetries = 3) => {
+      // Single-walk export: walks every conversation once, fetches TYPE_CALL messages,
+      // pulls transcripts for the eligible statuses, and persists the final CSV-ready
+      // records into specialexports.callTranscriptionsMessages (chunked).
+      // After this, charge-and-export only links the existing doc and triggers Lambda;
+      // Lambda only reads + writes CSV.
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+      // Generous retry — GHL rate-limits aggressively under bulk read.
+      const withRetry = async (fn, maxRetries = 6) => {
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
           try {
             return await fn();
           } catch (err) {
-            if (err.response?.status === 429 && attempt < maxRetries) {
-              const delay = Math.pow(2, attempt) * 2000;
-              logger.warn('Rate limited (429), retrying...', { attempt: attempt + 1, delay });
-              await new Promise(r => setTimeout(r, delay));
+            const is429 = err.response?.status === 429;
+            const is5xx = err.response?.status >= 500 && err.response?.status < 600;
+            if ((is429 || is5xx) && attempt < maxRetries) {
+              // Exponential w/ jitter, capped at 30s: 2s, 4s, 8s, 16s, 30s, 30s
+              const base = Math.min(30000, Math.pow(2, attempt) * 2000);
+              const delay = base + Math.floor(Math.random() * 500);
+              logger.warn('Transient error, retrying', { status: err.response?.status, attempt: attempt + 1, delay });
+              await sleep(delay);
             } else {
               throw err;
             }
@@ -478,7 +487,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       };
 
       // Paginate ALL conversations
-      let allConversationIds = [];
+      const allConversationIds = [];
       let startAfterDate = undefined;
       while (true) {
         const searchParams = { locationId, limit: 100 };
@@ -492,20 +501,20 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         startAfterDate = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
       }
 
-      logger.info('Call Transcriptions estimate: conversations fetched', { count: allConversationIds.length });
+      logger.info('Call Transcriptions: conversations fetched', { count: allConversationIds.length });
 
-      // Walk each conversation, hit messages API with type=TYPE_CALL, count by status (5 parallel).
-      // Statuses GHL guarantees a transcript for: completed, answered, voicemail.
-      const PARALLEL = 5;
+      // Step A — collect transcribable call messages.
+      // Lower concurrency (3) to reduce 429 pressure on GHL; the tradeoff is wall-clock time.
+      const PARALLEL = 3;
       const PAGE_SIZE = 300;
       const CALL_STATUSES_OK = new Set(['completed', 'answered', 'voicemail']);
-      let transcribableCount = 0;
-
+      const transcribableMsgs = [];
+      let conversationsFailed = 0;
       for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
         const batch = allConversationIds.slice(i, i + PARALLEL);
         const results = await Promise.allSettled(
           batch.map(async (cId) => {
-            let count = 0;
+            const out = [];
             let cursor = undefined;
             while (true) {
               const msgOptions = { limit: PAGE_SIZE, type: 'TYPE_CALL' };
@@ -514,40 +523,125 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               const wrapper = result.messages || {};
               const pageMsgs = wrapper.messages || [];
               for (const m of pageMsgs) {
-                if (CALL_STATUSES_OK.has(String(m?.status || '').toLowerCase())) count++;
+                if (CALL_STATUSES_OK.has(String(m?.status || '').toLowerCase())) {
+                  out.push({ ...m, conversationId: cId });
+                }
               }
               if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
               cursor = wrapper.lastMessageId;
             }
-            return count;
+            return out;
           })
         );
         for (const r of results) {
-          if (r.status === 'fulfilled') transcribableCount += r.value;
+          if (r.status === 'fulfilled') {
+            transcribableMsgs.push(...r.value);
+          } else {
+            conversationsFailed++;
+            logger.warn('Conversation message fetch failed (after retries)', { error: r.reason?.message });
+          }
+        }
+      }
+      logger.info('Call Transcriptions: transcribable messages found', {
+        count: transcribableMsgs.length, conversationsFailed
+      });
+
+      // Step B — fetch the plain-text transcript per message.
+      // Skip messages whose recording isn't ready (400 / 404) or whose transcript came back empty.
+      const transcriptionRecords = [];
+      let transcriptFailed = 0;
+      for (let i = 0; i < transcribableMsgs.length; i += PARALLEL) {
+        const batch = transcribableMsgs.slice(i, i + PARALLEL);
+        const results = await Promise.allSettled(
+          batch.map(async (m) => {
+            try {
+              const transcript = (await withRetry(() => ghlService.getMessageTranscription(locationId, m.id))) || '';
+              if (!transcript.trim()) return null;
+              return {
+                messageId: m.id,
+                conversationId: m.conversationId,
+                contactId: m.contactId || '',
+                userId: m.userId || '',
+                messageType: m.type || '',
+                direction: m.direction || '',
+                status: m.status || '',
+                dateAdded: m.dateAdded || null,
+                callDuration: m.meta?.callDuration || '',
+                callStatus: m.meta?.callStatus || '',
+                transcript
+              };
+            } catch (err) {
+              const status = err.response?.status;
+              if (status === 400 || status === 404) return null;
+              transcriptFailed++;
+              logger.warn('Transcription fetch failed', { messageId: m.id, status, error: err.message });
+              return null;
+            }
+          })
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) transcriptionRecords.push(r.value);
         }
       }
 
-      logger.info('Call Transcriptions estimate: count complete', { transcribableCount });
+      logger.info('Call Transcriptions: transcripts fetched', {
+        storedTranscriptions: transcriptionRecords.length, transcriptFailed
+      });
 
-      if (transcribableCount === 0) {
+      if (transcriptionRecords.length === 0) {
         return res.status(400).json({ success: false, error: 'No transcribable calls found for this sub-account' });
       }
 
+      // Chunked SpecialExport — store in callTranscriptionsMessages so it's clearly distinct
+      // from the specialTabMessages records which use `messages`.
+      const CHUNK_SIZE = 5000;
+      const totalChunks = Math.max(1, Math.ceil(transcriptionRecords.length / CHUNK_SIZE));
+      const specialExport = await SpecialExport.create({
+        locationId,
+        filters: { type: 'call_transcriptions' },
+        callTranscriptionsMessages: transcriptionRecords.slice(0, CHUNK_SIZE),
+        totalMessages: transcriptionRecords.length,
+        totalConversations: allConversationIds.length,
+        chunkIndex: 0,
+        totalChunks,
+        status: 'ready'
+      });
+      if (totalChunks > 1) {
+        const chunkDocs = [];
+        for (let ci = 1; ci < totalChunks; ci++) {
+          chunkDocs.push({
+            locationId,
+            filters: { type: 'call_transcriptions' },
+            callTranscriptionsMessages: transcriptionRecords.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
+            totalMessages: transcriptionRecords.length,
+            totalConversations: allConversationIds.length,
+            groupId: specialExport._id,
+            chunkIndex: ci,
+            totalChunks,
+            status: 'ready',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+        await SpecialExport.insertMany(chunkDocs);
+      }
+
+      const total = transcriptionRecords.length;
       const unitPrice = 0.50;
-      const finalAmount = transcribableCount * unitPrice;
+      const finalAmount = total * unitPrice;
       return res.json({
         success: true,
         data: {
           estimate: {
-            itemCounts: { callTranscriptions: transcribableCount, total: transcribableCount },
+            itemCounts: { callTranscriptions: total, total },
             baseAmount: finalAmount,
             discountPercent: 0,
             discountAmount: 0,
             finalAmount
           },
           filters,
-          exportType
-          // No specialExportId yet — created after charge in /charge-and-export
+          exportType,
+          specialExportId: specialExport._id
         }
       });
     }
@@ -600,7 +694,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
  */
 router.post('/charge-and-export', authenticateSession, async (req, res) => {
   try {
-    let { locationId, exportType, format, filters, notificationEmail } = req.body;
+    const { locationId, exportType, format, filters, notificationEmail } = req.body;
     const { companyId, userId } = req.user;
 
     if (!locationId) {
@@ -916,165 +1010,6 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         success: false,
         error: 'No valid OAuth token found for this location'
       });
-    }
-
-    // Step 7a: For callTranscriptions — wallet is now charged, do the heavy walk + transcription fetch + chunked storage.
-    // We persist into the same chunked SpecialExport collection used by specialTabMessages so the Lambda can read + write CSV.
-    if (exportType === 'callTranscriptions') {
-      const withRetry = async (fn, maxRetries = 3) => {
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-          try {
-            return await fn();
-          } catch (err) {
-            if (err.response?.status === 429 && attempt < maxRetries) {
-              const delay = Math.pow(2, attempt) * 2000;
-              logger.warn('Rate limited (429), retrying...', { attempt: attempt + 1, delay });
-              await new Promise(r => setTimeout(r, delay));
-            } else {
-              throw err;
-            }
-          }
-        }
-      };
-
-      // Walk all conversations
-      const allConversationIds = [];
-      let startAfterDate = undefined;
-      while (true) {
-        const searchParams = { locationId, limit: 100 };
-        if (startAfterDate) searchParams.startAfterDate = startAfterDate;
-        const result = await withRetry(() => ghlService.searchConversations(locationId, searchParams));
-        const convos = result.conversations || [];
-        if (convos.length === 0) break;
-        allConversationIds.push(...convos.map(c => c.id));
-        if (convos.length < 100) break;
-        const lastConvo = convos[convos.length - 1];
-        startAfterDate = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
-      }
-
-      // Fetch TYPE_CALL messages, filter by status
-      const PARALLEL = 5;
-      const PAGE_SIZE = 300;
-      const CALL_STATUSES_OK = new Set(['completed', 'answered', 'voicemail']);
-      const transcribableMsgs = [];
-      for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
-        const batch = allConversationIds.slice(i, i + PARALLEL);
-        const results = await Promise.allSettled(
-          batch.map(async (cId) => {
-            const out = [];
-            let cursor = undefined;
-            while (true) {
-              const msgOptions = { limit: PAGE_SIZE, type: 'TYPE_CALL' };
-              if (cursor) msgOptions.lastMessageId = cursor;
-              const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
-              const wrapper = result.messages || {};
-              const pageMsgs = wrapper.messages || [];
-              for (const m of pageMsgs) {
-                if (CALL_STATUSES_OK.has(String(m?.status || '').toLowerCase())) {
-                  out.push({ ...m, conversationId: cId });
-                }
-              }
-              if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
-              cursor = wrapper.lastMessageId;
-            }
-            return out;
-          })
-        );
-        for (const r of results) {
-          if (r.status === 'fulfilled') transcribableMsgs.push(...r.value);
-        }
-      }
-
-      // Fetch the plain-text transcription per message (skip 400/404 — recording not generated yet)
-      const transcriptionRecords = [];
-      for (let i = 0; i < transcribableMsgs.length; i += PARALLEL) {
-        const batch = transcribableMsgs.slice(i, i + PARALLEL);
-        const results = await Promise.allSettled(
-          batch.map(async (m) => {
-            try {
-              const transcript = (await withRetry(() => ghlService.getMessageTranscription(locationId, m.id))) || '';
-              if (!transcript.trim()) return null;
-              return {
-                messageId: m.id,
-                conversationId: m.conversationId,
-                contactId: m.contactId || '',
-                userId: m.userId || '',
-                messageType: m.type || '',
-                direction: m.direction || '',
-                status: m.status || '',
-                dateAdded: m.dateAdded || null,
-                callDuration: m.meta?.callDuration || '',
-                callStatus: m.meta?.callStatus || '',
-                transcript
-              };
-            } catch (err) {
-              const status = err.response?.status;
-              if (status === 400 || status === 404) return null;
-              logger.warn('Transcription fetch failed', { messageId: m.id, status, error: err.message });
-              return null;
-            }
-          })
-        );
-        for (const r of results) {
-          if (r.status === 'fulfilled' && r.value) transcriptionRecords.push(r.value);
-        }
-      }
-
-      logger.info('Call Transcriptions: post-charge fetch complete', {
-        conversations: allConversationIds.length,
-        transcribableMsgs: transcribableMsgs.length,
-        storedTranscriptions: transcriptionRecords.length
-      });
-
-      if (transcriptionRecords.length === 0) {
-        // Wallet is already charged. Surface clearly so support can handle a refund/credit if needed.
-        logger.error('Call Transcriptions: charge succeeded but no transcriptions were retrievable', {
-          locationId, transactionId: transaction._id
-        });
-        return res.status(500).json({
-          success: false,
-          error: 'Wallet was charged, but no transcriptions could be retrieved. Please contact support to resolve.',
-          transactionId: transaction._id
-        });
-      }
-
-      // Chunked SpecialExport (5,000 per doc — same as specialTabMessages so Lambda reads one chunk per invocation).
-      const CHUNK_SIZE = 5000;
-      const totalChunks = Math.max(1, Math.ceil(transcriptionRecords.length / CHUNK_SIZE));
-      const rootDoc = await SpecialExport.create({
-        locationId,
-        filters: { type: 'call_transcriptions' },
-        messages: transcriptionRecords.slice(0, CHUNK_SIZE),
-        totalMessages: transcriptionRecords.length,
-        totalConversations: allConversationIds.length,
-        chunkIndex: 0,
-        totalChunks,
-        status: 'ready'
-      });
-      if (totalChunks > 1) {
-        const chunkDocs = [];
-        for (let ci = 1; ci < totalChunks; ci++) {
-          chunkDocs.push({
-            locationId,
-            filters: { type: 'call_transcriptions' },
-            messages: transcriptionRecords.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
-            totalMessages: transcriptionRecords.length,
-            totalConversations: allConversationIds.length,
-            groupId: rootDoc._id,
-            chunkIndex: ci,
-            totalChunks,
-            status: 'ready',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          });
-        }
-        await SpecialExport.insertMany(chunkDocs);
-      }
-
-      // Pass the freshly-created SpecialExport id forward so the linking step (9a) wires it to the new job.
-      filters = { ...filters, specialExportId: rootDoc._id };
-      // Re-align totalItems with what we actually stored (some calls may have had no transcript yet).
-      totalItems = transcriptionRecords.length;
     }
 
     // Step 8: Create export job (Lambda will fetch tokens from OAuthToken collection)

@@ -38,6 +38,12 @@ const specialExportSchema = new mongoose.Schema({
     type: [mongoose.Schema.Types.Mixed],
     default: []
   },
+  // Dedicated field for the callTranscriptions export type — keeps these distinct from the
+  // specialTabMessages records that live under `messages` and removes any naming ambiguity.
+  callTranscriptionsMessages: {
+    type: [mongoose.Schema.Types.Mixed],
+    default: []
+  },
   totalMessages: {
     type: Number,
     default: 0
