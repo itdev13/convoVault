@@ -454,7 +454,6 @@ export default function OpportunitiesTab() {
               onChange={(e) => setContactId(e.target.value)}
               placeholder="Paste contact ID..."
               size="large"
-              allowClear
             />
           </div>
 
