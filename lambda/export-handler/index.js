@@ -1632,34 +1632,58 @@ exports.handler = async (event, context) => {
       cursor = hasMoreData ? String(currentSkip) : null;
 
     } else if (job.exportType === 'specialTabMessages') {
-      // === SPECIAL MESSAGES: Read pre-fetched messages from specialexports collection ===
-      // Try by exportJobId first, then fall back to latest ready export for this location
-      let specialExport = await db.collection('specialexports').findOne({
+      // === SPECIAL MESSAGES: Read pre-fetched messages from chunked specialexports ===
+      // Chunk 0 is the "root" doc (has exportJobId). Remaining chunks share groupId = root._id.
+      // Each chunk holds up to CHUNK_SIZE (5000) messages, matching BATCH_SIZE so one invocation = one chunk.
+      const CHUNK_SIZE = 5000;
+      const startIdx = job.processedItems || 0;
+      const chunkIndex = Math.floor(startIdx / CHUNK_SIZE);
+
+      // Find root doc (chunk 0) via exportJobId or fallback
+      let rootExport = await db.collection('specialexports').findOne({
         exportJobId: new ObjectId(exportJobId),
         status: 'ready'
       });
-      if (!specialExport) {
-        specialExport = await db.collection('specialexports').findOne({
+      if (!rootExport) {
+        rootExport = await db.collection('specialexports').findOne({
           locationId: job.locationId,
-          status: 'ready'
+          status: 'ready',
+          chunkIndex: { $in: [0, null] }
         }, { sort: { createdAt: -1 } });
       }
 
-      if (!specialExport || !specialExport.messages || specialExport.messages.length === 0) {
+      if (!rootExport) {
         throw new Error('No pre-fetched messages found in specialexports for this job');
       }
 
-      // Read messages in batches from the pre-fetched collection
-      const startIdx = job.processedItems || 0;
-      const endIdx = Math.min(startIdx + BATCH_SIZE, specialExport.messages.length);
-      records = specialExport.messages.slice(startIdx, endIdx);
+      const totalMessages = rootExport.totalMessages || rootExport.messages.length;
+      const groupId = rootExport._id; // chunk 0 _id is the groupId for all other chunks
+
+      // Load the correct chunk
+      let chunkDoc;
+      if (chunkIndex === 0) {
+        chunkDoc = rootExport;
+      } else {
+        chunkDoc = await db.collection('specialexports').findOne({
+          groupId,
+          chunkIndex,
+          status: 'ready'
+        });
+        if (!chunkDoc) {
+          throw new Error(`Chunk ${chunkIndex} not found for specialExport group ${groupId}`);
+        }
+      }
+
+      const localOffset = startIdx % CHUNK_SIZE;
+      records = chunkDoc.messages.slice(localOffset);
       recordsFetched = records.length;
-      hasMoreData = endIdx < specialExport.messages.length;
-      cursor = hasMoreData ? String(endIdx) : null;
+      const nextIdx = startIdx + recordsFetched;
+      hasMoreData = nextIdx < totalMessages;
+      cursor = hasMoreData ? String(nextIdx) : null;
 
       log('Special Messages batch from specialexports', {
-        startIdx, endIdx, batchSize: records.length,
-        totalStored: specialExport.messages.length, hasMoreData
+        startIdx, chunkIndex, localOffset, batchSize: records.length,
+        totalMessages, hasMoreData
       });
 
     } else {
@@ -1995,14 +2019,24 @@ exports.handler = async (event, context) => {
         totalBatches: currentBatch
       });
 
-      // Clean up the pre-fetched messages for specialTabMessages — the CSV is now on S3, we don't need to hold the raw messages.
+      // Clean up all chunk docs for this specialTabMessages export.
+      // Root doc is matched by exportJobId; sibling chunks share groupId = root._id.
       // TTL index is the safety net if this delete fails.
       if (job.exportType === 'specialTabMessages') {
         try {
-          const { deletedCount } = await db.collection('specialexports').deleteOne({
-            exportJobId: new ObjectId(exportJobId)
-          });
-          log('SpecialExport cleanup', { deletedCount });
+          const rootDoc = await db.collection('specialexports').findOne(
+            { exportJobId: new ObjectId(exportJobId) },
+            { projection: { _id: 1 } }
+          );
+          if (rootDoc) {
+            const { deletedCount } = await db.collection('specialexports').deleteMany({
+              $or: [
+                { _id: rootDoc._id },
+                { groupId: rootDoc._id }
+              ]
+            });
+            log('SpecialExport cleanup', { deletedCount });
+          }
         } catch (cleanupErr) {
           log('SpecialExport cleanup failed (TTL will handle it)', { error: cleanupErr.message });
         }

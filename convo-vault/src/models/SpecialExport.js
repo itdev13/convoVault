@@ -20,6 +20,20 @@ const specialExportSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  // For chunked exports: all chunk docs share the same groupId (= _id of chunk 0)
+  groupId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null,
+    index: true
+  },
+  chunkIndex: {
+    type: Number,
+    default: 0
+  },
+  totalChunks: {
+    type: Number,
+    default: 1
+  },
   messages: {
     type: [mongoose.Schema.Types.Mixed],
     default: []

@@ -176,7 +176,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         const MAX_PAGES = 100; // Safety limit: 100 pages * 100 contacts = 10,000 max
         while (hasMore && page < MAX_PAGES) {
           page++;
-          logger.info('Fetching contacts by tag', { tag: filters.tags, page, startAfterId, startAfter });
           const result = await ghlService.searchContacts(locationId, { tag: filters.tags, limit: 100, startAfterId, startAfter });
           const contacts = result.contacts || [];
           logger.info('Tag contacts page result', { page, contactsReturned: contacts.length, metaTotal: result.meta?.total, metaStartAfterId: result.meta?.startAfterId });
@@ -224,7 +223,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const MAX_RETRIES = 3;
       let pendingContactIds = [...resolvedContactIds];
 
-      logger.info('Counting notes for contacts', { totalContacts: pendingContactIds.length });
 
       for (let attempt = 1; attempt <= MAX_RETRIES && pendingContactIds.length > 0; attempt++) {
         const failedThisRound = [];
@@ -389,7 +387,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
                 .filter(m => !isEmail(m))
                 .map(m => ({ ...m, conversationId: cId }));
               msgs.push(...filtered);
-              logger.info('Special Messages: page done', { conversationId: cId, pageCount: pageMsgs.length, keptAfterEmailFilter: filtered.length, totalMsgs: msgs.length, nextPage: wrapper.nextPage, lastMessageId: wrapper.lastMessageId });
               if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
               cursor = wrapper.lastMessageId;
             }
@@ -401,17 +398,47 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
       }
 
-      logger.info('Special Messages: fetched', { totalMessages: allMessages.length, type: typeFilter });
+      logger.info('Special Messages: fetched', { totalMessages: allMessages.length, totalConversations: allConversationIds.length, type: typeFilter });
 
-      // Save to SpecialExport so charge-and-export can reuse without re-fetching
+      // Split into 5,000-message chunks to stay under MongoDB's 16MB BSON limit.
+      // Lambda BATCH_SIZE is also 5000 so each invocation loads exactly one chunk doc.
+      const CHUNK_SIZE = 5000;
+      const totalChunks = Math.max(1, Math.ceil(allMessages.length / CHUNK_SIZE));
+
+      // Create chunk 0 first to obtain its _id as the groupId for all remaining chunks.
+      const firstChunkMessages = allMessages.slice(0, CHUNK_SIZE);
       const specialExport = await SpecialExport.create({
         locationId,
         filters: { type: typeFilter },
-        messages: allMessages,
+        messages: firstChunkMessages,
         totalMessages: allMessages.length,
         totalConversations: allConversationIds.length,
+        chunkIndex: 0,
+        totalChunks,
         status: 'ready'
       });
+
+      // Create remaining chunks linked by groupId = specialExport._id
+      if (totalChunks > 1) {
+        const chunkDocs = [];
+        for (let ci = 1; ci < totalChunks; ci++) {
+          chunkDocs.push({
+            locationId,
+            filters: { type: typeFilter },
+            messages: allMessages.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
+            totalMessages: allMessages.length,
+            totalConversations: allConversationIds.length,
+            groupId: specialExport._id,
+            chunkIndex: ci,
+            totalChunks,
+            status: 'ready',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+        await SpecialExport.insertMany(chunkDocs);
+        logger.info('Special Messages: chunks stored', { totalChunks, totalMessages: allMessages.length });
+      }
 
       const total = allMessages.length;
       const unitPrice = 0.018;
