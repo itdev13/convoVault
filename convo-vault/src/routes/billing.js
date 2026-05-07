@@ -666,7 +666,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       }
 
       const total = transcriptionRecords.length;
-      const unitPrice = 1.00;
+      const unitPrice = 0.50;
       const finalAmount = total * unitPrice;
       return res.json({
         success: true,
@@ -963,10 +963,10 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];
     } else if (exportType === 'callTranscriptions') {
-      // Call Transcriptions: standalone billing (flat $1.00/record, single meter charge, no discount)
+      // Call Transcriptions: standalone billing (flat $0.50/record, single meter charge, no discount)
       // TODO: replace placeholder meterId with the real GHL meter ID for this product.
       const CALL_TRANSCRIPTIONS_METER_ID = process.env.CALL_TRANSCRIPTIONS_METER_ID || 'CALL_TRANSCRIPTIONS_METER_ID_TODO';
-      const unitPrice = 1.00;
+      const unitPrice = 0.50;
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: CALL_TRANSCRIPTIONS_METER_ID, qty: totalItems, description: 'Call transcriptions export' }];
