@@ -533,7 +533,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         return res.status(400).json({ success: false, error: 'No transcribable calls found for this sub-account' });
       }
 
-      const unitPrice = 0.03;
+      const unitPrice = 1.00;
       const finalAmount = transcribableCount * unitPrice;
       return res.json({
         success: true,
@@ -824,10 +824,10 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];
     } else if (exportType === 'callTranscriptions') {
-      // Call Transcriptions: standalone billing (flat $0.03/record, single meter charge, no discount)
+      // Call Transcriptions: standalone billing (flat $1.00/record, single meter charge, no discount)
       // TODO: replace placeholder meterId with the real GHL meter ID for this product.
       const CALL_TRANSCRIPTIONS_METER_ID = process.env.CALL_TRANSCRIPTIONS_METER_ID || 'CALL_TRANSCRIPTIONS_METER_ID_TODO';
-      const unitPrice = 0.03;
+      const unitPrice = 1.00;
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: CALL_TRANSCRIPTIONS_METER_ID, qty: totalItems, description: 'Call transcriptions export' }];

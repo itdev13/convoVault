@@ -492,7 +492,7 @@ export default function ExportEstimateModal({
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Price per Transcription</span>
-                    <span className="font-medium text-gray-800">$0.03</span>
+                    <span className="font-medium text-gray-800">$1.00</span>
                   </div>
                   <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
                     Heavy task — walks every conversation. No volume discounts apply.
@@ -542,8 +542,8 @@ export default function ExportEstimateModal({
             </div>
           )}
 
-          {/* Volume Discount Tiers - Show for conversations/messages/opportunities (not notes/tasks/specialTabMessages) */}
-          {!['notes', 'tasks', 'specialTabMessages'].includes(exportType) && (
+          {/* Volume Discount Tiers - Hidden for export types that have no volume discount */}
+          {!['notes', 'tasks', 'specialTabMessages', 'callTranscriptions'].includes(exportType) && (
           <Collapse ghost className="bg-gray-50 rounded-lg" defaultActiveKey={estimate.discountPercent > 0 ? [] : []}>
             <Panel
               header={
