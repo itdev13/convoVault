@@ -14,6 +14,7 @@ import LinksTab from './tabs/LinksTab';
 import CallLogsTab from './tabs/CallLogsTab';
 import TemplatesTab from './tabs/TemplatesTab';
 import SpecialMessagesTab from './tabs/SpecialMessagesTab';
+import CallTranscriptionsTab from './tabs/CallTranscriptionsTab';
 import ConversationMessages from './ConversationMessages';
 import { billingAPI } from '../api/billing';
 import CustomChargeTab from './tabs/CustomChargeTab';
@@ -30,6 +31,7 @@ export default function Dashboard() {
   const [specialTabEnabled, setSpecialTabEnabled] = useState(false);
   const [customChargeEnabled, setCustomChargeEnabled] = useState(false);
   const [importNotesEnabled, setImportNotesEnabled] = useState(false);
+  const [callTranscriptionsEnabled, setCallTranscriptionsEnabled] = useState(false);
 
   // Save active tab to localStorage whenever it changes
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function Dashboard() {
       setSpecialTabEnabled(!!res?.data?.specialTabEnabled);
       setCustomChargeEnabled(!!res?.data?.customChargeEnabled);
       setImportNotesEnabled(!!res?.data?.importNotesEnabled);
+      setCallTranscriptionsEnabled(!!res?.data?.callTranscriptionsEnabled);
     }).catch(() => {});
   }, [location?.id]);
 
@@ -58,6 +61,7 @@ export default function Dashboard() {
     { id: 'formSubmissions', label: 'Forms', icon: '📋' },
     { id: 'links', label: 'Links', icon: '🔗' },
     { id: 'callLogs', label: 'Voice AI', icon: '📞' },
+    ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
     ...(customChargeEnabled ? [{ id: 'customCharge', label: 'Charge', icon: '💳' }] : []),
   ];
 
@@ -185,6 +189,7 @@ export default function Dashboard() {
               {activeTab === 'formSubmissions' && <FormSubmissionsTab />}
               {activeTab === 'links' && <LinksTab />}
               {activeTab === 'callLogs' && <CallLogsTab />}
+              {activeTab === 'callTranscriptions' && callTranscriptionsEnabled && <CallTranscriptionsTab />}
               {activeTab === 'templates' && <TemplatesTab />}
               {activeTab === 'specialTabMessages' && specialTabEnabled && <SpecialMessagesTab />}
               {activeTab === 'exports' && <ExportTab />}

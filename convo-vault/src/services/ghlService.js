@@ -686,6 +686,28 @@ class GHLService {
   }
 
   /**
+   * Download the transcription for a single call/voicemail message as plain text.
+   * Returns a string like "00:01: Hello\n00:03: Hi there\n..." (or empty string if none).
+   * Reference: https://marketplace.gohighlevel.com/docs/ghl/conversations/download-message-transcription
+   *
+   * Note: this endpoint returns text/plain, so we bypass apiRequest's JSON-default config
+   * and call axios directly with responseType: 'text'.
+   */
+  async getMessageTranscription(locationId, messageId) {
+    const accessToken = await this.getValidToken(locationId);
+    const response = await axios({
+      method: 'GET',
+      url: `${this.baseURL}/conversations/locations/${locationId}/messages/${messageId}/transcription/download`,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Version: '2021-07-28'
+      },
+      responseType: 'text'
+    });
+    return response.data || '';
+  }
+
+  /**
    * Export messages with advanced filters
    * Includes conversationId in response and supports cursor pagination
    */

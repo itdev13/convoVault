@@ -74,7 +74,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -84,7 +84,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
     // Validate date range (not applicable for notes/links/templates)
     if (!['notes', 'links', 'templates'].includes(exportType)) {
-      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, exportType === 'specialTabMessages' ? MAX_DATE_RANGE_MS_SPECIAL_TAB : MAX_DATE_RANGE_MS);
+      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, ['specialTabMessages', 'callTranscriptions'].includes(exportType) ? MAX_DATE_RANGE_MS_SPECIAL_TAB : MAX_DATE_RANGE_MS);
       if (!dateValidation.valid) {
         return res.status(400).json({
           success: false,
@@ -458,6 +458,190 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           specialExportId: specialExport._id
         }
       });
+    } else if (exportType === 'callTranscriptions') {
+      // Heavy-task export:
+      //   1) paginate ALL conversations in date range
+      //   2) for each, fetch messages of type=TYPE_CALL
+      //   3) for each call message with status=='completed', fetch its transcription
+      //   4) store the transcription rows (chunked) in specialexports for the Lambda to write to CSV
+      let allConversationIds = [];
+      let startAfterDate = undefined;
+
+      const withRetry = async (fn, maxRetries = 3) => {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            return await fn();
+          } catch (err) {
+            if (err.response?.status === 429 && attempt < maxRetries) {
+              const delay = Math.pow(2, attempt) * 2000;
+              logger.warn('Rate limited (429), retrying...', { attempt: attempt + 1, delay });
+              await new Promise(r => setTimeout(r, delay));
+            } else {
+              throw err;
+            }
+          }
+        }
+      };
+
+      // Paginate conversations
+      while (true) {
+        const searchParams = { locationId, limit: 100 };
+        if (filters?.startDate) searchParams.startDate = filters.startDate;
+        if (filters?.endDate) searchParams.endDate = filters.endDate;
+        if (startAfterDate) searchParams.startAfterDate = startAfterDate;
+        const result = await withRetry(() => ghlService.searchConversations(locationId, searchParams));
+        const convos = result.conversations || [];
+        if (convos.length === 0) break;
+        allConversationIds.push(...convos.map(c => c.id));
+        if (convos.length < 100) break;
+        const lastConvo = convos[convos.length - 1];
+        startAfterDate = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
+      }
+
+      logger.info('Call Transcriptions: conversations fetched', { count: allConversationIds.length });
+
+      // Step 1: collect transcribable messages across conversations (5 parallel).
+      // Three transcribable cases (per GHL):
+      //   - TYPE_CALL with status='completed'  → call connected and ended cleanly
+      //   - TYPE_CALL with status='answered'   → answered → in-progress → eventually completed
+      //   - TYPE_CAMPAIGN_VOICEMAIL (any status) → voicemail recording is itself transcribed
+      const transcribableMsgs = [];
+      const PARALLEL = 5;
+      const PAGE_SIZE = 300;
+      const CALL_STATUSES_OK = new Set(['completed', 'answered']);
+      const TYPES_TO_FETCH = ['TYPE_CALL', 'TYPE_CAMPAIGN_VOICEMAIL'];
+
+      for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
+        const batch = allConversationIds.slice(i, i + PARALLEL);
+        const results = await Promise.allSettled(
+          batch.map(async (cId) => {
+            const out = [];
+            for (const msgType of TYPES_TO_FETCH) {
+              let cursor = undefined;
+              while (true) {
+                const msgOptions = { limit: PAGE_SIZE, type: msgType };
+                if (cursor) msgOptions.lastMessageId = cursor;
+                const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
+                const wrapper = result.messages || {};
+                const pageMsgs = wrapper.messages || [];
+                for (const m of pageMsgs) {
+                  if (msgType === 'TYPE_CALL') {
+                    if (CALL_STATUSES_OK.has(String(m?.status || '').toLowerCase())) {
+                      out.push({ ...m, conversationId: cId });
+                    }
+                  } else {
+                    // Voicemails: keep all
+                    out.push({ ...m, conversationId: cId });
+                  }
+                }
+                if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
+                cursor = wrapper.lastMessageId;
+              }
+            }
+            return out;
+          })
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') transcribableMsgs.push(...r.value);
+        }
+      }
+
+      logger.info('Call Transcriptions: transcribable messages found', { count: transcribableMsgs.length });
+
+      // Step 2: fetch the plain-text transcription for each message (5 parallel).
+      // The /transcription/download endpoint returns lines like "00:01: ...". Empty body / 400 / 404 → skip.
+      const transcriptionRecords = [];
+      for (let i = 0; i < transcribableMsgs.length; i += PARALLEL) {
+        const batch = transcribableMsgs.slice(i, i + PARALLEL);
+        const results = await Promise.allSettled(
+          batch.map(async (m) => {
+            try {
+              const transcript = (await withRetry(() => ghlService.getMessageTranscription(locationId, m.id))) || '';
+              if (!transcript.trim()) return null;
+              return {
+                messageId: m.id,
+                conversationId: m.conversationId,
+                contactId: m.contactId || '',
+                userId: m.userId || '',
+                messageType: m.type || '',
+                direction: m.direction || '',
+                status: m.status || '',
+                dateAdded: m.dateAdded || null,
+                callDuration: m.meta?.callDuration || '',
+                callStatus: m.meta?.callStatus || '',
+                transcript
+              };
+            } catch (err) {
+              const status = err.response?.status;
+              // 400 = "Transcription does not exist", 404 = no recording — both expected, just skip.
+              if (status === 400 || status === 404) return null;
+              logger.warn('Transcription fetch failed', { messageId: m.id, status, error: err.message });
+              return null;
+            }
+          })
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) transcriptionRecords.push(r.value);
+        }
+      }
+
+      logger.info('Call Transcriptions: transcriptions fetched', { totalTranscriptions: transcriptionRecords.length });
+
+      if (transcriptionRecords.length === 0) {
+        return res.status(400).json({ success: false, error: 'No call transcriptions found for the selected date range' });
+      }
+
+      // Chunked SpecialExport (same pattern as specialTabMessages — avoid 16MB BSON limit)
+      const CHUNK_SIZE = 5000;
+      const totalChunks = Math.max(1, Math.ceil(transcriptionRecords.length / CHUNK_SIZE));
+      const specialExport = await SpecialExport.create({
+        locationId,
+        filters: { type: 'call_transcriptions' },
+        messages: transcriptionRecords.slice(0, CHUNK_SIZE),
+        totalMessages: transcriptionRecords.length,
+        totalConversations: allConversationIds.length,
+        chunkIndex: 0,
+        totalChunks,
+        status: 'ready'
+      });
+      if (totalChunks > 1) {
+        const chunkDocs = [];
+        for (let ci = 1; ci < totalChunks; ci++) {
+          chunkDocs.push({
+            locationId,
+            filters: { type: 'call_transcriptions' },
+            messages: transcriptionRecords.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
+            totalMessages: transcriptionRecords.length,
+            totalConversations: allConversationIds.length,
+            groupId: specialExport._id,
+            chunkIndex: ci,
+            totalChunks,
+            status: 'ready',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+        await SpecialExport.insertMany(chunkDocs);
+      }
+
+      const total = transcriptionRecords.length;
+      const unitPrice = 0.03;
+      const finalAmount = total * unitPrice;
+      return res.json({
+        success: true,
+        data: {
+          estimate: {
+            itemCounts: { callTranscriptions: total, total },
+            baseAmount: finalAmount,
+            discountPercent: 0,
+            discountAmount: 0,
+            finalAmount
+          },
+          filters,
+          exportType,
+          specialExportId: specialExport._id
+        }
+      });
     }
 
     // Get access token to fetch actual prices from GHL
@@ -518,7 +702,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -545,7 +729,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     // Validate date range (not applicable for notes/links/templates)
     if (!['notes', 'links', 'templates'].includes(exportType)) {
-      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, exportType === 'specialTabMessages' ? MAX_DATE_RANGE_MS_SPECIAL_TAB : MAX_DATE_RANGE_MS);
+      const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, ['specialTabMessages', 'callTranscriptions'].includes(exportType) ? MAX_DATE_RANGE_MS_SPECIAL_TAB : MAX_DATE_RANGE_MS);
       if (!dateValidation.valid) {
         return res.status(400).json({
           success: false,
@@ -659,6 +843,10 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         // LiveChat: use estimatedTotal from frontend (already counted during estimate)
         totalItems = filters?.estimatedTotal || 0;
 
+      } else if (exportType === 'callTranscriptions') {
+        // Use estimatedTotal from frontend (already counted during estimate — heavy task, do not re-walk)
+        totalItems = filters?.estimatedTotal || 0;
+
       } else {
         // Use estimatedTotal from the estimate step if available (avoids GHL returning a different count)
         if (filters?.estimatedTotal) {
@@ -727,6 +915,14 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];
+    } else if (exportType === 'callTranscriptions') {
+      // Call Transcriptions: standalone billing (flat $0.03/record, single meter charge, no discount)
+      // TODO: replace placeholder meterId with the real GHL meter ID for this product.
+      const CALL_TRANSCRIPTIONS_METER_ID = process.env.CALL_TRANSCRIPTIONS_METER_ID || 'CALL_TRANSCRIPTIONS_METER_ID_TODO';
+      const unitPrice = 0.03;
+      const finalAmount = totalItems * unitPrice;
+      estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
+      meterCharges = [{ meterId: CALL_TRANSCRIPTIONS_METER_ID, qty: totalItems, description: 'Call transcriptions export' }];
     } else {
       // Step 3: Calculate pricing with actual GHL meter prices
       estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
@@ -887,8 +1083,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
     transaction.exportJobId = exportJob._id;
     await transaction.save();
 
-    // Step 9a: For specialTabMessages, link the existing SpecialExport (created during estimate) to this job
-    if (exportType === 'specialTabMessages' && filters?.specialExportId) {
+    // Step 9a: For specialTabMessages / callTranscriptions, link the existing SpecialExport (created during estimate) to this job
+    if (['specialTabMessages', 'callTranscriptions'].includes(exportType) && filters?.specialExportId) {
       try {
         await SpecialExport.findByIdAndUpdate(filters.specialExportId, {
           exportJobId: exportJob._id
@@ -1103,10 +1299,11 @@ router.get('/export-history', authenticateSession, async (req, res) => {
  */
 router.get('/pricing', async (req, res) => {
   const locationId = req.query?.locationId;
-  const [specialTabLocationIds, customChargeLocationIds, importNotesLocationIds] = await Promise.all([
+  const [specialTabLocationIds, customChargeLocationIds, importNotesLocationIds, callTranscriptionsLocationIds] = await Promise.all([
     AppConfig.getValues('specialTabLocationIds'),
     AppConfig.getValues('customChargeLocationIds'),
-    AppConfig.getValues('importNotesLocationIds')
+    AppConfig.getValues('importNotesLocationIds'),
+    AppConfig.getValues('callTranscriptionsLocationIds')
   ]);
   // "*" in values = show to all locations (global kill-switch)
   const specialTabEnabled = locationId
@@ -1118,6 +1315,9 @@ router.get('/pricing', async (req, res) => {
   const importNotesEnabled = locationId
     ? (importNotesLocationIds.includes('*') || importNotesLocationIds.includes(locationId))
     : false;
+  const callTranscriptionsEnabled = locationId
+    ? (callTranscriptionsLocationIds.includes('*') || callTranscriptionsLocationIds.includes(locationId))
+    : false;
   res.json({
     success: true,
     data: {
@@ -1127,7 +1327,8 @@ router.get('/pricing', async (req, res) => {
       maxDateRangeMonths: 6,
       specialTabEnabled,
       customChargeEnabled,
-      importNotesEnabled
+      importNotesEnabled,
+      callTranscriptionsEnabled
     }
   });
 });

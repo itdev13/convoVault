@@ -612,6 +612,32 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
 
 
 /**
+ * Convert call transcriptions to CSV format.
+ * Records are pre-fetched objects: { messageId, conversationId, contactId, userId, direction, status, dateAdded, callDuration, callStatus, transcript, segments }
+ */
+function callTranscriptionsToCSV(records, includeHeader = true) {
+  const header = includeHeader
+    ? 'Date,ConversationID,ContactID,MessageID,MessageType,UserID,Direction,Status,CallDuration,CallStatus,Transcript\n'
+    : '';
+  const rows = records.map(r => [
+    escapeCsv(formatDate(r.dateAdded)),
+    escapeCsv(r.conversationId || ''),
+    escapeCsv(r.contactId || ''),
+    escapeCsv(r.messageId || ''),
+    escapeCsv(r.messageType || ''),
+    escapeCsv(r.userId || ''),
+    escapeCsv(r.direction || ''),
+    escapeCsv(r.status || ''),
+    escapeCsv(r.callDuration || ''),
+    escapeCsv(r.callStatus || ''),
+    escapeCsv(r.transcript || '')
+  ].join(',')).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+
+/**
  * Convert notes to CSV format
  */
 function notesToCSV(notes, includeHeader = true) {
@@ -972,7 +998,8 @@ async function sendEmail(email, downloadUrl, jobDetails) {
         jobDetails.exportType === 'socialPosts' ? 'Social Posts' :
         jobDetails.exportType === 'callLogs' ? 'Call Logs' :
         jobDetails.exportType === 'templates' ? 'Templates' :
-        jobDetails.exportType === 'specialTabMessages' ? 'Special Messages' : 'Messages'
+        jobDetails.exportType === 'specialTabMessages' ? 'Special Messages' :
+        jobDetails.exportType === 'callTranscriptions' ? 'Call Transcriptions' : 'Messages'
       } Export is Ready`,
       htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1631,8 +1658,8 @@ exports.handler = async (event, context) => {
 
       cursor = hasMoreData ? String(currentSkip) : null;
 
-    } else if (job.exportType === 'specialTabMessages') {
-      // === SPECIAL MESSAGES: Read pre-fetched messages from chunked specialexports ===
+    } else if (job.exportType === 'specialTabMessages' || job.exportType === 'callTranscriptions') {
+      // === SPECIAL MESSAGES / CALL TRANSCRIPTIONS: Read pre-fetched records from chunked specialexports ===
       // Chunk 0 is the "root" doc (has exportJobId). Remaining chunks share groupId = root._id.
       // Each chunk holds up to CHUNK_SIZE (5000) messages, matching BATCH_SIZE so one invocation = one chunk.
       const CHUNK_SIZE = 5000;
@@ -1802,6 +1829,8 @@ exports.handler = async (event, context) => {
         content = templatesToCSV(records, isFirstContent);
       } else if (job.exportType === 'specialTabMessages') {
         content = specialMessagesToCSV(records, isFirstContent);
+      } else if (job.exportType === 'callTranscriptions') {
+        content = callTranscriptionsToCSV(records, isFirstContent);
       } else {
         content = messagesToCSV(records, isFirstContent, job.filters?.channel || '');
       }
@@ -2019,10 +2048,10 @@ exports.handler = async (event, context) => {
         totalBatches: currentBatch
       });
 
-      // Clean up all chunk docs for this specialTabMessages export.
+      // Clean up all chunk docs for this specialTabMessages / callTranscriptions export.
       // Root doc is matched by exportJobId; sibling chunks share groupId = root._id.
       // TTL index is the safety net if this delete fails.
-      if (job.exportType === 'specialTabMessages') {
+      if (job.exportType === 'specialTabMessages' || job.exportType === 'callTranscriptions') {
         try {
           const rootDoc = await db.collection('specialexports').findOne(
             { exportJobId: new ObjectId(exportJobId) },
