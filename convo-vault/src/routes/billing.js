@@ -963,9 +963,9 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];
     } else if (exportType === 'callTranscriptions') {
-      // Call Transcriptions: standalone billing (flat $0.50/record, single meter charge, no discount).
+      // Call Transcriptions: standalone billing (flat $0.05/record, single meter charge, no discount).
       // Reuses the same meter as specialTabMessages.
-      const unitPrice = 0.50;
+      const unitPrice = 0.05;
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Call transcriptions export' }];
