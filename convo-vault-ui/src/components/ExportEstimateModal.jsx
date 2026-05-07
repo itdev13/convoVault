@@ -487,15 +487,24 @@ export default function ExportEstimateModal({
               {exportType === 'callTranscriptions' && (
                 <>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Total Transcriptions</span>
+                    <span className="text-gray-700">Conversations walked</span>
+                    <span className="font-medium">{formatNumber(estimate.itemCounts?.conversationsTraversed || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Call messages scanned</span>
+                    <span className="font-medium">{formatNumber(estimate.itemCounts?.callMessagesScanned || 0)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Transcriptions retrieved</span>
                     <span className="font-medium">{formatNumber(estimate.itemCounts?.total)}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Price per Transcription</span>
-                    <span className="font-medium text-gray-800">$0.50</span>
+                    <span className="font-medium text-gray-800">$1.00</span>
                   </div>
                   <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
-                    Heavy task — walks every conversation. No volume discounts apply.
+                    Heavy task — we walk every conversation in the sub-account, scan every call,
+                    and pull each available transcript individually. No volume discounts apply.
                   </div>
                 </>
               )}
