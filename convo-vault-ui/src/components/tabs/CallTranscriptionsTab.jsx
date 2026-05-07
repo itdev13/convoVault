@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
-import { Button, DatePicker, message as antMessage } from 'antd';
+import { Button, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
-import dayjs from 'dayjs';
 
 export default function CallTranscriptionsTab() {
   const { location } = useAuth();
@@ -16,9 +15,6 @@ export default function CallTranscriptionsTab() {
   const [specialExportId, setSpecialExportId] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
-
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
 
   // Poll active job status
   useEffect(() => {
@@ -39,12 +35,7 @@ export default function CallTranscriptionsTab() {
     return () => clearInterval(pollInterval);
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
-  const buildExportFilters = () => {
-    const f = {};
-    if (startDate) f.startDate = dayjs(startDate).startOf('day').valueOf();
-    if (endDate) f.endDate = dayjs(endDate).endOf('day').valueOf();
-    return f;
-  };
+  const buildExportFilters = () => ({});
 
   const handleGetEstimate = async () => {
     setExportModalVisible(true);
@@ -137,54 +128,24 @@ export default function CallTranscriptionsTab() {
         />
       )}
 
-      {/* Filters */}
+      {/* Action card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-lg font-semibold text-gray-900">Date Range</span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-            <DatePicker
-              value={startDate ? dayjs(startDate) : null}
-              onChange={(date) => setStartDate(date ? date.toDate() : null)}
-              className="w-full"
-              size="large"
-              placeholder="Select start date"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-            <DatePicker
-              value={endDate ? dayjs(endDate) : null}
-              onChange={(date) => setEndDate(date ? date.toDate() : null)}
-              className="w-full"
-              size="large"
-              placeholder="Select end date"
-            />
-          </div>
-
-          <div>
-            <Button
-              type="primary"
-              size="large"
-              onClick={handleGetEstimate}
-              loading={estimating}
-              disabled={!location?.id}
-              className="bg-green-600 hover:bg-green-700 border-green-600"
-            >
-              Get Estimate & Export
-            </Button>
-          </div>
-        </div>
+        <Button
+          type="primary"
+          size="large"
+          onClick={handleGetEstimate}
+          loading={estimating}
+          disabled={!location?.id}
+          className="bg-green-600 hover:bg-green-700 border-green-600"
+        >
+          Get Estimate & Export
+        </Button>
 
         <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="text-sm text-amber-800">
-            <strong>Heavy task:</strong> we walk every conversation in the date range, find call messages,
-            and fetch a transcription for each completed call. Depending on volume this can take a while.
-            Pricing: <strong>$0.03 per transcription</strong> (no volume discount). Max date range: 1 year.
+            <strong>Heavy task:</strong> we walk every conversation in this sub-account, find call &amp; voicemail
+            messages, and fetch a transcription for each one that has a recording. Depending on volume this can take a while.
+            Pricing: <strong>$0.03 per transcription</strong> (no volume discount).
           </p>
         </div>
       </div>
