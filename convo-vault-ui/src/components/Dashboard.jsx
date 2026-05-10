@@ -94,10 +94,15 @@ export default function Dashboard() {
   // Sidebar groups for Import Data
   const importGroups = [
     {
-      label: '',
+      label: 'Contacts & CRM',
       items: [
         { id: 'importContacts', label: 'Contacts', icon: '👥' },
         { id: 'importNotes', label: 'Notes', icon: '📥' },
+      ]
+    },
+    {
+      label: 'Content',
+      items: [
         { id: 'importCustomFields', label: 'Custom Fields', icon: '🧩' },
         { id: 'importCustomValues', label: 'Custom Values', icon: '🔖' },
       ]
