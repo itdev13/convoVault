@@ -27,7 +27,7 @@ const exportJobSchema = new mongoose.Schema({
   // Export type: conversations, messages, notes, or tasks
   exportType: {
     type: String,
-    enum: ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts'],
+    enum: ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags'],
     required: true
   },
 
