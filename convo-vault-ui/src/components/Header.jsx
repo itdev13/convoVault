@@ -51,39 +51,39 @@ export default function Header({ onExportsClick, onSupportClick }) {
 
   return (
     <header className="bg-gradient-to-r from-blue-600 to-blue-700 shadow-lg">
-      <div className="max-w-full px-6 py-4">
+      <div className="max-w-full px-5 py-2">
         <div className="flex items-center justify-between">
           {/* Logo & Title */}
-          <div className="flex items-center gap-3">
-              <img 
-                src="/assets/app-icon-marketplace.svg" 
-                alt="ConvoVault" 
-                className="w-12 h-12 object-contain rounded-full"
+          <div className="flex items-center gap-2.5">
+              <img
+                src="/assets/app-icon-marketplace.svg"
+                alt="ConvoVault"
+                className="w-8 h-8 object-contain rounded-full"
               />
-            <div>
-              <h1 className="text-2xl font-bold text-white">Export Conversations and Messages</h1>
-              <p className="text-sm text-blue-100">Conversation Management Dashboard</p>
+            <div className="leading-tight">
+              <h1 className="text-base font-bold text-white">Export / Import All Your Data</h1>
+              <p className="text-[11px] text-blue-100">Messages, Notes, Tasks, Opportunities, Forms, Links, Voice AI &amp; more</p>
             </div>
           </div>
 
           {/* Updates, API Docs & Sub-Account */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             {/* Export History Button */}
             <button
               onClick={onExportsClick}
-              className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-lg px-3 py-2 border border-white/20 transition-all flex items-center gap-2"
+              className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-md px-2.5 py-1 border border-white/20 transition-all flex items-center gap-1.5"
             >
-              <span className="text-lg">📤</span>
-              <span className="text-white font-semibold text-sm hidden sm:inline">Export History</span>
+              <span className="text-sm">📤</span>
+              <span className="text-white font-semibold text-xs hidden sm:inline">Export History</span>
             </button>
 
             {/* Support Button */}
             <button
               onClick={onSupportClick}
-              className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-lg px-3 py-2 border border-white/20 transition-all flex items-center gap-2"
+              className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-md px-2.5 py-1 border border-white/20 transition-all flex items-center gap-1.5"
             >
-              <span className="text-lg">🆘</span>
-              <span className="text-white font-semibold text-sm hidden sm:inline">Support</span>
+              <span className="text-sm">🆘</span>
+              <span className="text-white font-semibold text-xs hidden sm:inline">Support</span>
             </button>
 
             {/* Updates Button with Popover */}
@@ -91,11 +91,11 @@ export default function Header({ onExportsClick, onSupportClick }) {
               <button
                 onMouseEnter={() => setShowUpdates(true)}
                 onMouseLeave={() => setShowUpdates(false)}
-                className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-lg px-3 py-2 border border-white/20 transition-all flex items-center gap-2 relative"
+                className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-md px-2.5 py-1 border border-white/20 transition-all flex items-center gap-1.5 relative"
               >
-                <span className="text-lg">⚡</span>
-                <span className="text-white font-semibold text-sm hidden sm:inline">Updates</span>
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="text-sm">⚡</span>
+                <span className="text-white font-semibold text-xs hidden sm:inline">Updates</span>
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></span>
               </button>
               
               {/* Updates Popover */}
@@ -153,9 +153,9 @@ export default function Header({ onExportsClick, onSupportClick }) {
             
             {/* Sub-Account Name */}
             {location?.name && (
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-6 py-3 border border-white/20 flex items-baseline gap-2">
-                <div className="text-lg text-blue-100 font-medium mb-1">Account -</div>
-                <div className="text-white font-bold text-lg">
+              <div className="bg-white/10 backdrop-blur-sm rounded-md px-3 py-1 border border-white/20 flex items-baseline gap-1.5">
+                <div className="text-xs text-blue-100 font-medium">Account</div>
+                <div className="text-white font-bold text-xs">
                   {location.name}
                 </div>
               </div>

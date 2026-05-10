@@ -73,7 +73,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -110,10 +110,18 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       links: 0,
       socialPosts: 0,
       callLogs: 0,
-      templates: 0
+      templates: 0,
+      contacts: 0
     };
 
-    if (exportType === 'conversations') {
+    if (exportType === 'contacts') {
+      // One paged probe gives us meta.total without scanning everything.
+      const result = await ghlService.searchContactsAdvanced(locationId, {
+        ...filters,
+        limit: 1
+      });
+      counts.contacts = result.total || 0;
+    } else if (exportType === 'conversations') {
       // Fetch first page of conversations to estimate count
       const result = await ghlService.searchConversations(locationId, {
         ...filters,
@@ -749,7 +757,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -816,6 +824,13 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         });
         totalItems = result.total || result.conversations?.length || 0;
         counts.conversations = totalItems;
+      } else if (exportType === 'contacts') {
+        const result = await ghlService.searchContactsAdvanced(locationId, {
+          ...filters,
+          limit: 1
+        });
+        totalItems = result.total || 0;
+        counts.contacts = totalItems;
       } else if (exportType === 'notes') {
         // Notes: contactIds already resolved during estimate, count passed from frontend
         totalItems = filters?.estimatedNoteCount || 0;
@@ -1346,21 +1361,14 @@ router.get('/export-history', authenticateSession, async (req, res) => {
  */
 router.get('/pricing', async (req, res) => {
   const locationId = req.query?.locationId;
-  const [specialTabLocationIds, customChargeLocationIds, importNotesLocationIds, callTranscriptionsLocationIds] = await Promise.all([
-    AppConfig.getValues('specialTabLocationIds'),
+  // Custom Charge and Call Transcriptions stay gated; Complete Messages and Import Notes are now live for all locations.
+  const [customChargeLocationIds, callTranscriptionsLocationIds] = await Promise.all([
     AppConfig.getValues('customChargeLocationIds'),
-    AppConfig.getValues('importNotesLocationIds'),
     AppConfig.getValues('callTranscriptionsLocationIds')
   ]);
   // "*" in values = show to all locations (global kill-switch)
-  const specialTabEnabled = locationId
-    ? (specialTabLocationIds.includes('*') || specialTabLocationIds.includes(locationId))
-    : false;
   const customChargeEnabled = locationId
     ? (customChargeLocationIds.includes('*') || customChargeLocationIds.includes(locationId))
-    : false;
-  const importNotesEnabled = locationId
-    ? (importNotesLocationIds.includes('*') || importNotesLocationIds.includes(locationId))
     : false;
   const callTranscriptionsEnabled = locationId
     ? (callTranscriptionsLocationIds.includes('*') || callTranscriptionsLocationIds.includes(locationId))
@@ -1372,9 +1380,10 @@ router.get('/pricing', async (req, res) => {
       discountTiers: billingService.getDiscountTiers(),
       maxDateRange: '1 month',
       maxDateRangeMonths: 6,
-      specialTabEnabled,
+      // Always-on now — kept in the response for backward compatibility with older clients.
+      specialTabEnabled: true,
+      importNotesEnabled: true,
       customChargeEnabled,
-      importNotesEnabled,
       callTranscriptionsEnabled
     }
   });

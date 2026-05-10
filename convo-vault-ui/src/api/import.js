@@ -46,6 +46,14 @@ export const importAPI = {
   },
 
   /**
+   * Import contacts from parsed CSV rows
+   */
+  importContacts: async (locationId, rows, fileName) => {
+    const response = await apiClient.post('/import/contacts', { locationId, rows, fileName });
+    return response;
+  },
+
+  /**
    * Download CSV template
    */
   downloadTemplate: async () => {

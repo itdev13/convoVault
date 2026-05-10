@@ -135,6 +135,96 @@ router.get('/messages', authenticateSession, async (req, res) => {
 });
 
 /**
+ * @route GET /api/export/contacts
+ * @desc List contacts for the dashboard preview, paginated.
+ *       Backed by POST /contacts/search (advanced).
+ */
+router.get('/contacts', authenticateSession, async (req, res) => {
+  try {
+    const {
+      locationId,
+      query,
+      tag,
+      assignedTo,
+      startDate,
+      endDate,
+      startAfter,
+      startAfterId,
+      limit
+    } = req.query;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+
+    if (startDate && !isValidDate(startDate)) {
+      return res.status(400).json({ success: false, error: 'Invalid startDate format' });
+    }
+    if (endDate && !isValidDate(endDate)) {
+      return res.status(400).json({ success: false, error: 'Invalid endDate format' });
+    }
+
+    const sanitizedLimit = sanitizeLimit(limit, 100, 500);
+
+    const result = await ghlService.searchContactsAdvanced(locationId, {
+      limit: sanitizedLimit,
+      query: query || undefined,
+      tag: tag || undefined,
+      assignedTo: assignedTo || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      startAfter: startAfter || undefined,
+      startAfterId: startAfterId || undefined
+    });
+
+    const contacts = result.contacts || [];
+
+    res.json({
+      success: true,
+      data: {
+        total: result.total || contacts.length,
+        loaded: contacts.length,
+        contacts: contacts.map(c => ({
+          id: c.id,
+          name: c.name || c.contactName || `${c.firstName || ''} ${c.lastName || ''}`.trim(),
+          firstName: c.firstName || '',
+          lastName: c.lastName || '',
+          email: c.email || '',
+          phone: c.phone || '',
+          companyName: c.companyName || '',
+          tags: c.tags || [],
+          source: c.source || '',
+          type: c.type || '',
+          assignedTo: c.assignedTo || '',
+          dateAdded: c.dateAdded,
+          dateUpdated: c.dateUpdated,
+          city: c.city || '',
+          state: c.state || '',
+          country: c.country || ''
+        })),
+        pagination: {
+          startAfter: result.meta?.startAfter || null,
+          startAfterId: result.meta?.startAfterId || null,
+          hasMore: !!result.meta?.startAfterId
+        }
+      },
+      meta: {
+        locationId,
+        exportedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    logError('Export contacts list error', error, { locationId: req.query?.locationId });
+    const statusCode = error.status || error.response?.status || 500;
+    res.status(statusCode).json({
+      success: false,
+      error: 'Failed to fetch contacts',
+      message: getUserFriendlyMessage(error)
+    });
+  }
+});
+
+/**
  * @route GET /api/export/messages/all
  * @desc Export ALL messages with automatic pagination
  * Handles cursor-based pagination automatically

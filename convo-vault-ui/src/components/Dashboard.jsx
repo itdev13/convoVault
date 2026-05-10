@@ -15,47 +15,48 @@ import CallLogsTab from './tabs/CallLogsTab';
 import TemplatesTab from './tabs/TemplatesTab';
 import SpecialMessagesTab from './tabs/SpecialMessagesTab';
 import CallTranscriptionsTab from './tabs/CallTranscriptionsTab';
+import ExportContactsTab from './tabs/ExportContactsTab';
 import ConversationMessages from './ConversationMessages';
 import { billingAPI } from '../api/billing';
 import CustomChargeTab from './tabs/CustomChargeTab';
 import ImportNotesTab from './tabs/ImportNotesTab';
+import ImportContactsTab from './tabs/ImportContactsTab';
 
 export default function Dashboard() {
   const { location } = useAuth();
 
-  // Get saved tab from localStorage or default to 'conversations'
+  // Top-level mode: 'export' (default) or 'import'
+  const savedMode = localStorage.getItem('dataMode') || 'export';
+  const [dataMode, setDataMode] = useState(savedMode);
+
+  // Saved sub-tab — defaults to 'messages' under Export, 'importNotes' under Import.
   const savedTab = localStorage.getItem('activeTab') || 'messages';
   const [activeTab, setActiveTab] = useState(savedTab);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [showConversationView, setShowConversationView] = useState(false);
-  const [specialTabEnabled, setSpecialTabEnabled] = useState(false);
+  // Charge and Call Transcriptions stay gated; Complete Messages and Import Notes are now live for everyone.
   const [customChargeEnabled, setCustomChargeEnabled] = useState(false);
-  const [importNotesEnabled, setImportNotesEnabled] = useState(false);
   const [callTranscriptionsEnabled, setCallTranscriptionsEnabled] = useState(false);
 
-  // Save active tab to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('activeTab', activeTab);
-  }, [activeTab]);
+  // Persist mode + sub-tab
+  useEffect(() => { localStorage.setItem('dataMode', dataMode); }, [dataMode]);
+  useEffect(() => { localStorage.setItem('activeTab', activeTab); }, [activeTab]);
 
-  // Check which gated tabs are enabled for this location (driven by AppConfig in Mongo)
   useEffect(() => {
     if (!location?.id) return;
     billingAPI.getPricing(location.id).then(res => {
-      setSpecialTabEnabled(!!res?.data?.specialTabEnabled);
       setCustomChargeEnabled(!!res?.data?.customChargeEnabled);
-      setImportNotesEnabled(!!res?.data?.importNotesEnabled);
       setCallTranscriptionsEnabled(!!res?.data?.callTranscriptionsEnabled);
     }).catch(() => {});
   }, [location?.id]);
 
-  const tabs = [
+  // Sub-tabs under "Export Data"
+  const exportTabs = [
     { id: 'messages', label: 'Messages', icon: '📊' },
-    ...(specialTabEnabled ? [{ id: 'specialTabMessages', label: 'Complete Messages', icon: '💎' }] : []),
-    // { id: 'conversations', label: 'Conversation Threads', icon: '💬' },
+    { id: 'specialTabMessages', label: 'Complete Messages', icon: '💎' },
+    { id: 'contacts', label: 'Contacts', icon: '👤' },
     { id: 'templates', label: 'Templates', icon: '📄' },
     { id: 'notes', label: 'Notes', icon: '📝' },
-    ...(importNotesEnabled ? [{ id: 'importNotes', label: 'Import Notes', icon: '📥' }] : []),
     { id: 'tasks', label: 'Tasks', icon: '✅' },
     { id: 'opportunities', label: 'Opportunities', icon: '💰' },
     { id: 'formSubmissions', label: 'Forms', icon: '📋' },
@@ -64,6 +65,32 @@ export default function Dashboard() {
     ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
     ...(customChargeEnabled ? [{ id: 'customCharge', label: 'Charge', icon: '💳' }] : []),
   ];
+
+  // Sub-tabs under "Import Data"
+  const importTabs = [
+    { id: 'importContacts', label: 'Contacts', icon: '👥' },
+    { id: 'importNotes', label: 'Notes', icon: '📥' },
+  ];
+
+  const tabs = dataMode === 'export' ? exportTabs : importTabs;
+
+  // If the persisted activeTab doesn't belong to the current mode (e.g. user switched modes),
+  // snap to the first tab in the current group.
+  useEffect(() => {
+    if (tabs.length === 0) return;
+    if (!tabs.some(t => t.id === activeTab)) {
+      setActiveTab(tabs[0].id);
+    }
+  }, [dataMode, tabs.length]);
+
+  const switchMode = (mode) => {
+    if (mode === dataMode) return;
+    setDataMode(mode);
+    setShowConversationView(false);
+    // Snap activeTab to first sub-tab of new mode immediately so content updates without a frame of mismatch.
+    const list = mode === 'export' ? exportTabs : importTabs;
+    if (list.length > 0) setActiveTab(list[0].id);
+  };
 
   const handleConversationSelect = (conversation) => {
     setSelectedConversation(conversation);
@@ -123,19 +150,72 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="bg-white rounded-xl shadow-lg mb-6 overflow-x-auto">
-          <div className="border-b border-gray-200">
-            <nav className="flex -mb-px justify-around">
-              {tabs.map((tab) => (
+        {/* Mode tabs (Export / Import) — connected to the sub-tab card below like browser tabs.
+            No horizontal padding here so the leftmost mode tab lines up with the left edge of the
+            sub-tabs card underneath. */}
+        <div className="flex items-end gap-2">
+          {[
+            { key: 'export', label: 'Export Data', tagline: 'Pull data out as CSV / JSON' },
+            { key: 'import', label: 'Import Data', tagline: 'Bring data in from a CSV' },
+          ].map(m => {
+            const active = dataMode === m.key;
+            return (
+              <button
+                key={m.key}
+                onClick={() => switchMode(m.key)}
+                className={`
+                  group relative flex items-center gap-3 px-5 pt-3 pb-4 rounded-t-xl transition-all
+                  ${active
+                    ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg z-10'
+                    : 'bg-white/70 hover:bg-white text-gray-600 border border-gray-200 border-b-0'
+                  }
+                `}
+              >
+                {/* Icon */}
+                <div className={`
+                  w-9 h-9 rounded-lg flex items-center justify-center transition-colors
+                  ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500 group-hover:text-gray-700'}
+                `}>
+                  {m.key === 'export' ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
+                    </svg>
+                  )}
+                </div>
+                <div className="text-left">
+                  <div className={`font-bold text-sm leading-tight ${active ? 'text-white' : 'text-gray-700'}`}>
+                    {m.label}
+                  </div>
+                  <div className={`text-xs leading-tight mt-0.5 ${active ? 'text-blue-100' : 'text-gray-500'}`}>
+                    {m.tagline}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Sub-tabs card — thin neutral border + small top gap keeps the two levels visibly separate. */}
+        <div className="bg-white rounded-xl shadow-lg mb-6 overflow-x-auto relative border-t border-gray-200">
+          <nav className="flex -mb-px justify-start min-w-max pl-3 gap-4">
+            {tabs.length === 0 ? (
+              <div className="px-4 py-4 text-sm text-gray-500">
+                No {dataMode === 'export' ? 'export' : 'import'} options available for this sub-account.
+              </div>
+            ) : (
+              tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => {
                     setActiveTab(tab.id);
-                    setShowConversationView(false); // Exit conversation view when switching tabs
+                    setShowConversationView(false);
                   }}
                   className={`
-                    relative flex items-center justify-center gap-1 border-b-3 px-1 py-2 font-semibold text-sm transition-all whitespace-nowrap
+                    relative flex items-center justify-center gap-1 border-b-3 px-3 py-3 font-semibold text-sm transition-all whitespace-nowrap
                     ${(activeTab === tab.id || (showConversationView && tab.id === 'conversations'))
                       ? 'border-blue-600 text-blue-600 bg-blue-50/50'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -148,9 +228,9 @@ export default function Dashboard() {
                     <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-t-full"></div>
                   )}
                 </button>
-              ))}
-            </nav>
-          </div>
+              ))
+            )}
+          </nav>
         </div>
 
         {/* Tab Content */}
@@ -183,15 +263,17 @@ export default function Dashboard() {
               )}
               {activeTab === 'messages' && <MessagesTab />}
               {activeTab === 'notes' && <NotesTab />}
-              {activeTab === 'importNotes' && importNotesEnabled && <ImportNotesTab />}
+              {activeTab === 'importNotes' && <ImportNotesTab />}
+              {activeTab === 'importContacts' && <ImportContactsTab />}
               {activeTab === 'tasks' && <TasksTab />}
               {activeTab === 'opportunities' && <OpportunitiesTab />}
               {activeTab === 'formSubmissions' && <FormSubmissionsTab />}
               {activeTab === 'links' && <LinksTab />}
               {activeTab === 'callLogs' && <CallLogsTab />}
               {activeTab === 'callTranscriptions' && callTranscriptionsEnabled && <CallTranscriptionsTab />}
+              {activeTab === 'contacts' && <ExportContactsTab />}
               {activeTab === 'templates' && <TemplatesTab />}
-              {activeTab === 'specialTabMessages' && specialTabEnabled && <SpecialMessagesTab />}
+              {activeTab === 'specialTabMessages' && <SpecialMessagesTab />}
               {activeTab === 'exports' && <ExportTab />}
               {activeTab === 'import' && <ImportTab />}
               {activeTab === 'support' && <SupportTab />}

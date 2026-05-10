@@ -920,6 +920,28 @@ class GHLService {
   }
 
   /**
+   * Create a contact (always inserts a new record).
+   * https://marketplace.gohighlevel.com/docs/ghl/contacts/create-contact
+   *
+   * Use this when you want a fresh row per CSV line — duplicates are NOT merged.
+   * If you need dedup-by-email/phone, use upsertContact() instead.
+   */
+  async createContact(locationId, contactData) {
+    try {
+      const requestBody = { ...contactData, locationId };
+      const response = await this.apiRequest('POST', '/contacts/', locationId, requestBody);
+      return response.contact || response;
+    } catch (error) {
+      logger.error('createContact failed:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      throw new Error(`Failed to create contact: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  /**
    * Create conversation
    * https://marketplace.gohighlevel.com/docs/ghl/conversations/create-conversation
    */
@@ -984,6 +1006,60 @@ class GHLService {
       };
     } catch (error) {
       logger.error('Search contacts failed:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Advanced contacts search.
+   * POST /contacts/search — supports filter expressions and cursor pagination via (startAfter, startAfterId).
+   * Reference: https://marketplace.gohighlevel.com/docs/ghl/contacts/search-contacts-advanced
+   */
+  async searchContactsAdvanced(locationId, options = {}) {
+    try {
+      const body = {
+        locationId,
+        pageLimit: Math.min(Math.max(parseInt(options.limit, 10) || 100, 1), 500)
+      };
+
+      if (options.startAfter) body.startAfter = options.startAfter;
+      if (options.startAfterId) body.startAfterId = options.startAfterId;
+
+      // Build a simple filter array — only include filters the caller provided.
+      // Filter shape per GHL docs: { field, operator, value }
+      const filters = [];
+      if (options.query) {
+        body.searchAfter = options.query; // free-text search field name varies; pass as searchAfter or query
+        body.query = options.query;
+      }
+      if (options.tag) {
+        filters.push({ field: 'tags', operator: 'contains', value: options.tag });
+      }
+      if (options.assignedTo) {
+        filters.push({ field: 'assignedTo', operator: 'eq', value: options.assignedTo });
+      }
+      if (options.startDate) {
+        filters.push({ field: 'dateAdded', operator: 'gte', value: new Date(options.startDate).getTime() });
+      }
+      if (options.endDate) {
+        filters.push({ field: 'dateAdded', operator: 'lte', value: new Date(options.endDate).getTime() });
+      }
+      if (filters.length) body.filters = filters;
+
+      const response = await this.apiRequest(
+        'POST',
+        '/contacts/search',
+        locationId,
+        body
+      );
+
+      return {
+        contacts: response.contacts || [],
+        meta: response.meta || {},
+        total: response.total || response.meta?.total || response.contacts?.length || 0
+      };
+    } catch (error) {
+      logger.error('searchContactsAdvanced failed:', error.message);
       throw error;
     }
   }

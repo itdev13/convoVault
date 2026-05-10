@@ -36,7 +36,9 @@ const DEFAULT_UNIT_PRICES = {
   socialPosts: 0.015,      // 0.015 cents per social post (with volume discounts)
   callLogs: 0.015,         // 0.015 cents per call log (with volume discounts)
   templates: 0.015,        // 0.015 cents per template (with volume discounts)
-  importNotes: 0.018       // 1.8 cents per imported note (no discounts)
+  importNotes: 0.018,      // 1.8 cents per imported note (no discounts)
+  importContacts: 0.018,   // 1.8 cents per imported contact (no discounts)
+  contacts: 0.018          // 1.8 cents per contact (with volume discounts, like messages)
 };
 
 
@@ -152,7 +154,8 @@ class BillingService {
       links = 0,
       socialPosts = 0,
       callLogs = 0,
-      templates = 0
+      templates = 0,
+      contacts = 0
     } = counts;
 
     // Use provided prices or defaults
@@ -168,8 +171,9 @@ class BillingService {
     const socialPostsCost = socialPosts * (unitPrices.socialPosts || DEFAULT_UNIT_PRICES.socialPosts);
     const callLogsCost = callLogs * (unitPrices.callLogs || DEFAULT_UNIT_PRICES.callLogs);
     const templatesCost = templates * (unitPrices.templates || DEFAULT_UNIT_PRICES.templates);
-    const discountableBase = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost + templatesCost;
-    const discountableItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs + templates;
+    const contactsCost = contacts * (unitPrices.contacts || DEFAULT_UNIT_PRICES.contacts);
+    const discountableBase = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost + templatesCost + contactsCost;
+    const discountableItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs + templates + contacts;
 
     // Notes/tasks: flat rate, NO discounts
     const notesTasksPrice = unitPrices.notesAndTasks || DEFAULT_UNIT_PRICES.notesAndTasks;
@@ -206,6 +210,7 @@ class BillingService {
         socialPosts,
         callLogs,
         templates,
+        contacts,
         total: totalItems
       },
       breakdown: {
@@ -263,6 +268,11 @@ class BillingService {
           count: templates,
           unitPrice: unitPrices.templates || DEFAULT_UNIT_PRICES.templates,
           subtotal: templatesCost
+        },
+        contacts: {
+          count: contacts,
+          unitPrice: unitPrices.contacts || DEFAULT_UNIT_PRICES.contacts,
+          subtotal: contactsCost
         }
       },
       baseAmount,
@@ -526,6 +536,15 @@ class BillingService {
         meterId: METER_IDS.callLogs,
         qty: counts.callLogs,
         description: 'Call log exports'
+      });
+    }
+
+    if (counts.contacts > 0) {
+      // Contacts share the messages meter — same rate ($0.018) and same volume-discount tiering.
+      charges.push({
+        meterId: METER_IDS.smsWhatsapp,
+        qty: counts.contacts,
+        description: 'Contact exports'
       });
     }
 

@@ -15,6 +15,7 @@ const billingService = require('../services/billingService');
 const BillingTransaction = require('../models/BillingTransaction');
 
 const IMPORT_NOTES_METER_ID = '69864aed1265653fdd7c0620'; // shared meter, same as exports
+const IMPORT_CONTACTS_METER_ID = '69864aed1265653fdd7c0620'; // same meter as imports/notes — shared
 
 /**
  * FEATURE 3: Import from CSV/Excel to Conversations
@@ -808,6 +809,222 @@ async function processNotesImportAsync(jobId, locationId, rows) {
   });
 
   logger.info(`✅ Notes import ${jobId} done: ${successful} succeeded, ${skipped} skipped, ${failed} failed`);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// CONTACTS IMPORT — frontend parses the CSV and POSTs JSON rows.
+// Each row → POST /contacts/ (always-create), throttled to avoid 429s.
+// Pricing: $0.018/row, no discounts, charged upfront.
+// ════════════════════════════════════════════════════════════════════════
+
+const MAX_CONTACTS_ROWS_PER_IMPORT = 5000;
+
+router.post('/contacts', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, rows } = req.body || {};
+    const { companyId, userId } = req.user;
+
+    if (!locationId) {
+      return res.status(400).json({ success: false, error: 'locationId is required' });
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'rows must be a non-empty array' });
+    }
+    if (rows.length > MAX_CONTACTS_ROWS_PER_IMPORT) {
+      return res.status(400).json({
+        success: false,
+        error: `Too many rows (${rows.length}). Max ${MAX_CONTACTS_ROWS_PER_IMPORT} per import — please split the file.`
+      });
+    }
+
+    const unitPrices = billingService.getUnitPrices(locationId);
+    const unitPrice = unitPrices.importContacts ?? 0.018;
+    const totalRows = rows.length;
+    const finalAmount = Number((totalRows * unitPrice).toFixed(4));
+
+    const tokenData = await ghlService.getValidToken(locationId);
+    const accessToken = tokenData.accessToken || tokenData;
+
+    const hasFunds = await billingService.hasFunds(companyId, accessToken);
+    if (!hasFunds) {
+      return res.status(402).json({
+        success: false,
+        error: 'Insufficient wallet balance',
+        message: 'Please add funds to your GHL wallet to continue'
+      });
+    }
+
+    const meterCharges = [{ meterId: IMPORT_CONTACTS_METER_ID, qty: totalRows, description: 'Contacts import' }];
+
+    const transaction = await BillingTransaction.create({
+      locationId,
+      companyId,
+      type: 'import_contacts',
+      itemCounts: { contacts: totalRows, total: totalRows },
+      pricing: { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount },
+      meterCharges,
+      status: 'pending',
+      userId
+    });
+
+    try {
+      const chargeResult = await billingService.chargeWallet(
+        companyId, accessToken, meterCharges, locationId, transaction._id.toString(), finalAmount
+      );
+      transaction.ghlChargeId = chargeResult?.charges?.map(c => c?.chargeId).join(',');
+      transaction.referralCode = chargeResult.referralCode || null;
+      if (chargeResult.internalTesting) {
+        transaction.status = 'tested';
+        transaction.internalTesting = true;
+        transaction.paymentIgnored = true;
+      } else {
+        transaction.status = 'charged';
+      }
+      await transaction.save();
+    } catch (chargeError) {
+      transaction.status = 'failed';
+      transaction.errorMessage = chargeError.message;
+      await transaction.save();
+      return res.status(402).json({
+        success: false,
+        error: 'Payment failed',
+        message: chargeError.message
+      });
+    }
+
+    const job = await ImportJob.create({
+      locationId,
+      fileName: req.body.fileName || 'contacts-import.csv',
+      totalRows,
+      status: 'pending'
+    });
+
+    processContactsImportAsync(job._id, locationId, rows);
+
+    res.json({
+      success: true,
+      message: 'Contacts import started',
+      data: {
+        jobId: job._id,
+        totalRows,
+        status: 'processing',
+        amountCharged: finalAmount,
+        transactionId: transaction._id
+      }
+    });
+  } catch (error) {
+    logError('Contacts import error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: error.message || 'Failed to start contacts import' });
+  }
+});
+
+async function processContactsImportAsync(jobId, locationId, rows) {
+  await ImportJob.findByIdAndUpdate(jobId, { status: 'processing', startedAt: new Date() });
+
+  let successful = 0;
+  let failed = 0;
+  let skipped = 0;
+  const importErrors = [];
+
+  // Throttle ~3 req/sec — single GHL call per row, well under typical rate limits.
+  const queue = new ThrottleQueue({ name: `contacts-import-${jobId}`, delayMs: 350 });
+
+  let processed = 0;
+  const total = rows.length;
+
+  // CSV columns are read case-insensitively for the common fields the user is likely to provide.
+  const get = (row, ...keys) => {
+    for (const k of keys) {
+      if (row[k] != null && row[k] !== '') return row[k];
+      const lower = k.charAt(0).toLowerCase() + k.slice(1);
+      if (row[lower] != null && row[lower] !== '') return row[lower];
+      const upper = k.charAt(0).toUpperCase() + k.slice(1);
+      if (row[upper] != null && row[upper] !== '') return row[upper];
+    }
+    return undefined;
+  };
+
+  // tags column is split on `;` or `,`
+  const parseTags = (val) => {
+    if (Array.isArray(val)) return val;
+    if (!val) return undefined;
+    return String(val).split(/[;,]/).map(t => t.trim()).filter(Boolean);
+  };
+
+  const jobs = rows.map((row, idx) => new Promise((resolve) => {
+    queue.push(async () => {
+      try {
+        const firstName = (get(row, 'firstName', 'first_name', 'FirstName') || '').toString().trim();
+        const lastName = (get(row, 'lastName', 'last_name', 'LastName') || '').toString().trim();
+        const fullName = (get(row, 'name', 'fullName', 'Name') || '').toString().trim();
+        const email = (get(row, 'email', 'Email') || '').toString().trim();
+        const phone = (get(row, 'phone', 'Phone') || '').toString().trim();
+
+        // Need at least an email or phone — GHL rejects contacts with neither.
+        if (!email && !phone) {
+          skipped++;
+          importErrors.push({ row: idx + 2, error: 'No email or phone provided', data: { firstName, lastName, fullName } });
+          return;
+        }
+
+        const payload = {
+          firstName: firstName || undefined,
+          lastName: lastName || undefined,
+          name: fullName || (firstName || lastName ? `${firstName} ${lastName}`.trim() : undefined),
+          email: email || undefined,
+          phone: phone || undefined,
+          companyName: get(row, 'companyName', 'company_name', 'CompanyName') || undefined,
+          website: get(row, 'website', 'Website') || undefined,
+          source: get(row, 'source', 'Source') || undefined,
+          address1: get(row, 'address1', 'address', 'Address') || undefined,
+          city: get(row, 'city', 'City') || undefined,
+          state: get(row, 'state', 'State') || undefined,
+          country: get(row, 'country', 'Country') || undefined,
+          postalCode: get(row, 'postalCode', 'postal_code', 'PostalCode', 'zip') || undefined,
+          timezone: get(row, 'timezone', 'Timezone') || undefined,
+          dateOfBirth: get(row, 'dateOfBirth', 'date_of_birth', 'DateOfBirth') || undefined,
+          gender: get(row, 'gender', 'Gender') || undefined,
+          tags: parseTags(get(row, 'tags', 'Tags')),
+          assignedTo: get(row, 'assignedTo', 'assigned_to', 'AssignedTo') || undefined
+        };
+
+        await ghlService.createContact(locationId, payload);
+        successful++;
+      } catch (err) {
+        const ghlMsg = err.response?.data?.message || err.message || 'Unknown error';
+        // Treat dedup conflicts as skipped, not failed (e.g. "Contact already exists").
+        const status = err.response?.status;
+        if (status === 409 || /duplicate|already exists/i.test(ghlMsg)) {
+          skipped++;
+          importErrors.push({ row: idx + 2, error: 'Contact already exists', data: { email: row.email, phone: row.phone } });
+        } else {
+          failed++;
+          importErrors.push({ row: idx + 2, error: ghlMsg, data: { email: row.email, phone: row.phone } });
+          logWarning('Contacts import row failed', { row: idx + 2, error: ghlMsg });
+        }
+      } finally {
+        processed++;
+        if (processed % 10 === 0 || processed === total) {
+          await ImportJob.findByIdAndUpdate(jobId, { processed, successful, failed, skipped }).catch(() => {});
+        }
+        resolve();
+      }
+    });
+  }));
+
+  await Promise.all(jobs);
+
+  await ImportJob.findByIdAndUpdate(jobId, {
+    status: 'completed',
+    processed,
+    successful,
+    failed,
+    skipped,
+    importErrors: importErrors.slice(0, 100),
+    completedAt: new Date()
+  });
+
+  logger.info(`✅ Contacts import ${jobId} done: ${successful} succeeded, ${skipped} skipped, ${failed} failed`);
 }
 
 module.exports = router;

@@ -19,7 +19,7 @@ const billingTransactionSchema = new mongoose.Schema({
   // Transaction type
   type: {
     type: String,
-    enum: ['export_conversations', 'export_messages', 'export_notes', 'export_tasks', 'export_opportunities', 'export_formSubmissions', 'export_links', 'export_socialPosts', 'export_callLogs', 'export_templates', 'export_specialTabMessages', 'export_callTranscriptions', 'custom_charge', 'import_notes'],
+    enum: ['export_conversations', 'export_messages', 'export_notes', 'export_tasks', 'export_opportunities', 'export_formSubmissions', 'export_links', 'export_socialPosts', 'export_callLogs', 'export_templates', 'export_specialTabMessages', 'export_callTranscriptions', 'export_contacts', 'custom_charge', 'import_notes', 'import_contacts'],
     required: true
   },
 

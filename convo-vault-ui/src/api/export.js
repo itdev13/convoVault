@@ -15,6 +15,14 @@ export const exportAPI = {
   },
 
   /**
+   * List contacts (advanced search) for the dashboard preview
+   */
+  exportContacts: async (locationId, filters = {}) => {
+    const params = { locationId, ...filters };
+    return await apiClient.get('/export/contacts', { params });
+  },
+
+  /**
    * Export all messages (bulk)
    */
   exportAll: async (locationId, filters = {}) => {

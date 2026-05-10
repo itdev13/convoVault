@@ -187,6 +187,48 @@ function nonNullValue(val){
 /**
  * Fetch a page of tasks for a location via location-level search API
  */
+/**
+ * Fetch a single page of contacts via the advanced search endpoint.
+ * Uses cursor-style pagination (startAfter, startAfterId) per GHL meta response.
+ */
+async function fetchContactsPage(locationId, accessToken, filters, cursor) {
+  const body = {
+    locationId,
+    pageLimit: 100
+  };
+  if (cursor) {
+    if (typeof cursor === 'object') {
+      if (cursor.startAfter) body.startAfter = cursor.startAfter;
+      if (cursor.startAfterId) body.startAfterId = cursor.startAfterId;
+    }
+  }
+
+  const f = filters || {};
+  if (f.query) body.query = f.query;
+  const filterExpr = [];
+  if (f.tag) filterExpr.push({ field: 'tags', operator: 'contains', value: f.tag });
+  if (f.assignedTo) filterExpr.push({ field: 'assignedTo', operator: 'eq', value: f.assignedTo });
+  if (f.startDate) filterExpr.push({ field: 'dateAdded', operator: 'gte', value: new Date(f.startDate).getTime() });
+  if (f.endDate) filterExpr.push({ field: 'dateAdded', operator: 'lte', value: new Date(f.endDate).getTime() });
+  if (filterExpr.length) body.filters = filterExpr;
+
+  const response = await axios.post(`${GHL_API_URL}/contacts/search`, body, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    }
+  });
+
+  const meta = response.data.meta || {};
+  return {
+    data: response.data.contacts || [],
+    nextCursor: meta.startAfterId
+      ? { startAfter: meta.startAfter, startAfterId: meta.startAfterId }
+      : null
+  };
+}
+
 async function fetchTasksPage(locationId, accessToken, skip, filters = {}) {
   const LIMIT = 1000;
   const body = { limit: LIMIT, skip, count: true };
@@ -615,6 +657,52 @@ function messagesToCSV(messages, includeHeader = true, channelFilter = '') {
  * Convert call transcriptions to CSV format.
  * Records are pre-fetched objects: { messageId, conversationId, contactId, userId, direction, status, dateAdded, callDuration, callStatus, transcript, segments }
  */
+/**
+ * Convert contacts to CSV format
+ */
+function contactsToCSV(contacts, includeHeader = true) {
+  const header = includeHeader
+    ? 'ID,FirstName,LastName,Name,Email,AdditionalEmails,Phone,CompanyName,Website,Source,Type,Tags,AssignedTo,Address1,City,State,Country,PostalCode,Timezone,DateOfBirth,Gender,DND,DateAdded,DateUpdated,CustomFields\n'
+    : '';
+  const rows = contacts.map(c => {
+    const tags = Array.isArray(c.tags) ? c.tags.join('; ') : '';
+    const additionalEmails = Array.isArray(c.additionalEmails)
+      ? c.additionalEmails.map(e => e?.email || '').filter(Boolean).join('; ')
+      : '';
+    const customFields = Array.isArray(c.customFields)
+      ? c.customFields.map(f => `${f.id}=${typeof f.value === 'object' ? JSON.stringify(f.value) : f.value}`).join('; ')
+      : '';
+    return [
+      escapeCsv(c.id || ''),
+      escapeCsv(c.firstName || c.firstNameRaw || ''),
+      escapeCsv(c.lastName || c.lastNameRaw || ''),
+      escapeCsv(c.name || c.contactName || ''),
+      escapeCsv(c.email || ''),
+      escapeCsv(additionalEmails),
+      escapeCsv(c.phone || ''),
+      escapeCsv(c.companyName || ''),
+      escapeCsv(c.website || ''),
+      escapeCsv(c.source || ''),
+      escapeCsv(c.type || ''),
+      escapeCsv(tags),
+      escapeCsv(c.assignedTo || ''),
+      escapeCsv(c.address1 || ''),
+      escapeCsv(c.city || ''),
+      escapeCsv(c.state || ''),
+      escapeCsv(c.country || ''),
+      escapeCsv(c.postalCode || ''),
+      escapeCsv(c.timezone || ''),
+      escapeCsv(c.dateOfBirth || ''),
+      escapeCsv(c.gender || ''),
+      escapeCsv(c.dnd ? 'true' : 'false'),
+      escapeCsv(formatDate(c.dateAdded)),
+      escapeCsv(formatDate(c.dateUpdated)),
+      escapeCsv(customFields)
+    ].join(',');
+  }).join('\n');
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
 function callTranscriptionsToCSV(records, includeHeader = true) {
   const header = includeHeader
     ? 'Date,ConversationID,ContactID,MessageID,MessageType,UserID,Direction,Status,CallDuration,CallStatus,Transcript\n'
@@ -999,7 +1087,8 @@ async function sendEmail(email, downloadUrl, jobDetails) {
         jobDetails.exportType === 'callLogs' ? 'Call Logs' :
         jobDetails.exportType === 'templates' ? 'Templates' :
         jobDetails.exportType === 'specialTabMessages' ? 'Special Messages' :
-        jobDetails.exportType === 'callTranscriptions' ? 'Call Transcriptions' : 'Messages'
+        jobDetails.exportType === 'callTranscriptions' ? 'Call Transcriptions' :
+        jobDetails.exportType === 'contacts' ? 'Contacts' : 'Messages'
       } Export is Ready`,
       htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1658,6 +1747,49 @@ exports.handler = async (event, context) => {
 
       cursor = hasMoreData ? String(currentSkip) : null;
 
+    } else if (job.exportType === 'contacts') {
+      // === CONTACTS: cursor pagination via { startAfter, startAfterId } ===
+      // The cursor is persisted as a JSON string between Lambda invocations.
+      let contactsCursor = null;
+      if (cursor) {
+        try { contactsCursor = JSON.parse(cursor); } catch { contactsCursor = null; }
+      }
+
+      while (recordsFetched < BATCH_SIZE && hasMoreData) {
+        if (context.getRemainingTimeInMillis() < TIMEOUT_BUFFER_MS) {
+          log('Approaching timeout, saving progress', { remainingMs: context.getRemainingTimeInMillis() });
+          break;
+        }
+
+        let pageResult;
+        try {
+          pageResult = await fetchContactsPage(job.locationId, accessToken, job.filters || {}, contactsCursor);
+        } catch (fetchError) {
+          if (fetchError.response?.status === 401) {
+            log('Got 401 on contacts fetch, refreshing token and retrying');
+            await refreshAndUpdateToken();
+            pageResult = await fetchContactsPage(job.locationId, accessToken, job.filters || {}, contactsCursor);
+          } else {
+            throw fetchError;
+          }
+        }
+
+        const page = pageResult.data || [];
+        records.push(...page);
+        recordsFetched = records.length;
+
+        if (pageResult.nextCursor) {
+          contactsCursor = pageResult.nextCursor;
+        } else {
+          hasMoreData = false;
+          contactsCursor = null;
+          break;
+        }
+      }
+
+      cursor = contactsCursor ? JSON.stringify(contactsCursor) : null;
+      hasMoreData = !!cursor;
+
     } else if (job.exportType === 'specialTabMessages' || job.exportType === 'callTranscriptions') {
       // === SPECIAL MESSAGES / CALL TRANSCRIPTIONS: Read pre-fetched records from chunked specialexports ===
       // Chunk 0 is the "root" doc (has exportJobId). Remaining chunks share groupId = root._id.
@@ -1837,6 +1969,8 @@ exports.handler = async (event, context) => {
         content = specialMessagesToCSV(records, isFirstContent);
       } else if (job.exportType === 'callTranscriptions') {
         content = callTranscriptionsToCSV(records, isFirstContent);
+      } else if (job.exportType === 'contacts') {
+        content = contactsToCSV(records, isFirstContent);
       } else {
         content = messagesToCSV(records, isFirstContent, job.filters?.channel || '');
       }

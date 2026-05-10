@@ -420,7 +420,7 @@ export default function ExportEstimateModal({
           <div className="bg-blue-50 rounded-lg px-4 py-2 border border-blue-200">
             <div className="space-y-2 text-sm">
               {/* Show credits-based pricing for conversations/messages */}
-              {(exportType === 'conversations' || exportType === 'messages') && (
+              {!importMode && (exportType === 'conversations' || exportType === 'messages' || exportType === 'contacts') && (
                 <>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Credits</span>
@@ -437,19 +437,27 @@ export default function ExportEstimateModal({
                 </>
               )}
 
-              {/* Import Notes mode — flat per-note pricing, no discount tiers */}
-              {importMode && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Notes to import</span>
-                    <span className="font-medium">{formatNumber(estimate.itemCounts?.total)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Price per Note</span>
-                    <span className="font-medium text-gray-800">{formatUnitPrice(estimate.breakdown?.notes?.unitPrice ?? 0)}</span>
-                  </div>
-                </>
-              )}
+              {/* Import mode (notes / contacts) — flat per-row pricing, no discount tiers */}
+              {importMode && (() => {
+                const isContacts = exportType === 'contacts';
+                const itemLabelPlural = isContacts ? 'Contacts to import' : 'Notes to import';
+                const unitLabel = isContacts ? 'Contact' : 'Note';
+                const unitPrice = isContacts
+                  ? (estimate.breakdown?.contacts?.unitPrice ?? 0)
+                  : (estimate.breakdown?.notes?.unitPrice ?? 0);
+                return (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-700">{itemLabelPlural}</span>
+                      <span className="font-medium">{formatNumber(estimate.itemCounts?.total)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-700">Price per {unitLabel}</span>
+                      <span className="font-medium text-gray-800">{formatUnitPrice(unitPrice)}</span>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Show credit-based pricing for notes/tasks/opportunities/formSubmissions/links/socialPosts/templates (1 item = 1 credit) */}
               {!importMode && (['notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'].includes(exportType)) && (
