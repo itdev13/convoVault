@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Header from './Header';
 import ConversationsTab from './tabs/ConversationsTab';
 import MessagesTab from './tabs/MessagesTab';
-import ImportTab from './tabs/ImportTab';
 import SupportTab from './tabs/SupportTab';
 import ExportTab from './tabs/ExportTab';
 import NotesTab from './tabs/NotesTab';
@@ -55,32 +54,57 @@ export default function Dashboard() {
     }).catch(() => {});
   }, [location?.id]);
 
-  // Sub-tabs under "Export Data"
-  const exportTabs = [
-    { id: 'messages', label: 'Messages', icon: '📊' },
-    { id: 'specialTabMessages', label: 'Complete Messages', icon: '💎' },
-    { id: 'contacts', label: 'Contacts', icon: '👤' },
-    { id: 'templates', label: 'Templates', icon: '📄' },
-    { id: 'notes', label: 'Notes', icon: '📝' },
-    { id: 'tasks', label: 'Tasks', icon: '✅' },
-    { id: 'opportunities', label: 'Opportunities', icon: '💰' },
-    { id: 'formSubmissions', label: 'Forms', icon: '📋' },
-    { id: 'links', label: 'Links', icon: '🔗' },
-    { id: 'callLogs', label: 'Voice AI', icon: '📞' },
-    { id: 'customFields', label: 'Custom Fields', icon: '🧩' },
-    { id: 'customValues', label: 'Custom Values', icon: '🔖' },
-    { id: 'tags', label: 'Tags', icon: '🏷️' },
-    ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
-    ...(customChargeEnabled ? [{ id: 'customCharge', label: 'Charge', icon: '💳' }] : []),
+  // Sidebar groups for Export Data
+  const exportGroups = [
+    {
+      label: 'Conversations',
+      items: [
+        { id: 'messages', label: 'Messages', icon: '📊' },
+        { id: 'specialTabMessages', label: 'Complete Messages', icon: '💎' },
+      ]
+    },
+    {
+      label: 'Contacts & CRM',
+      items: [
+        { id: 'contacts', label: 'Contacts', icon: '👤' },
+        { id: 'opportunities', label: 'Opportunities', icon: '💰' },
+        { id: 'formSubmissions', label: 'Forms', icon: '📋' },
+      ]
+    },
+    {
+      label: 'Content',
+      items: [
+        { id: 'notes', label: 'Notes', icon: '📝' },
+        { id: 'tasks', label: 'Tasks', icon: '✅' },
+        { id: 'templates', label: 'Templates', icon: '📄' },
+        { id: 'links', label: 'Links', icon: '🔗' },
+        { id: 'callLogs', label: 'Voice AI', icon: '📞' },
+        { id: 'customFields', label: 'Custom Fields', icon: '🧩' },
+        { id: 'customValues', label: 'Custom Values', icon: '🔖' },
+        { id: 'tags', label: 'Tags', icon: '🏷️' },
+        ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
+      ]
+    },
+    ...(customChargeEnabled ? [{ label: 'Billing', items: [{ id: 'customCharge', label: 'Charge', icon: '💳' }] }] : []),
   ];
 
-  // Sub-tabs under "Import Data"
-  const importTabs = [
-    { id: 'importContacts', label: 'Contacts', icon: '👥' },
-    { id: 'importNotes', label: 'Notes', icon: '📥' },
-    { id: 'importCustomFields', label: 'Custom Fields', icon: '🧩' },
-    { id: 'importCustomValues', label: 'Custom Values', icon: '🔖' },
+  // All export tab ids (flat) — used for tab-switching validation
+  const exportTabs = exportGroups.flatMap(g => g.items);
+
+  // Sidebar groups for Import Data
+  const importGroups = [
+    {
+      label: '',
+      items: [
+        { id: 'importContacts', label: 'Contacts', icon: '👥' },
+        { id: 'importNotes', label: 'Notes', icon: '📥' },
+        { id: 'importCustomFields', label: 'Custom Fields', icon: '🧩' },
+        { id: 'importCustomValues', label: 'Custom Values', icon: '🔖' },
+      ]
+    },
   ];
+
+  const importTabs = importGroups.flatMap(g => g.items);
 
   const tabs = dataMode === 'export' ? exportTabs : importTabs;
 
@@ -209,92 +233,92 @@ export default function Dashboard() {
           })}
         </div>
 
-        {/* Sub-tabs card — thin neutral border + small top gap keeps the two levels visibly separate. */}
-        <div className="bg-white rounded-xl shadow-lg mb-6 overflow-x-auto relative border-t border-gray-200">
-          <nav className="flex -mb-px justify-start min-w-max pl-3 gap-4">
-            {tabs.length === 0 ? (
-              <div className="px-4 py-4 text-sm text-gray-500">
-                No {dataMode === 'export' ? 'export' : 'import'} options available for this sub-account.
+        {/* Sidebar nav + content panel — same layout for Export and Import */}
+        <div className="bg-white rounded-xl shadow-lg flex overflow-hidden border-t border-gray-200">
+          {/* Sidebar */}
+          <aside className="w-52 flex-shrink-0 border-r border-gray-100 py-4 bg-gray-50/60">
+            {(dataMode === 'export' ? exportGroups : importGroups).map((group, gi) => (
+              <div key={group.label || `g-${gi}`} className="mb-1">
+                {group.label && (
+                  <div className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 select-none">
+                    {group.label}
+                  </div>
+                )}
+                {group.items.map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => {
+                        setActiveTab(tab.id);
+                        setShowConversationView(false);
+                      }}
+                      className={`
+                        w-full flex items-center gap-2.5 px-4 py-2 text-sm font-medium transition-all text-left
+                        ${isActive
+                          ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600'
+                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800 border-r-2 border-transparent'
+                        }
+                      `}
+                    >
+                      <span className="text-base leading-none">{tab.icon}</span>
+                      <span className="truncate">{tab.label}</span>
+                    </button>
+                  );
+                })}
               </div>
-            ) : (
-              tabs.map((tab) => (
+            ))}
+          </aside>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0 p-8">
+            {showConversationView && (
+              <div className="mb-6 flex items-center gap-2 text-sm text-gray-600">
                 <button
-                  key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id);
-                    setShowConversationView(false);
-                  }}
-                  className={`
-                    relative flex items-center justify-center gap-1 border-b-3 px-3 py-3 font-semibold text-sm transition-all whitespace-nowrap
-                    ${(activeTab === tab.id || (showConversationView && tab.id === 'conversations'))
-                      ? 'border-blue-600 text-blue-600 bg-blue-50/50'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                    }
-                  `}
+                  onClick={() => setShowConversationView(false)}
+                  className="hover:text-blue-600 transition-colors font-medium"
                 >
-                  <span className="text-xl">{tab.icon}</span>
-                  <span className="hidden sm:inline">{tab.label}</span>
-                  {(activeTab === tab.id || (showConversationView && tab.id === 'conversations')) && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-t-full"></div>
-                  )}
+                  Conversation Threads
                 </button>
-              ))
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                <span className="text-gray-900 font-medium">{selectedConversation?.contactName || 'Messages'}</span>
+              </div>
             )}
-          </nav>
-        </div>
 
-        {/* Tab Content */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          {/* Breadcrumb for Conversation View */}
-          {showConversationView && (
-            <div className="mb-6 flex items-center gap-2 text-sm text-gray-600">
-              <button 
-                onClick={() => setShowConversationView(false)}
-                className="hover:text-blue-600 transition-colors font-medium"
-              >
-                Conversation Threads
-              </button>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-              <span className="text-gray-900 font-medium">{selectedConversation?.contactName || 'Messages'}</span>
-            </div>
-          )}
-
-          {showConversationView ? (
-            <ConversationMessages 
-              conversation={selectedConversation} 
-              onBack={() => setShowConversationView(false)}
-            />
-          ) : (
-            <>
-              {activeTab === 'conversations' && (
-                <ConversationsTab onSelectConversation={handleConversationSelect} />
-              )}
-              {activeTab === 'messages' && <MessagesTab />}
-              {activeTab === 'notes' && <NotesTab />}
-              {activeTab === 'importNotes' && <ImportNotesTab />}
-              {activeTab === 'importContacts' && <ImportContactsTab />}
-              {activeTab === 'importCustomFields' && <ImportCustomFieldsTab />}
-              {activeTab === 'importCustomValues' && <ImportCustomValuesTab />}
-              {activeTab === 'tasks' && <TasksTab />}
-              {activeTab === 'opportunities' && <OpportunitiesTab />}
-              {activeTab === 'formSubmissions' && <FormSubmissionsTab />}
-              {activeTab === 'links' && <LinksTab />}
-              {activeTab === 'callLogs' && <CallLogsTab />}
-              {activeTab === 'customFields' && <CustomFieldsTab />}
-              {activeTab === 'customValues' && <CustomValuesTab />}
-              {activeTab === 'tags' && <TagsTab />}
-              {activeTab === 'callTranscriptions' && callTranscriptionsEnabled && <CallTranscriptionsTab />}
-              {activeTab === 'contacts' && <ExportContactsTab />}
-              {activeTab === 'templates' && <TemplatesTab />}
-              {activeTab === 'specialTabMessages' && <SpecialMessagesTab />}
-              {activeTab === 'exports' && <ExportTab />}
-              {activeTab === 'import' && <ImportTab />}
-              {activeTab === 'support' && <SupportTab />}
-              {activeTab === 'customCharge' && customChargeEnabled && <CustomChargeTab />}
-            </>
-          )}
+            {showConversationView ? (
+              <ConversationMessages
+                conversation={selectedConversation}
+                onBack={() => setShowConversationView(false)}
+              />
+            ) : (
+              <>
+                {activeTab === 'conversations' && <ConversationsTab onSelectConversation={handleConversationSelect} />}
+                {activeTab === 'messages' && <MessagesTab />}
+                {activeTab === 'specialTabMessages' && <SpecialMessagesTab />}
+                {activeTab === 'contacts' && <ExportContactsTab />}
+                {activeTab === 'opportunities' && <OpportunitiesTab />}
+                {activeTab === 'formSubmissions' && <FormSubmissionsTab />}
+                {activeTab === 'notes' && <NotesTab />}
+                {activeTab === 'tasks' && <TasksTab />}
+                {activeTab === 'templates' && <TemplatesTab />}
+                {activeTab === 'links' && <LinksTab />}
+                {activeTab === 'callLogs' && <CallLogsTab />}
+                {activeTab === 'customFields' && <CustomFieldsTab />}
+                {activeTab === 'customValues' && <CustomValuesTab />}
+                {activeTab === 'tags' && <TagsTab />}
+                {activeTab === 'callTranscriptions' && callTranscriptionsEnabled && <CallTranscriptionsTab />}
+                {activeTab === 'customCharge' && customChargeEnabled && <CustomChargeTab />}
+                {activeTab === 'importContacts' && <ImportContactsTab />}
+                {activeTab === 'importNotes' && <ImportNotesTab />}
+                {activeTab === 'importCustomFields' && <ImportCustomFieldsTab />}
+                {activeTab === 'importCustomValues' && <ImportCustomValuesTab />}
+                {activeTab === 'exports' && <ExportTab />}
+                {activeTab === 'support' && <SupportTab />}
+              </>
+            )}
+          </div>
         </div>
 
       </div>
