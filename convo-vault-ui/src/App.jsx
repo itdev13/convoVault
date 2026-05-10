@@ -16,7 +16,7 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-   n return <ErrorScreen error="Not authenticated. Please install the app first." />;
+   return <ErrorScreen error="Not authenticated. Please install the app first." />;
   }
 
   return <Dashboard />;
