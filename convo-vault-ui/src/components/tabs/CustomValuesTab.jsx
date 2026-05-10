@@ -214,7 +214,6 @@ export default function CustomValuesTab() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter by name, field key, or value"
               size="large"
-              allowClear
             />
           </div>
         </div>
