@@ -67,7 +67,8 @@ export default function ExportEstimateModal({
     if (!est?.breakdown) return 0;
     return getCredits('conversations', est.breakdown.conversations?.count)
       + getCredits('smsWhatsapp', est.breakdown.smsWhatsapp?.count)
-      + getCredits('email', est.breakdown.email?.count);
+      + getCredits('email', est.breakdown.email?.count)
+      + (Number(est.breakdown.contacts?.count) || 0);
   };
 
   // Calculate price per credit
@@ -410,6 +411,20 @@ export default function ExportEstimateModal({
                   <div className="text-right">
                     <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.templates.count)}</span>
                     <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.templates.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Contacts */}
+              {!importMode && estimate.breakdown?.contacts?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Contacts</span>
+                    <div className="text-xs text-gray-500">1 credit per contact</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.contacts.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.contacts.count)} credits</div>
                   </div>
                 </div>
               )}
