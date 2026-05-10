@@ -430,7 +430,7 @@ export default function ExportEstimateModal({
               )}
 
               {/* Custom Fields */}
-              {estimate.breakdown?.customFields?.count > 0 && (
+              {!importMode && estimate.breakdown?.customFields?.count > 0 && (
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <div>
                     <span className="text-gray-700 font-medium">Custom Fields</span>
@@ -444,7 +444,7 @@ export default function ExportEstimateModal({
               )}
 
               {/* Custom Values */}
-              {estimate.breakdown?.customValues?.count > 0 && (
+              {!importMode && estimate.breakdown?.customValues?.count > 0 && (
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <div>
                     <span className="text-gray-700 font-medium">Custom Values</span>
@@ -494,22 +494,24 @@ export default function ExportEstimateModal({
                 </>
               )}
 
-              {/* Import mode (notes / contacts) — flat per-row pricing, no discount tiers */}
+              {/* Import mode (notes / contacts / custom fields / custom values) — flat per-row pricing, no discount tiers */}
               {importMode && (() => {
-                const isContacts = exportType === 'contacts';
-                const itemLabelPlural = isContacts ? 'Contacts to import' : 'Notes to import';
-                const unitLabel = isContacts ? 'Contact' : 'Note';
-                const unitPrice = isContacts
-                  ? (estimate.breakdown?.contacts?.unitPrice ?? 0)
-                  : (estimate.breakdown?.notes?.unitPrice ?? 0);
+                const importLabels = {
+                  contacts: { plural: 'Contacts to import', unit: 'Contact', breakdownKey: 'contacts' },
+                  customFields: { plural: 'Custom Fields to import', unit: 'Field', breakdownKey: 'customFields' },
+                  customValues: { plural: 'Custom Values to import', unit: 'Value', breakdownKey: 'customValues' },
+                  notes: { plural: 'Notes to import', unit: 'Note', breakdownKey: 'notes' },
+                };
+                const cfg = importLabels[exportType] || importLabels.notes;
+                const unitPrice = estimate.breakdown?.[cfg.breakdownKey]?.unitPrice ?? 0;
                 return (
                   <>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-700">{itemLabelPlural}</span>
+                      <span className="text-gray-700">{cfg.plural}</span>
                       <span className="font-medium">{formatNumber(estimate.itemCounts?.total)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-gray-700">Price per {unitLabel}</span>
+                      <span className="text-gray-700">Price per {cfg.unit}</span>
                       <span className="font-medium text-gray-800">{formatUnitPrice(unitPrice)}</span>
                     </div>
                   </>
