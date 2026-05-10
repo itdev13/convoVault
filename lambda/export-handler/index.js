@@ -208,8 +208,12 @@ async function fetchContactsPage(locationId, accessToken, filters, cursor) {
   const filterExpr = [];
   if (f.tag) filterExpr.push({ field: 'tags', operator: 'contains', value: f.tag });
   if (f.assignedTo) filterExpr.push({ field: 'assignedTo', operator: 'eq', value: f.assignedTo });
-  if (f.startDate) filterExpr.push({ field: 'dateAdded', operator: 'gte', value: new Date(f.startDate).getTime() });
-  if (f.endDate) filterExpr.push({ field: 'dateAdded', operator: 'lte', value: new Date(f.endDate).getTime() });
+  if (f.startDate || f.endDate) {
+    const range = {};
+    if (f.startDate) range.gte = new Date(f.startDate).getTime();
+    if (f.endDate) range.lte = new Date(f.endDate).getTime();
+    filterExpr.push({ field: 'dateAdded', operator: 'range', value: range });
+  }
   if (filterExpr.length) body.filters = filterExpr;
 
   const response = await axios.post(`${GHL_API_URL}/contacts/search`, body, {
