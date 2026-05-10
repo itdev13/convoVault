@@ -574,8 +574,8 @@ export default function ExportEstimateModal({
             </div>
           )}
 
-          {/* Volume Discount Tiers - Hidden for export types that have no volume discount */}
-          {!['notes', 'tasks', 'specialTabMessages', 'callTranscriptions'].includes(exportType) && (
+          {/* Volume Discount Tiers - Hidden for import mode and export types that have no volume discount */}
+          {!importMode && !['notes', 'tasks', 'specialTabMessages', 'callTranscriptions'].includes(exportType) && (
           <Collapse ghost className="bg-gray-50 rounded-lg" defaultActiveKey={estimate.discountPercent > 0 ? [] : []}>
             <Panel
               header={
