@@ -81,7 +81,6 @@ export default function Dashboard() {
         { id: 'callLogs', label: 'Voice AI', icon: '📞' },
         { id: 'customFields', label: 'Custom Fields', icon: '🧩' },
         { id: 'customValues', label: 'Custom Values', icon: '🔖' },
-        { id: 'tags', label: 'Tags', icon: '🏷️' },
         ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
       ]
     },
