@@ -840,7 +840,10 @@ router.post('/contacts', authenticateSession, async (req, res) => {
     const unitPrices = billingService.getUnitPrices(locationId);
     const unitPrice = unitPrices.importContacts ?? 0.018;
     const totalRows = rows.length;
-    const finalAmount = Number((totalRows * unitPrice).toFixed(4));
+    const baseAmount = Number((totalRows * unitPrice).toFixed(4));
+    const discountPercent = billingService.getDiscountPercent(totalRows);
+    const discountAmount = Number((baseAmount * (discountPercent / 100)).toFixed(4));
+    const finalAmount = Number((baseAmount - discountAmount).toFixed(4));
 
     const tokenData = await ghlService.getValidToken(locationId);
     const accessToken = tokenData.accessToken || tokenData;
@@ -861,7 +864,7 @@ router.post('/contacts', authenticateSession, async (req, res) => {
       companyId,
       type: 'import_contacts',
       itemCounts: { contacts: totalRows, total: totalRows },
-      pricing: { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount },
+      pricing: { baseAmount, discountPercent, discountAmount, finalAmount },
       meterCharges,
       status: 'pending',
       userId

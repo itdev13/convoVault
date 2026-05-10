@@ -3,8 +3,19 @@ import { useAuth } from '../../context/AuthContext';
 import { Button, Table, Alert, Progress, message as antMessage } from 'antd';
 import { importAPI } from '../../api/import';
 import ExportEstimateModal from '../ExportEstimateModal';
+import { DISCOUNT_TIERS } from '../../constants/pricing';
 
 const IMPORT_CONTACTS_UNIT_PRICE = 0.018;
+
+const getDiscountPercent = (count) => {
+  for (const tier of DISCOUNT_TIERS) {
+    if (count >= tier.min && count < tier.max) return tier.discount;
+  }
+  return DISCOUNT_TIERS[DISCOUNT_TIERS.length - 1].discount;
+};
+
+const formatTierRange = (tier) =>
+  tier.max === Infinity ? `${tier.min}+` : `${tier.min}-${tier.max}`;
 
 // We accept the columns the export side produces (contactsToCSV in the Lambda) plus the
 // common shorthand fields a user might hand-author. Matching is case-insensitive on the backend.
@@ -133,7 +144,10 @@ export default function ImportContactsTab() {
     }
   };
 
-  const totalAmount = parsedRows.length * IMPORT_CONTACTS_UNIT_PRICE;
+  const baseAmount = Number((parsedRows.length * IMPORT_CONTACTS_UNIT_PRICE).toFixed(4));
+  const importDiscountPercent = getDiscountPercent(parsedRows.length);
+  const importDiscountAmount = Number((baseAmount * (importDiscountPercent / 100)).toFixed(4));
+  const finalImportAmount = Number((baseAmount - importDiscountAmount).toFixed(4));
 
   // Poll job status
   useEffect(() => {
@@ -251,13 +265,14 @@ export default function ImportContactsTab() {
             contacts: {
               count: parsedRows.length,
               unitPrice: IMPORT_CONTACTS_UNIT_PRICE,
-              subtotal: totalAmount
+              subtotal: baseAmount
             }
           },
-          baseAmount: totalAmount,
-          discountPercent: 0,
-          discountAmount: 0,
-          finalAmount: totalAmount
+          baseAmount,
+          discountPercent: importDiscountPercent,
+          discountAmount: importDiscountAmount,
+          finalAmount: finalImportAmount,
+          discountTiers: DISCOUNT_TIERS.map(t => ({ range: formatTierRange(t), discount: t.discount }))
         }}
       />
 

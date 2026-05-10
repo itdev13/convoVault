@@ -37,7 +37,7 @@ const DEFAULT_UNIT_PRICES = {
   callLogs: 0.015,         // 0.015 cents per call log (with volume discounts)
   templates: 0.015,        // 0.015 cents per template (with volume discounts)
   importNotes: 0.018,      // 1.8 cents per imported note (no discounts)
-  importContacts: 0.018,   // 1.8 cents per imported contact (no discounts)
+  importContacts: 0.018,   // 1.8 cents per imported contact (volume discounts apply)
   contacts: 0.018          // 1.8 cents per contact (with volume discounts, like messages)
 };
 
