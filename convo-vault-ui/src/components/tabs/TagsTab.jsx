@@ -186,7 +186,6 @@ export default function TagsTab() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Filter by tag name"
           size="large"
-          allowClear
         />
       </div>
 
