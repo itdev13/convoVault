@@ -1042,7 +1042,7 @@ class GHLService {
         const range = {};
         if (options.startDate) range.gte = new Date(options.startDate).getTime();
         if (options.endDate) range.lte = new Date(options.endDate).getTime();
-        filters.push({ field: 'date_added', operator: 'range', value: range });
+        filters.push({ field: 'dateAdded', operator: 'range', value: range });
       }
       if (filters.length) body.filters = filters;
 
