@@ -328,6 +328,59 @@ async function fetchOpportunitiesPage(locationId, accessToken, page, filters = {
 }
 
 /**
+ * Fetch all tags for a location (single-shot — no pagination, no filters).
+ * GET /locations/{locationId}/tags
+ */
+async function fetchTagsAll(locationId, accessToken) {
+  const response = await axios.get(`${GHL_API_URL}/locations/${locationId}/tags`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    }
+  });
+  const tags = response.data.tags || [];
+  return { data: tags, total: tags.length, hasMore: false };
+}
+
+/**
+ * Fetch all custom values for a location (single-shot — no pagination).
+ * GET /locations/{locationId}/customValues?documentType=...
+ * Note: when documentType=folder the GHL response key flips to `customValueFolders`.
+ */
+async function fetchCustomValuesAll(locationId, accessToken, filters = {}) {
+  const documentType = filters?.documentType || 'all';
+  const response = await axios.get(`${GHL_API_URL}/locations/${locationId}/customValues`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    },
+    params: { documentType }
+  });
+  const items = response.data.customValues || response.data.customValueFolders || [];
+  return { data: items, total: items.length, hasMore: false };
+}
+
+/**
+ * Fetch all custom fields for a location (single-shot — no pagination).
+ * GET /locations/{locationId}/customFields?model=...
+ */
+async function fetchCustomFieldsAll(locationId, accessToken, filters = {}) {
+  const model = filters?.model || 'all';
+  const response = await axios.get(`${GHL_API_URL}/locations/${locationId}/customFields`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Version': '2021-07-28'
+    },
+    params: { model }
+  });
+  const fields = response.data.customFields || response.data.fields || [];
+  return { data: fields, total: fields.length, hasMore: false };
+}
+
+/**
  * Fetch a page of templates for a location
  * GET /locations/{locationId}/templates
  */
@@ -873,6 +926,76 @@ function linksToCSV(links, includeHeader = true) {
 }
 
 /**
+ * Convert tags to CSV format
+ */
+function tagsToCSV(tags, includeHeader = true) {
+  const header = includeHeader
+    ? 'ID,Name,LocationID\n'
+    : '';
+
+  const rows = tags.map(t => {
+    return [
+      escapeCsv(t.id || t._id || ''),
+      escapeCsv(t.name || ''),
+      escapeCsv(t.locationId || '')
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert custom values to CSV format
+ */
+function customValuesToCSV(values, includeHeader = true) {
+  const header = includeHeader
+    ? 'ID,Name,FieldKey,Value,DocumentType,ParentID,LocationID\n'
+    : '';
+
+  const rows = values.map(v => {
+    return [
+      escapeCsv(v.id || v._id || ''),
+      escapeCsv(v.name || ''),
+      escapeCsv(v.fieldKey || ''),
+      escapeCsv(v.value || ''),
+      escapeCsv(v.documentType || ''),
+      escapeCsv(v.parentId || ''),
+      escapeCsv(v.locationId || '')
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
+ * Convert custom fields to CSV format
+ */
+function customFieldsToCSV(fields, includeHeader = true) {
+  const header = includeHeader
+    ? 'ID,Name,FieldKey,DataType,Model,Position,Placeholder,PicklistOptions,DateAdded\n'
+    : '';
+
+  const rows = fields.map(f => {
+    const opts = Array.isArray(f.picklistOptions)
+      ? f.picklistOptions.map(o => (typeof o === 'string' ? o : (o?.label || o?.value || ''))).filter(Boolean).join('; ')
+      : '';
+    return [
+      escapeCsv(f.id || f._id || ''),
+      escapeCsv(f.name || ''),
+      escapeCsv(f.fieldKey || ''),
+      escapeCsv(f.dataType || ''),
+      escapeCsv(f.model || ''),
+      escapeCsv(f.position ?? ''),
+      escapeCsv(f.placeholder || ''),
+      escapeCsv(opts),
+      escapeCsv(formatDate(f.dateAdded))
+    ].join(',');
+  }).join('\n');
+
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
+/**
  * Convert templates to CSV format
  */
 function templatesToCSV(templates, includeHeader = true) {
@@ -1090,6 +1213,9 @@ async function sendEmail(email, downloadUrl, jobDetails) {
         jobDetails.exportType === 'socialPosts' ? 'Social Posts' :
         jobDetails.exportType === 'callLogs' ? 'Call Logs' :
         jobDetails.exportType === 'templates' ? 'Templates' :
+        jobDetails.exportType === 'customFields' ? 'Custom Fields' :
+        jobDetails.exportType === 'customValues' ? 'Custom Values' :
+        jobDetails.exportType === 'tags' ? 'Tags' :
         jobDetails.exportType === 'specialTabMessages' ? 'Special Messages' :
         jobDetails.exportType === 'callTranscriptions' ? 'Call Transcriptions' :
         jobDetails.exportType === 'contacts' ? 'Contacts' : 'Messages'
@@ -1707,6 +1833,63 @@ exports.handler = async (event, context) => {
 
       cursor = hasMoreData ? String(page) : null;
 
+    } else if (job.exportType === 'customFields') {
+      // === CUSTOM FIELDS: single-shot list, no pagination ===
+      let pageResult;
+      try {
+        pageResult = await fetchCustomFieldsAll(job.locationId, accessToken, job.filters || {});
+      } catch (fetchError) {
+        if (fetchError.response?.status === 401) {
+          log('Got 401 on custom fields fetch, refreshing token and retrying');
+          await refreshAndUpdateToken();
+          pageResult = await fetchCustomFieldsAll(job.locationId, accessToken, job.filters || {});
+        } else {
+          throw fetchError;
+        }
+      }
+      records.push(...pageResult.data);
+      recordsFetched += pageResult.data.length;
+      hasMoreData = false;
+      cursor = null;
+
+    } else if (job.exportType === 'customValues') {
+      // === CUSTOM VALUES: single-shot list, no pagination ===
+      let pageResult;
+      try {
+        pageResult = await fetchCustomValuesAll(job.locationId, accessToken, job.filters || {});
+      } catch (fetchError) {
+        if (fetchError.response?.status === 401) {
+          log('Got 401 on custom values fetch, refreshing token and retrying');
+          await refreshAndUpdateToken();
+          pageResult = await fetchCustomValuesAll(job.locationId, accessToken, job.filters || {});
+        } else {
+          throw fetchError;
+        }
+      }
+      records.push(...pageResult.data);
+      recordsFetched += pageResult.data.length;
+      hasMoreData = false;
+      cursor = null;
+
+    } else if (job.exportType === 'tags') {
+      // === TAGS: single-shot list, no pagination, no filters ===
+      let pageResult;
+      try {
+        pageResult = await fetchTagsAll(job.locationId, accessToken);
+      } catch (fetchError) {
+        if (fetchError.response?.status === 401) {
+          log('Got 401 on tags fetch, refreshing token and retrying');
+          await refreshAndUpdateToken();
+          pageResult = await fetchTagsAll(job.locationId, accessToken);
+        } else {
+          throw fetchError;
+        }
+      }
+      records.push(...pageResult.data);
+      recordsFetched += pageResult.data.length;
+      hasMoreData = false;
+      cursor = null;
+
     } else if (job.exportType === 'templates') {
       // === TEMPLATES: Skip-based pagination (limit 100) ===
       let currentSkip = cursor ? parseInt(cursor) : 0;
@@ -1969,6 +2152,12 @@ exports.handler = async (event, context) => {
         content = callLogsToCSV(records, isFirstContent);
       } else if (job.exportType === 'templates') {
         content = templatesToCSV(records, isFirstContent);
+      } else if (job.exportType === 'customFields') {
+        content = customFieldsToCSV(records, isFirstContent);
+      } else if (job.exportType === 'customValues') {
+        content = customValuesToCSV(records, isFirstContent);
+      } else if (job.exportType === 'tags') {
+        content = tagsToCSV(records, isFirstContent);
       } else if (job.exportType === 'specialTabMessages') {
         content = specialMessagesToCSV(records, isFirstContent);
       } else if (job.exportType === 'callTranscriptions') {

@@ -5,7 +5,10 @@ import { importAPI } from '../../api/import';
 import ExportEstimateModal from '../ExportEstimateModal';
 import { DISCOUNT_TIERS } from '../../constants/pricing';
 
-const IMPORT_NOTES_UNIT_PRICE = 0.018; // mirrors backend billingService DEFAULT_UNIT_PRICES.importNotes
+const IMPORT_CUSTOM_VALUES_UNIT_PRICE = 0.018;
+
+const REQUIRED_COLS = ['name'];
+const KNOWN_COLS = ['name', 'value'];
 
 const getDiscountPercent = (count) => {
   for (const tier of DISCOUNT_TIERS) {
@@ -17,14 +20,6 @@ const getDiscountPercent = (count) => {
 const formatTierRange = (tier) =>
   tier.max === Infinity ? `${tier.min}+` : `${tier.min}-${tier.max}`;
 
-// Columns produced by the notes export (lambda/export-handler/index.js notesToCSV)
-const REQUIRED_COLS = ['Body']; // BodyText is fallback
-const KNOWN_COLS = [
-  'NoteID', 'ContactID', 'ContactName', 'ContactEmail', 'ContactPhone',
-  'Body', 'BodyText', 'UserID', 'DateAdded', 'Relations'
-];
-
-// Minimal RFC-4180 CSV parser — handles quoted fields, escaped quotes, embedded commas/newlines.
 function parseCSV(text) {
   const rows = [];
   let row = [];
@@ -36,9 +31,7 @@ function parseCSV(text) {
       if (c === '"') {
         if (text[i + 1] === '"') { field += '"'; i++; }
         else { inQuotes = false; }
-      } else {
-        field += c;
-      }
+      } else { field += c; }
     } else {
       if (c === '"') { inQuotes = true; }
       else if (c === ',') { row.push(field); field = ''; }
@@ -62,46 +55,48 @@ function rowsToObjects(rows) {
   return { headers, records };
 }
 
-export default function ImportNotesTab() {
+function lookup(record, ...keys) {
+  for (const k of keys) {
+    if (record[k] != null && record[k] !== '') return record[k];
+    const lower = k.charAt(0).toLowerCase() + k.slice(1);
+    if (record[lower] != null && record[lower] !== '') return record[lower];
+    const upper = k.charAt(0).toUpperCase() + k.slice(1);
+    if (record[upper] != null && record[upper] !== '') return record[upper];
+  }
+  return '';
+}
+
+export default function ImportCustomValuesTab() {
   const { location } = useAuth();
   const fileInputRef = useRef(null);
 
   const [fileName, setFileName] = useState('');
   const [parsedRows, setParsedRows] = useState([]);
   const [parseError, setParseError] = useState(null);
-  const [missingCols, setMissingCols] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
   const [estimateVisible, setEstimateVisible] = useState(false);
 
   const handleFile = async (file) => {
     setParseError(null);
-    setMissingCols([]);
     setParsedRows([]);
     setActiveJob(null);
     setFileName(file.name);
 
     if (!file.name.toLowerCase().endsWith('.csv')) {
-      setParseError('Only CSV files are supported. If you exported as XLSX, please re-export as CSV.');
+      setParseError('Only CSV files are supported.');
       return;
     }
 
     try {
       const text = await file.text();
       const rawRows = parseCSV(text);
-      const { headers, records } = rowsToObjects(rawRows);
+      const { records } = rowsToObjects(rawRows);
 
-      const missing = REQUIRED_COLS.filter(c => !headers.includes(c));
-      if (missing.length > 0) {
-        setMissingCols(missing);
-        setParseError(`File is missing required columns: ${missing.join(', ')}.`);
-        return;
-      }
+      const valid = records.filter(r => lookup(r, 'name').toString().trim());
 
-      // Filter out empty rows + rows with no body
-      const valid = records.filter(r => (r.Body && r.Body.trim()) || (r.BodyText && r.BodyText.trim()));
       if (valid.length === 0) {
-        setParseError('No rows with note body found in the file.');
+        setParseError('No rows with a name found. Each row needs a name column.');
         return;
       }
 
@@ -120,14 +115,7 @@ export default function ImportNotesTab() {
     if (!location?.id || parsedRows.length === 0) return;
     setSubmitting(true);
     try {
-      const rows = parsedRows.map(r => ({
-        contactName: r.ContactName,
-        contactEmail: r.ContactEmail,
-        contactPhone: r.ContactPhone,
-        body: r.Body,
-        bodyText: r.BodyText
-      }));
-      const res = await importAPI.importNotes(location.id, rows, fileName);
+      const res = await importAPI.importCustomValues(location.id, parsedRows, fileName);
       if (res.success) {
         setActiveJob({ jobId: res.data.jobId, totalRows: res.data.totalRows, status: 'processing', processed: 0 });
         setEstimateVisible(false);
@@ -142,12 +130,11 @@ export default function ImportNotesTab() {
     }
   };
 
-  const baseAmount = Number((parsedRows.length * IMPORT_NOTES_UNIT_PRICE).toFixed(4));
+  const baseAmount = Number((parsedRows.length * IMPORT_CUSTOM_VALUES_UNIT_PRICE).toFixed(4));
   const importDiscountPercent = getDiscountPercent(parsedRows.length);
   const importDiscountAmount = Number((baseAmount * (importDiscountPercent / 100)).toFixed(4));
   const finalImportAmount = Number((baseAmount - importDiscountAmount).toFixed(4));
 
-  // Poll job status
   useEffect(() => {
     if (!activeJob?.jobId || activeJob.status === 'completed' || activeJob.status === 'failed') return;
     const interval = setInterval(async () => {
@@ -165,19 +152,10 @@ export default function ImportNotesTab() {
   }, [activeJob?.jobId, activeJob?.status]);
 
   const columns = [
-    { title: 'Contact Name', dataIndex: 'ContactName', key: 'ContactName', width: 160, ellipsis: true },
-    { title: 'Email', dataIndex: 'ContactEmail', key: 'ContactEmail', width: 180, ellipsis: true },
-    { title: 'Phone', dataIndex: 'ContactPhone', key: 'ContactPhone', width: 140, ellipsis: true },
-    {
-      title: 'Note (HTML)',
-      dataIndex: 'Body',
-      key: 'Body',
-      ellipsis: true,
-      render: (val, row) => {
-        const text = val || row.BodyText || '';
-        return <span title={text}>{text.length > 120 ? text.slice(0, 120) + '…' : text}</span>;
-      }
-    }
+    { title: 'Name', key: 'name', width: 240, ellipsis: true,
+      render: (_, r) => lookup(r, 'name') || '—' },
+    { title: 'Value', key: 'value', ellipsis: true,
+      render: (_, r) => lookup(r, 'value') || '—' }
   ];
 
   const progressPercent = activeJob && activeJob.totalRows
@@ -187,19 +165,17 @@ export default function ImportNotesTab() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">Import Notes</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1">Import Custom Values</h2>
         <p className="text-gray-600 text-sm mb-2">
-          Upload a CSV to bulk-create contacts and attach notes. Contacts are matched by email or phone.
+          Upload a CSV to bulk-create custom values. Required column:{' '}
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded">name</code>.
         </p>
         <p className="text-gray-500 text-xs">
-          Required columns: <code className="bg-gray-100 px-1.5 py-0.5 rounded">ContactName</code>,
-          <code className="bg-gray-100 px-1.5 py-0.5 rounded ml-1">ContactEmail</code> or
-          <code className="bg-gray-100 px-1.5 py-0.5 rounded ml-1">ContactPhone</code>, and
-          <code className="bg-gray-100 px-1.5 py-0.5 rounded ml-1">Body</code>.
+          Optional column: <code className="bg-gray-100 px-1.5 py-0.5 rounded">value</code>.
+          Field key is auto-derived from name (lowercased, special chars stripped).
         </p>
       </div>
 
-      {/* File picker */}
       <div className="mb-6 flex items-center gap-3">
         <input
           ref={fileInputRef}
@@ -215,13 +191,7 @@ export default function ImportNotesTab() {
       </div>
 
       {parseError && (
-        <Alert
-          type="error"
-          message="Cannot import this file"
-          description={parseError}
-          className="mb-4"
-          showIcon
-        />
+        <Alert type="error" message="Cannot import this file" description={parseError} className="mb-4" showIcon />
       )}
 
       {parsedRows.length > 0 && !activeJob && (
@@ -229,7 +199,7 @@ export default function ImportNotesTab() {
           <Alert
             type="info"
             message={`${parsedRows.length} rows ready to import`}
-            description="Review the rows below, then click Submit to create contacts and notes in this location."
+            description="Review the rows below, then click Submit to create the custom values."
             className="mb-4"
             showIcon
           />
@@ -239,12 +209,12 @@ export default function ImportNotesTab() {
             dataSource={parsedRows}
             pagination={{ pageSize: 25, showSizeChanger: false }}
             size="small"
-            scroll={{ x: 800 }}
+            scroll={{ x: 600 }}
             className="mb-4"
           />
           <div className="flex justify-end">
             <Button type="primary" size="large" onClick={handleSubmit} loading={submitting}>
-              Submit & Import {parsedRows.length} Notes
+              Submit &amp; Import {parsedRows.length} Custom Values
             </Button>
           </div>
         </>
@@ -256,14 +226,14 @@ export default function ImportNotesTab() {
         onConfirm={handleConfirmCharge}
         loading={submitting}
         estimating={false}
-        exportType="notes"
+        exportType="customValues"
         importMode={true}
         estimate={{
-          itemCounts: { notes: parsedRows.length, total: parsedRows.length },
+          itemCounts: { customValues: parsedRows.length, total: parsedRows.length },
           breakdown: {
-            notes: {
+            customValues: {
               count: parsedRows.length,
-              unitPrice: IMPORT_NOTES_UNIT_PRICE,
+              unitPrice: IMPORT_CUSTOM_VALUES_UNIT_PRICE,
               subtotal: baseAmount
             }
           },
@@ -294,7 +264,7 @@ export default function ImportNotesTab() {
               </div>
               <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
                 <div className="text-yellow-700 font-semibold text-lg">{activeJob.skipped || 0}</div>
-                <div className="text-yellow-700 text-xs">Skipped</div>
+                <div className="text-yellow-700 text-xs">Skipped (duplicates)</div>
               </div>
               <div className="bg-red-50 border border-red-200 rounded p-3">
                 <div className="text-red-700 font-semibold text-lg">{activeJob.failed || 0}</div>
@@ -304,7 +274,9 @@ export default function ImportNotesTab() {
           )}
           {activeJob.status === 'completed' && activeJob.errors && activeJob.errors.length > 0 && (
             <details className="mt-4">
-              <summary className="cursor-pointer text-sm text-gray-700">View {activeJob.errors.length} error{activeJob.errors.length > 1 ? 's' : ''}</summary>
+              <summary className="cursor-pointer text-sm text-gray-700">
+                View {activeJob.errors.length} error{activeJob.errors.length > 1 ? 's' : ''}
+              </summary>
               <ul className="mt-2 space-y-1 text-xs text-red-700 max-h-48 overflow-y-auto">
                 {activeJob.errors.slice(0, 50).map((e, i) => (
                   <li key={i}>Row {e.row}: {e.error}</li>

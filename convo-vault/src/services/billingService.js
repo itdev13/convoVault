@@ -21,24 +21,34 @@ const METER_IDS = {
   socialPosts: '69864aed1265653fdd7c0620',
   callLogs: '69864aed1265653fdd7c0620',
   templates: '69864aed1265653fdd7c0620',
-  businesses: '69864aed1265653fdd7c0620'
+  businesses: '69864aed1265653fdd7c0620',
+  customFields: '69864aed1265653fdd7c0620',
+  customValues: '69864aed1265653fdd7c0620',
+  tags: '69864aed1265653fdd7c0620'
 };
 
 // Default unit prices in dollars (fallback if API fails)
+// All export types are billed at $0.018 per item with the same volume discount tiers.
+// Email is the only exception — kept at 3x base to reflect higher cost of email data.
 const DEFAULT_UNIT_PRICES = {
-  conversations: 0.018,    // 1.8 cents per conversation
-  smsWhatsapp: 0.018,      // 1.8 cents per text message
-  email: 0.054,            // 5.4 cents per email message (3x base)
-  notesAndTasks: 0.015,    // 0.015 cents per note/task (no discounts)
-  opportunities: 0.015,    // 0.015 cents per opportunity (with volume discounts)
-  formSubmissions: 0.015,  // 0.015 cents per form submission (with volume discounts)
-  links: 0.015,            // 0.015 cents per link (with volume discounts)
-  socialPosts: 0.015,      // 0.015 cents per social post (with volume discounts)
-  callLogs: 0.015,         // 0.015 cents per call log (with volume discounts)
-  templates: 0.015,        // 0.015 cents per template (with volume discounts)
-  importNotes: 0.018,      // 1.8 cents per imported note (no discounts)
-  importContacts: 0.018,   // 1.8 cents per imported contact (volume discounts apply)
-  contacts: 0.018          // 1.8 cents per contact (with volume discounts, like messages)
+  conversations: 0.018,
+  smsWhatsapp: 0.018,
+  email: 0.054,            // 3x base — email is more expensive
+  notesAndTasks: 0.018,
+  opportunities: 0.018,
+  formSubmissions: 0.018,
+  links: 0.018,
+  socialPosts: 0.018,
+  callLogs: 0.018,
+  templates: 0.018,
+  customFields: 0.018,
+  customValues: 0.018,
+  tags: 0.018,
+  importNotes: 0.018,
+  importContacts: 0.018,
+  importCustomFields: 0.018,
+  importCustomValues: 0.018,
+  contacts: 0.018
 };
 
 
@@ -155,13 +165,15 @@ class BillingService {
       socialPosts = 0,
       callLogs = 0,
       templates = 0,
-      contacts = 0
+      contacts = 0,
+      customFields = 0,
+      customValues = 0,
+      tags = 0
     } = counts;
 
     // Use provided prices or defaults
     const unitPrices = prices || DEFAULT_UNIT_PRICES;
-    console.log('unitPrices', unitPrices);
-    // Calculate discountable amounts (conversations + messages + opportunities + formSubmissions + links + socialPosts)
+    // Every export type is now discountable. Volume tiers apply to the total item count.
     const conversationsCost = conversations * unitPrices.conversations;
     const textMessagesCost = smsMessages * unitPrices.smsWhatsapp;
     const emailCost = emailMessages * unitPrices.email;
@@ -172,22 +184,20 @@ class BillingService {
     const callLogsCost = callLogs * (unitPrices.callLogs || DEFAULT_UNIT_PRICES.callLogs);
     const templatesCost = templates * (unitPrices.templates || DEFAULT_UNIT_PRICES.templates);
     const contactsCost = contacts * (unitPrices.contacts || DEFAULT_UNIT_PRICES.contacts);
-    const discountableBase = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost + templatesCost + contactsCost;
-    const discountableItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs + templates + contacts;
+    const customFieldsCost = customFields * (unitPrices.customFields || DEFAULT_UNIT_PRICES.customFields);
+    const customValuesCost = customValues * (unitPrices.customValues || DEFAULT_UNIT_PRICES.customValues);
+    const tagsCost = tags * (unitPrices.tags || DEFAULT_UNIT_PRICES.tags);
 
-    // Notes/tasks: flat rate, NO discounts
     const notesTasksPrice = unitPrices.notesAndTasks || DEFAULT_UNIT_PRICES.notesAndTasks;
     const notesCost = notes * notesTasksPrice;
     const tasksCost = tasks * notesTasksPrice;
-    const nonDiscountableAmount = notesCost + tasksCost;
 
-    const totalItems = discountableItems + notes + tasks;
-    const baseAmount = discountableBase + nonDiscountableAmount;
+    const totalItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs + templates + contacts + customFields + customValues + tags + notes + tasks;
+    const baseAmount = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost + templatesCost + contactsCost + customFieldsCost + customValuesCost + tagsCost + notesCost + tasksCost;
 
-    // Discount only applies to conversations/messages
-    const discountPercent = discountableItems > 0 ? this.getDiscountPercent(discountableItems) : 0;
-    const discountAmount = discountableBase * (discountPercent / 100);
-    const finalAmount = (discountableBase - discountAmount) + nonDiscountableAmount;
+    const discountPercent = totalItems > 0 ? this.getDiscountPercent(totalItems) : 0;
+    const discountAmount = baseAmount * (discountPercent / 100);
+    const finalAmount = baseAmount - discountAmount;
 
     logger.info('Billing calculation:', {
       totalItems,
@@ -211,6 +221,9 @@ class BillingService {
         callLogs,
         templates,
         contacts,
+        customFields,
+        customValues,
+        tags,
         total: totalItems
       },
       breakdown: {
@@ -273,6 +286,21 @@ class BillingService {
           count: contacts,
           unitPrice: unitPrices.contacts || DEFAULT_UNIT_PRICES.contacts,
           subtotal: contactsCost
+        },
+        customFields: {
+          count: customFields,
+          unitPrice: unitPrices.customFields || DEFAULT_UNIT_PRICES.customFields,
+          subtotal: customFieldsCost
+        },
+        customValues: {
+          count: customValues,
+          unitPrice: unitPrices.customValues || DEFAULT_UNIT_PRICES.customValues,
+          subtotal: customValuesCost
+        },
+        tags: {
+          count: tags,
+          unitPrice: unitPrices.tags || DEFAULT_UNIT_PRICES.tags,
+          subtotal: tagsCost
         }
       },
       baseAmount,
@@ -545,6 +573,30 @@ class BillingService {
         meterId: METER_IDS.smsWhatsapp,
         qty: counts.contacts,
         description: 'Contact exports'
+      });
+    }
+
+    if (counts.customFields > 0) {
+      charges.push({
+        meterId: METER_IDS.customFields,
+        qty: counts.customFields,
+        description: 'Custom field exports'
+      });
+    }
+
+    if (counts.customValues > 0) {
+      charges.push({
+        meterId: METER_IDS.customValues,
+        qty: counts.customValues,
+        description: 'Custom value exports'
+      });
+    }
+
+    if (counts.tags > 0) {
+      charges.push({
+        meterId: METER_IDS.tags,
+        qty: counts.tags,
+        description: 'Tag exports'
       });
     }
 

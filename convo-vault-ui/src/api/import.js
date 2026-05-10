@@ -54,6 +54,22 @@ export const importAPI = {
   },
 
   /**
+   * Import custom fields from parsed CSV rows
+   */
+  importCustomFields: async (locationId, rows, fileName) => {
+    const response = await apiClient.post('/import/custom-fields', { locationId, rows, fileName });
+    return response;
+  },
+
+  /**
+   * Import custom values from parsed CSV rows
+   */
+  importCustomValues: async (locationId, rows, fileName) => {
+    const response = await apiClient.post('/import/custom-values', { locationId, rows, fileName });
+    return response;
+  },
+
+  /**
    * Download CSV template
    */
   downloadTemplate: async () => {

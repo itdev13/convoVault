@@ -73,7 +73,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -81,8 +81,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date range (not applicable for notes/links/templates)
-    if (!['notes', 'links', 'templates'].includes(exportType)) {
+    // Validate date range (not applicable for notes/links/templates/customFields/customValues/tags)
+    if (!['notes', 'links', 'templates', 'customFields', 'customValues', 'tags'].includes(exportType)) {
       const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, ['specialTabMessages', 'callTranscriptions'].includes(exportType) ? MAX_DATE_RANGE_MS_SPECIAL_TAB : MAX_DATE_RANGE_MS);
       if (!dateValidation.valid) {
         return res.status(400).json({
@@ -111,7 +111,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       socialPosts: 0,
       callLogs: 0,
       templates: 0,
-      contacts: 0
+      contacts: 0,
+      customFields: 0,
+      customValues: 0,
+      tags: 0
     };
 
     if (exportType === 'contacts') {
@@ -325,6 +328,21 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         limit: '1'
       });
       counts.templates = result.total || 0;
+
+    } else if (exportType === 'customFields') {
+      // Custom fields: single-shot list, no pagination
+      const result = await ghlService.getCustomFields(locationId, filters?.model || 'all');
+      counts.customFields = result.total || 0;
+
+    } else if (exportType === 'customValues') {
+      // Custom values: single-shot list, no pagination
+      const result = await ghlService.getCustomValues(locationId, filters?.documentType || 'all');
+      counts.customValues = result.total || 0;
+
+    } else if (exportType === 'tags') {
+      // Tags: single-shot list, no pagination, no filters
+      const result = await ghlService.getLocationTags(locationId);
+      counts.tags = result.total || 0;
 
     } else if (exportType === 'specialTabMessages') {
       // Special Messages: fetch ALL conversations, then fetch + store messages matching the type
@@ -757,7 +775,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -782,8 +800,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    // Validate date range (not applicable for notes/links/templates)
-    if (!['notes', 'links', 'templates'].includes(exportType)) {
+    // Validate date range (not applicable for notes/links/templates/customFields/customValues/tags)
+    if (!['notes', 'links', 'templates', 'customFields', 'customValues', 'tags'].includes(exportType)) {
       const dateValidation = validateDateRange(filters?.startDate, filters?.endDate, ['specialTabMessages', 'callTranscriptions'].includes(exportType) ? MAX_DATE_RANGE_MS_SPECIAL_TAB : MAX_DATE_RANGE_MS);
       if (!dateValidation.valid) {
         return res.status(400).json({
@@ -813,7 +831,10 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         links: 0,
         socialPosts: 0,
         callLogs: 0,
-        templates: 0
+        templates: 0,
+        customFields: 0,
+        customValues: 0,
+        tags: 0
       };
       let totalItems = 0;
 
@@ -900,6 +921,21 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         });
         totalItems = result.total || 0;
         counts.templates = totalItems;
+
+      } else if (exportType === 'customFields') {
+        const result = await ghlService.getCustomFields(locationId, filters?.model || 'all');
+        totalItems = result.total || 0;
+        counts.customFields = totalItems;
+
+      } else if (exportType === 'customValues') {
+        const result = await ghlService.getCustomValues(locationId, filters?.documentType || 'all');
+        totalItems = result.total || 0;
+        counts.customValues = totalItems;
+
+      } else if (exportType === 'tags') {
+        const result = await ghlService.getLocationTags(locationId);
+        totalItems = result.total || 0;
+        counts.tags = totalItems;
 
       } else if (exportType === 'specialTabMessages') {
         // LiveChat: use estimatedTotal from frontend (already counted during estimate)

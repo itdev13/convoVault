@@ -5,18 +5,19 @@
  * Change prices here and they update everywhere in the frontend.
  */
 
-// Unit prices in dollars
+// Unit prices in dollars — every export type is 1.8 cents/item with volume discounts.
+// Email keeps its 3x multiplier (5.4 cents/item) because email data is more expensive.
 export const UNIT_PRICES = {
-  conversations: 0.018,    // 1.8 cents per conversation
-  smsWhatsapp: 0.018,      // 1.8 cents per SMS/WhatsApp message
-  email: 0.054,            // 5.4 cents per email (3x base)
-  notesAndTasks: 0.015,    // 1.5 cents per note or task
-  opportunities: 0.015,    // 1.5 cents per opportunity
-  formSubmissions: 0.015,  // 1.5 cents per form submission
-  links: 0.015,            // 1.5 cents per link
-  socialPosts: 0.015,      // 1.5 cents per social post
-  callLogs: 0.015,         // 1.5 cents per call log
-  templates: 0.015,        // 1.5 cents per template
+  conversations: 0.018,
+  smsWhatsapp: 0.018,
+  email: 0.054,
+  notesAndTasks: 0.018,
+  opportunities: 0.018,
+  formSubmissions: 0.018,
+  links: 0.018,
+  socialPosts: 0.018,
+  callLogs: 0.018,
+  templates: 0.018,
 };
 
 // Previous prices (for strikethrough display in UI)

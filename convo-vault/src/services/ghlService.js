@@ -1065,6 +1065,117 @@ class GHLService {
   }
 
   /**
+   * Create a custom field on a location.
+   * POST /locations/:locationId/customFields
+   * https://marketplace.gohighlevel.com/docs/ghl/locations/create-custom-field
+   */
+  async createCustomField(locationId, body) {
+    try {
+      const response = await this.apiRequest(
+        'POST',
+        `/locations/${locationId}/customFields`,
+        locationId,
+        body
+      );
+      // Response key flips to customFieldFolder when documentType=folder.
+      return response.customField || response.customFieldFolder || response;
+    } catch (error) {
+      logger.error('createCustomField failed:', { locationId, error: error.response?.data || error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * Create a custom value on a location.
+   * POST /locations/:locationId/customValues
+   * https://marketplace.gohighlevel.com/docs/ghl/locations/create-custom-value
+   */
+  async createCustomValue(locationId, body) {
+    try {
+      const response = await this.apiRequest(
+        'POST',
+        `/locations/${locationId}/customValues`,
+        locationId,
+        body
+      );
+      return response.customValue || response;
+    } catch (error) {
+      logger.error('createCustomValue failed:', { locationId, error: error.response?.data || error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * List tags for a location.
+   * GET /locations/:locationId/tags
+   * No query params, no pagination — returns the full list sorted by name asc.
+   * https://marketplace.gohighlevel.com/docs/ghl/locations/get-location-tags
+   */
+  async getLocationTags(locationId) {
+    try {
+      const response = await this.apiRequest(
+        'GET',
+        `/locations/${locationId}/tags`,
+        locationId
+      );
+      const tags = response.tags || [];
+      return { tags, total: tags.length };
+    } catch (error) {
+      logger.error('getLocationTags failed:', { locationId, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * List custom values for a location.
+   * GET /locations/:locationId/customValues
+   * documentType: 'document' (default — values only) | 'folder' | 'all'
+   * Note: when documentType=folder the GHL response key flips to `customValueFolders`.
+   * https://marketplace.gohighlevel.com/docs/ghl/locations/get-custom-values
+   */
+  async getCustomValues(locationId, documentType = 'all') {
+    try {
+      const response = await this.apiRequest(
+        'GET',
+        `/locations/${locationId}/customValues`,
+        locationId,
+        null,
+        { documentType }
+      );
+      const items = response.customValues || response.customValueFolders || [];
+      return { customValues: items, total: items.length };
+    } catch (error) {
+      logger.error('getCustomValues failed:', { locationId, documentType, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
+   * List custom fields for a location.
+   * GET /locations/:locationId/customFields
+   * model: 'contact' | 'opportunity' | 'all' | 'custom_objects.<key>' (defaults to 'contact' server-side)
+   * https://marketplace.gohighlevel.com/docs/ghl/locations/get-custom-fields
+   */
+  async getCustomFields(locationId, model = 'all') {
+    try {
+      const response = await this.apiRequest(
+        'GET',
+        `/locations/${locationId}/customFields`,
+        locationId,
+        null,
+        { model }
+      );
+      return {
+        customFields: response.customFields || response.fields || [],
+        total: (response.customFields || response.fields || []).length
+      };
+    } catch (error) {
+      logger.error('getCustomFields failed:', { locationId, model, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
    * Get all notes for a contact
    * GET /contacts/:contactId/notes
    */

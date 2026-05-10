@@ -152,6 +152,7 @@ class ConversationsManagerApp {
     const analyticsRoutes = require('./routes/analytics');
     const billingRoutes = require('./routes/billing');
     const notificationRoutes = require('./routes/notifications');
+    const locationsRoutes = require('./routes/locations');
 
     this.app.use('/api/conversations', apiLimiter, conversationsRoutes);
     this.app.use('/api/messages', apiLimiter, messagesRoutes);
@@ -161,6 +162,7 @@ class ConversationsManagerApp {
     this.app.use('/api/analytics', analyticsRoutes); // Lightweight, no rate limit
     this.app.use('/api/billing', apiLimiter, billingRoutes);
     this.app.use('/api/notifications', apiLimiter, notificationRoutes);
+    this.app.use('/api/locations', apiLimiter, locationsRoutes);
 
     // Referral tracking routes
     const referralRoutes = require('./routes/referrals');

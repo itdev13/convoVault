@@ -62,13 +62,13 @@ export default function ExportEstimateModal({
     return (Number(count) || 0) * (CREDIT_MULTIPLIERS[channel] || 1);
   };
 
-  // Calculate total credits from estimate
+  // Calculate total credits from estimate.
+  // Email keeps its 3x multiplier; every other type is 1 credit per item.
   const getTotalCredits = (est) => {
     if (!est?.breakdown) return 0;
-    return getCredits('conversations', est.breakdown.conversations?.count)
-      + getCredits('smsWhatsapp', est.breakdown.smsWhatsapp?.count)
-      + getCredits('email', est.breakdown.email?.count)
-      + (Number(est.breakdown.contacts?.count) || 0);
+    const flatTypes = ['conversations', 'smsWhatsapp', 'contacts', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'customFields', 'customValues', 'tags'];
+    const flat = flatTypes.reduce((sum, k) => sum + (Number(est.breakdown[k]?.count) || 0), 0);
+    return flat + getCredits('email', est.breakdown.email?.count);
   };
 
   // Calculate price per credit
@@ -428,14 +428,56 @@ export default function ExportEstimateModal({
                   </div>
                 </div>
               )}
+
+              {/* Custom Fields */}
+              {estimate.breakdown?.customFields?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Custom Fields</span>
+                    <div className="text-xs text-gray-500">1 credit per field</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.customFields.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.customFields.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Values */}
+              {estimate.breakdown?.customValues?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Custom Values</span>
+                    <div className="text-xs text-gray-500">1 credit per item</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.customValues.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.customValues.count)} credits</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tags */}
+              {estimate.breakdown?.tags?.count > 0 && (
+                <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <span className="text-gray-700 font-medium">Tags</span>
+                    <div className="text-xs text-gray-500">1 credit per tag</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.tags.count)}</span>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.tags.count)} credits</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Pricing Breakdown */}
           <div className="bg-blue-50 rounded-lg px-4 py-2 border border-blue-200">
             <div className="space-y-2 text-sm">
-              {/* Show credits-based pricing for conversations/messages */}
-              {!importMode && (exportType === 'conversations' || exportType === 'messages' || exportType === 'contacts') && (
+              {/* Credit-based pricing for every export type. Every $0.018 item = 1 credit; email = 3 credits. */}
+              {!importMode && ['conversations', 'messages', 'contacts', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'customFields', 'customValues', 'tags'].includes(exportType) && (
                 <>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Credits</span>
@@ -473,23 +515,6 @@ export default function ExportEstimateModal({
                   </>
                 );
               })()}
-
-              {/* Show credit-based pricing for notes/tasks/opportunities/formSubmissions/links/socialPosts/templates (1 item = 1 credit) */}
-              {!importMode && (['notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates'].includes(exportType)) && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Credits</span>
-                    <span className="font-medium">{formatNumber(estimate.itemCounts?.total)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Price per Credit</span>
-                    <span className="font-medium flex items-center gap-2">
-                      <span className="line-through text-gray-400 text-xs">${OLD_UNIT_PRICES.notesAndTasks}</span>
-                      <span className="text-green-600">${UNIT_PRICES.notesAndTasks}</span>
-                    </span>
-                  </div>
-                </>
-              )}
 
               {exportType === 'specialTabMessages' && (
                 <>
@@ -574,8 +599,8 @@ export default function ExportEstimateModal({
             </div>
           )}
 
-          {/* Volume Discount Tiers - Shown when the estimate provides tiers (export flows always include them; import flows include them only when discounts apply) */}
-          {(estimate.discountTiers?.length > 0) && !['notes', 'tasks', 'specialTabMessages', 'callTranscriptions'].includes(exportType) && (
+          {/* Volume Discount Tiers - Shown when the estimate provides tiers. Hidden for the standalone-billed flows (specialTabMessages/callTranscriptions) which have no volume discounts. */}
+          {(estimate.discountTiers?.length > 0) && !['specialTabMessages', 'callTranscriptions'].includes(exportType) && (
           <Collapse ghost className="bg-gray-50 rounded-lg" defaultActiveKey={estimate.discountPercent > 0 ? [] : []}>
             <Panel
               header={

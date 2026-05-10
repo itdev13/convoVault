@@ -16,6 +16,8 @@ const BillingTransaction = require('../models/BillingTransaction');
 
 const IMPORT_NOTES_METER_ID = '69864aed1265653fdd7c0620'; // shared meter, same as exports
 const IMPORT_CONTACTS_METER_ID = '69864aed1265653fdd7c0620'; // same meter as imports/notes — shared
+const IMPORT_CUSTOM_FIELDS_METER_ID = '69864aed1265653fdd7c0620'; // shared meter
+const IMPORT_CUSTOM_VALUES_METER_ID = '69864aed1265653fdd7c0620'; // shared meter
 
 /**
  * FEATURE 3: Import from CSV/Excel to Conversations
@@ -642,7 +644,10 @@ router.post('/notes', authenticateSession, async (req, res) => {
     const unitPrices = billingService.getUnitPrices(locationId);
     const unitPrice = unitPrices.importNotes ?? 0.018;
     const totalRows = rows.length;
-    const finalAmount = Number((totalRows * unitPrice).toFixed(4));
+    const baseAmount = Number((totalRows * unitPrice).toFixed(4));
+    const discountPercent = billingService.getDiscountPercent(totalRows);
+    const discountAmount = Number((baseAmount * (discountPercent / 100)).toFixed(4));
+    const finalAmount = Number((baseAmount - discountAmount).toFixed(4));
 
     // Get OAuth token + verify wallet funds (same pattern as charge-and-export)
     const tokenData = await ghlService.getValidToken(locationId);
@@ -664,7 +669,7 @@ router.post('/notes', authenticateSession, async (req, res) => {
       companyId,
       type: 'import_notes',
       itemCounts: { notes: totalRows, total: totalRows },
-      pricing: { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount },
+      pricing: { baseAmount, discountPercent, discountAmount, finalAmount },
       meterCharges,
       status: 'pending',
       userId
@@ -1028,6 +1033,408 @@ async function processContactsImportAsync(jobId, locationId, rows) {
   });
 
   logger.info(`✅ Contacts import ${jobId} done: ${successful} succeeded, ${skipped} skipped, ${failed} failed`);
+}
+
+// =============================================================================
+// Custom Fields import
+// =============================================================================
+
+const MAX_CUSTOM_FIELDS_ROWS_PER_IMPORT = 1000;
+const CF_VALID_DATA_TYPES = new Set([
+  'TEXT', 'LARGE_TEXT', 'NUMERICAL', 'PHONE', 'MONETORY', 'CHECKBOX',
+  'SINGLE_OPTIONS', 'MULTIPLE_OPTIONS', 'FLOAT', 'TIME', 'DATE',
+  'TEXTBOX_LIST', 'FILE_UPLOAD', 'SIGNATURE', 'RADIO'
+]);
+
+router.post('/custom-fields', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, rows } = req.body || {};
+    const { companyId, userId } = req.user;
+
+    if (!locationId) return res.status(400).json({ success: false, error: 'locationId is required' });
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'rows must be a non-empty array' });
+    }
+    if (rows.length > MAX_CUSTOM_FIELDS_ROWS_PER_IMPORT) {
+      return res.status(400).json({
+        success: false,
+        error: `Too many rows (${rows.length}). Max ${MAX_CUSTOM_FIELDS_ROWS_PER_IMPORT} per import — please split the file.`
+      });
+    }
+
+    const unitPrices = billingService.getUnitPrices(locationId);
+    const unitPrice = unitPrices.importCustomFields ?? 0.018;
+    const totalRows = rows.length;
+    const baseAmount = Number((totalRows * unitPrice).toFixed(4));
+    const discountPercent = billingService.getDiscountPercent(totalRows);
+    const discountAmount = Number((baseAmount * (discountPercent / 100)).toFixed(4));
+    const finalAmount = Number((baseAmount - discountAmount).toFixed(4));
+
+    const tokenData = await ghlService.getValidToken(locationId);
+    const accessToken = tokenData.accessToken || tokenData;
+
+    const hasFunds = await billingService.hasFunds(companyId, accessToken);
+    if (!hasFunds) {
+      return res.status(402).json({
+        success: false,
+        error: 'Insufficient wallet balance',
+        message: 'Please add funds to your GHL wallet to continue'
+      });
+    }
+
+    const meterCharges = [{ meterId: IMPORT_CUSTOM_FIELDS_METER_ID, qty: totalRows, description: 'Custom fields import' }];
+
+    const transaction = await BillingTransaction.create({
+      locationId,
+      companyId,
+      type: 'import_custom_fields',
+      itemCounts: { customFields: totalRows, total: totalRows },
+      pricing: { baseAmount, discountPercent, discountAmount, finalAmount },
+      meterCharges,
+      status: 'pending',
+      userId
+    });
+
+    try {
+      const chargeResult = await billingService.chargeWallet(
+        companyId, accessToken, meterCharges, locationId, transaction._id.toString(), finalAmount
+      );
+      transaction.ghlChargeId = chargeResult?.charges?.map(c => c?.chargeId).join(',');
+      transaction.referralCode = chargeResult.referralCode || null;
+      if (chargeResult.internalTesting) {
+        transaction.status = 'tested';
+        transaction.internalTesting = true;
+        transaction.paymentIgnored = true;
+      } else {
+        transaction.status = 'charged';
+      }
+      await transaction.save();
+    } catch (chargeError) {
+      transaction.status = 'failed';
+      transaction.errorMessage = chargeError.message;
+      await transaction.save();
+      return res.status(402).json({
+        success: false,
+        error: 'Payment failed',
+        message: chargeError.message
+      });
+    }
+
+    const job = await ImportJob.create({
+      locationId,
+      fileName: req.body.fileName || 'custom-fields-import.csv',
+      totalRows,
+      status: 'pending'
+    });
+
+    processCustomFieldsImportAsync(job._id, locationId, rows);
+
+    res.json({
+      success: true,
+      message: 'Custom fields import started',
+      data: {
+        jobId: job._id,
+        totalRows,
+        status: 'processing',
+        amountCharged: finalAmount,
+        transactionId: transaction._id
+      }
+    });
+  } catch (error) {
+    logError('Custom fields import error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: error.message || 'Failed to start custom fields import' });
+  }
+});
+
+async function processCustomFieldsImportAsync(jobId, locationId, rows) {
+  await ImportJob.findByIdAndUpdate(jobId, { status: 'processing', startedAt: new Date() });
+
+  let successful = 0;
+  let failed = 0;
+  let skipped = 0;
+  const importErrors = [];
+
+  const queue = new ThrottleQueue({ name: `custom-fields-import-${jobId}`, delayMs: 350 });
+
+  let processed = 0;
+  const total = rows.length;
+
+  const get = (row, ...keys) => {
+    for (const k of keys) {
+      if (row[k] != null && row[k] !== '') return row[k];
+      const lower = k.charAt(0).toLowerCase() + k.slice(1);
+      if (row[lower] != null && row[lower] !== '') return row[lower];
+      const upper = k.charAt(0).toUpperCase() + k.slice(1);
+      if (row[upper] != null && row[upper] !== '') return row[upper];
+    }
+    return undefined;
+  };
+
+  // options column: "Bronze:bronze; Silver:silver" → [{name:'Bronze',value:'bronze'},...]
+  // or "Bronze;Silver;Gold" → [{name:'Bronze',value:'Bronze'},...]
+  const parseOptions = (val) => {
+    if (!val) return undefined;
+    const items = String(val).split(/[;|]/).map(s => s.trim()).filter(Boolean);
+    if (!items.length) return undefined;
+    return items.map(item => {
+      const [name, value] = item.split(':').map(s => s && s.trim());
+      return { name: name || item, value: value || name || item };
+    });
+  };
+
+  const jobs = rows.map((row, idx) => new Promise((resolve) => {
+    queue.push(async () => {
+      try {
+        const name = (get(row, 'name', 'Name') || '').toString().trim();
+        const dataType = (get(row, 'dataType', 'data_type', 'DataType') || '').toString().trim().toUpperCase();
+        const model = (get(row, 'model', 'Model') || 'contact').toString().trim().toLowerCase();
+
+        if (!name) {
+          skipped++;
+          importErrors.push({ row: idx + 2, error: 'Missing name', data: { name } });
+          return;
+        }
+        if (!CF_VALID_DATA_TYPES.has(dataType)) {
+          skipped++;
+          importErrors.push({ row: idx + 2, error: `Invalid dataType "${dataType}"`, data: { name, dataType } });
+          return;
+        }
+
+        const payload = {
+          name,
+          dataType,
+          model: ['contact', 'opportunity'].includes(model) ? model : 'contact',
+          placeholder: get(row, 'placeholder', 'Placeholder') || undefined,
+          fieldKey: get(row, 'fieldKey', 'field_key', 'FieldKey') || undefined,
+          description: get(row, 'description', 'Description') || undefined,
+          prefill: get(row, 'prefill', 'Prefill') || undefined
+        };
+
+        // Picklist options for SINGLE_OPTIONS / MULTIPLE_OPTIONS / RADIO / CHECKBOX
+        if (['SINGLE_OPTIONS', 'MULTIPLE_OPTIONS', 'RADIO', 'CHECKBOX'].includes(dataType)) {
+          const opts = parseOptions(get(row, 'options', 'picklistOptions', 'Options'));
+          if (!opts || !opts.length) {
+            skipped++;
+            importErrors.push({ row: idx + 2, error: `${dataType} requires options column`, data: { name } });
+            return;
+          }
+          payload.options = opts;
+        }
+
+        await ghlService.createCustomField(locationId, payload);
+        successful++;
+      } catch (err) {
+        const ghlMsg = err.response?.data?.message || err.message || 'Unknown error';
+        if (/already exists/i.test(ghlMsg)) {
+          skipped++;
+          importErrors.push({ row: idx + 2, error: 'Custom field already exists', data: { name: row.name } });
+        } else {
+          failed++;
+          importErrors.push({ row: idx + 2, error: ghlMsg, data: { name: row.name } });
+          logWarning('Custom fields import row failed', { row: idx + 2, error: ghlMsg });
+        }
+      } finally {
+        processed++;
+        if (processed % 10 === 0 || processed === total) {
+          await ImportJob.findByIdAndUpdate(jobId, { processed, successful, failed, skipped }).catch(() => {});
+        }
+        resolve();
+      }
+    });
+  }));
+
+  await Promise.all(jobs);
+
+  await ImportJob.findByIdAndUpdate(jobId, {
+    status: 'completed',
+    processed,
+    successful,
+    failed,
+    skipped,
+    importErrors: importErrors.slice(0, 100),
+    completedAt: new Date()
+  });
+
+  logger.info(`✅ Custom fields import ${jobId} done: ${successful} succeeded, ${skipped} skipped, ${failed} failed`);
+}
+
+// =============================================================================
+// Custom Values import
+// =============================================================================
+
+const MAX_CUSTOM_VALUES_ROWS_PER_IMPORT = 1000;
+
+router.post('/custom-values', authenticateSession, async (req, res) => {
+  try {
+    const { locationId, rows } = req.body || {};
+    const { companyId, userId } = req.user;
+
+    if (!locationId) return res.status(400).json({ success: false, error: 'locationId is required' });
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'rows must be a non-empty array' });
+    }
+    if (rows.length > MAX_CUSTOM_VALUES_ROWS_PER_IMPORT) {
+      return res.status(400).json({
+        success: false,
+        error: `Too many rows (${rows.length}). Max ${MAX_CUSTOM_VALUES_ROWS_PER_IMPORT} per import — please split the file.`
+      });
+    }
+
+    const unitPrices = billingService.getUnitPrices(locationId);
+    const unitPrice = unitPrices.importCustomValues ?? 0.018;
+    const totalRows = rows.length;
+    const baseAmount = Number((totalRows * unitPrice).toFixed(4));
+    const discountPercent = billingService.getDiscountPercent(totalRows);
+    const discountAmount = Number((baseAmount * (discountPercent / 100)).toFixed(4));
+    const finalAmount = Number((baseAmount - discountAmount).toFixed(4));
+
+    const tokenData = await ghlService.getValidToken(locationId);
+    const accessToken = tokenData.accessToken || tokenData;
+
+    const hasFunds = await billingService.hasFunds(companyId, accessToken);
+    if (!hasFunds) {
+      return res.status(402).json({
+        success: false,
+        error: 'Insufficient wallet balance',
+        message: 'Please add funds to your GHL wallet to continue'
+      });
+    }
+
+    const meterCharges = [{ meterId: IMPORT_CUSTOM_VALUES_METER_ID, qty: totalRows, description: 'Custom values import' }];
+
+    const transaction = await BillingTransaction.create({
+      locationId,
+      companyId,
+      type: 'import_custom_values',
+      itemCounts: { customValues: totalRows, total: totalRows },
+      pricing: { baseAmount, discountPercent, discountAmount, finalAmount },
+      meterCharges,
+      status: 'pending',
+      userId
+    });
+
+    try {
+      const chargeResult = await billingService.chargeWallet(
+        companyId, accessToken, meterCharges, locationId, transaction._id.toString(), finalAmount
+      );
+      transaction.ghlChargeId = chargeResult?.charges?.map(c => c?.chargeId).join(',');
+      transaction.referralCode = chargeResult.referralCode || null;
+      if (chargeResult.internalTesting) {
+        transaction.status = 'tested';
+        transaction.internalTesting = true;
+        transaction.paymentIgnored = true;
+      } else {
+        transaction.status = 'charged';
+      }
+      await transaction.save();
+    } catch (chargeError) {
+      transaction.status = 'failed';
+      transaction.errorMessage = chargeError.message;
+      await transaction.save();
+      return res.status(402).json({
+        success: false,
+        error: 'Payment failed',
+        message: chargeError.message
+      });
+    }
+
+    const job = await ImportJob.create({
+      locationId,
+      fileName: req.body.fileName || 'custom-values-import.csv',
+      totalRows,
+      status: 'pending'
+    });
+
+    processCustomValuesImportAsync(job._id, locationId, rows);
+
+    res.json({
+      success: true,
+      message: 'Custom values import started',
+      data: {
+        jobId: job._id,
+        totalRows,
+        status: 'processing',
+        amountCharged: finalAmount,
+        transactionId: transaction._id
+      }
+    });
+  } catch (error) {
+    logError('Custom values import error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: error.message || 'Failed to start custom values import' });
+  }
+});
+
+async function processCustomValuesImportAsync(jobId, locationId, rows) {
+  await ImportJob.findByIdAndUpdate(jobId, { status: 'processing', startedAt: new Date() });
+
+  let successful = 0;
+  let failed = 0;
+  let skipped = 0;
+  const importErrors = [];
+
+  const queue = new ThrottleQueue({ name: `custom-values-import-${jobId}`, delayMs: 350 });
+
+  let processed = 0;
+  const total = rows.length;
+
+  const get = (row, ...keys) => {
+    for (const k of keys) {
+      if (row[k] != null && row[k] !== '') return row[k];
+      const lower = k.charAt(0).toLowerCase() + k.slice(1);
+      if (row[lower] != null && row[lower] !== '') return row[lower];
+      const upper = k.charAt(0).toUpperCase() + k.slice(1);
+      if (row[upper] != null && row[upper] !== '') return row[upper];
+    }
+    return undefined;
+  };
+
+  const jobs = rows.map((row, idx) => new Promise((resolve) => {
+    queue.push(async () => {
+      try {
+        const name = (get(row, 'name', 'Name') || '').toString().trim();
+        const value = (get(row, 'value', 'Value') || '').toString();
+
+        if (!name) {
+          skipped++;
+          importErrors.push({ row: idx + 2, error: 'Missing name', data: {} });
+          return;
+        }
+
+        await ghlService.createCustomValue(locationId, { name, value });
+        successful++;
+      } catch (err) {
+        const ghlMsg = err.response?.data?.message || err.message || 'Unknown error';
+        if (/already exists/i.test(ghlMsg)) {
+          skipped++;
+          importErrors.push({ row: idx + 2, error: 'Custom value already exists', data: { name: row.name } });
+        } else {
+          failed++;
+          importErrors.push({ row: idx + 2, error: ghlMsg, data: { name: row.name } });
+          logWarning('Custom values import row failed', { row: idx + 2, error: ghlMsg });
+        }
+      } finally {
+        processed++;
+        if (processed % 10 === 0 || processed === total) {
+          await ImportJob.findByIdAndUpdate(jobId, { processed, successful, failed, skipped }).catch(() => {});
+        }
+        resolve();
+      }
+    });
+  }));
+
+  await Promise.all(jobs);
+
+  await ImportJob.findByIdAndUpdate(jobId, {
+    status: 'completed',
+    processed,
+    successful,
+    failed,
+    skipped,
+    importErrors: importErrors.slice(0, 100),
+    completedAt: new Date()
+  });
+
+  logger.info(`✅ Custom values import ${jobId} done: ${successful} succeeded, ${skipped} skipped, ${failed} failed`);
 }
 
 module.exports = router;

@@ -21,6 +21,11 @@ import { billingAPI } from '../api/billing';
 import CustomChargeTab from './tabs/CustomChargeTab';
 import ImportNotesTab from './tabs/ImportNotesTab';
 import ImportContactsTab from './tabs/ImportContactsTab';
+import CustomFieldsTab from './tabs/CustomFieldsTab';
+import CustomValuesTab from './tabs/CustomValuesTab';
+import TagsTab from './tabs/TagsTab';
+import ImportCustomFieldsTab from './tabs/ImportCustomFieldsTab';
+import ImportCustomValuesTab from './tabs/ImportCustomValuesTab';
 
 export default function Dashboard() {
   const { location } = useAuth();
@@ -62,6 +67,9 @@ export default function Dashboard() {
     { id: 'formSubmissions', label: 'Forms', icon: '📋' },
     { id: 'links', label: 'Links', icon: '🔗' },
     { id: 'callLogs', label: 'Voice AI', icon: '📞' },
+    { id: 'customFields', label: 'Custom Fields', icon: '🧩' },
+    { id: 'customValues', label: 'Custom Values', icon: '🔖' },
+    { id: 'tags', label: 'Tags', icon: '🏷️' },
     ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
     ...(customChargeEnabled ? [{ id: 'customCharge', label: 'Charge', icon: '💳' }] : []),
   ];
@@ -70,6 +78,8 @@ export default function Dashboard() {
   const importTabs = [
     { id: 'importContacts', label: 'Contacts', icon: '👥' },
     { id: 'importNotes', label: 'Notes', icon: '📥' },
+    { id: 'importCustomFields', label: 'Custom Fields', icon: '🧩' },
+    { id: 'importCustomValues', label: 'Custom Values', icon: '🔖' },
   ];
 
   const tabs = dataMode === 'export' ? exportTabs : importTabs;
@@ -265,11 +275,16 @@ export default function Dashboard() {
               {activeTab === 'notes' && <NotesTab />}
               {activeTab === 'importNotes' && <ImportNotesTab />}
               {activeTab === 'importContacts' && <ImportContactsTab />}
+              {activeTab === 'importCustomFields' && <ImportCustomFieldsTab />}
+              {activeTab === 'importCustomValues' && <ImportCustomValuesTab />}
               {activeTab === 'tasks' && <TasksTab />}
               {activeTab === 'opportunities' && <OpportunitiesTab />}
               {activeTab === 'formSubmissions' && <FormSubmissionsTab />}
               {activeTab === 'links' && <LinksTab />}
               {activeTab === 'callLogs' && <CallLogsTab />}
+              {activeTab === 'customFields' && <CustomFieldsTab />}
+              {activeTab === 'customValues' && <CustomValuesTab />}
+              {activeTab === 'tags' && <TagsTab />}
               {activeTab === 'callTranscriptions' && callTranscriptionsEnabled && <CallTranscriptionsTab />}
               {activeTab === 'contacts' && <ExportContactsTab />}
               {activeTab === 'templates' && <TemplatesTab />}
