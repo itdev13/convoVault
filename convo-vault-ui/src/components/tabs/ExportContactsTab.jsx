@@ -335,6 +335,16 @@ export default function ExportContactsTab() {
           </table>
         </div>
       )}
+
+      {/* Export Columns */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Export Columns</h3>
+        <div className="flex flex-wrap gap-2">
+          {['ID', 'FirstName', 'LastName', 'Name', 'Email', 'AdditionalEmails', 'Phone', 'CompanyName', 'Website', 'Source', 'Type', 'Tags', 'AssignedTo', 'Address1', 'City', 'State', 'Country', 'PostalCode', 'Timezone', 'DateOfBirth', 'Gender', 'DND', 'DateAdded', 'DateUpdated', 'CustomFields'].map((col) => (
+            <span key={col} className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-mono rounded-full">{col}</span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
