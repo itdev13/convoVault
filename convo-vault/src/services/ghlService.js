@@ -1038,11 +1038,11 @@ class GHLService {
       if (options.assignedTo) {
         filters.push({ field: 'assignedTo', operator: 'eq', value: options.assignedTo });
       }
-      if (options.startDate) {
-        filters.push({ field: 'dateAdded', operator: 'gte', value: new Date(options.startDate).getTime() });
-      }
-      if (options.endDate) {
-        filters.push({ field: 'dateAdded', operator: 'lte', value: new Date(options.endDate).getTime() });
+      if (options.startDate || options.endDate) {
+        const range = {};
+        if (options.startDate) range.gte = new Date(options.startDate).getTime();
+        if (options.endDate) range.lte = new Date(options.endDate).getTime();
+        filters.push({ field: 'date_added', operator: 'range', value: range });
       }
       if (filters.length) body.filters = filters;
 
