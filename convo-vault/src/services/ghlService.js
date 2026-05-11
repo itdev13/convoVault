@@ -1029,7 +1029,6 @@ class GHLService {
       // Filter shape per GHL docs: { field, operator, value }
       const filters = [];
       if (options.query) {
-        body.searchAfter = options.query; // free-text search field name varies; pass as searchAfter or query
         body.query = options.query;
       }
       if (options.tag) {
