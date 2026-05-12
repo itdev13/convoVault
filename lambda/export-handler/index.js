@@ -188,19 +188,24 @@ function nonNullValue(val){
  * Fetch a page of tasks for a location via location-level search API
  */
 /**
- * Fetch a single page of contacts via the advanced search endpoint.
- * Uses cursor-style pagination (startAfter, startAfterId) per GHL meta response.
+ * Fetch a single page of contacts via POST /contacts/search.
+ * Cursor pagination: each contact in the response carries its own `searchAfter`
+ * array (the ES sort tuple). The next page's cursor is the LAST contact's
+ * searchAfter. A stable sort (date_added desc + _id asc tiebreaker) is required
+ * for cursor pagination to be deterministic.
  */
 async function fetchContactsPage(locationId, accessToken, filters, cursor) {
+  const PAGE_LIMIT = 500; // OAuth/Marketplace hard cap is 500 per request
   const body = {
     locationId,
-    pageLimit: 100
+    pageLimit: PAGE_LIMIT,
+    sort: [
+      { field: 'date_added', direction: 'desc' },
+      { field: '_id', direction: 'asc' }
+    ]
   };
-  if (cursor) {
-    if (typeof cursor === 'object') {
-      if (cursor.startAfter) body.startAfter = cursor.startAfter;
-      if (cursor.startAfterId) body.startAfterId = cursor.startAfterId;
-    }
+  if (Array.isArray(cursor) && cursor.length > 0) {
+    body.searchAfter = cursor;
   }
 
   const f = filters || {};
@@ -224,13 +229,19 @@ async function fetchContactsPage(locationId, accessToken, filters, cursor) {
     }
   });
 
-  const meta = response.data.meta || {};
-  return {
-    data: response.data.contacts || [],
-    nextCursor: meta.startAfterId
-      ? { startAfter: meta.startAfter, startAfterId: meta.startAfterId }
-      : null
-  };
+  const contacts = response.data.contacts || [];
+
+  // Next-page cursor = last contact's `searchAfter` (the ES sort array).
+  // Stop paginating when fewer than PAGE_LIMIT returned — that's the last page.
+  let nextCursor = null;
+  if (contacts.length === PAGE_LIMIT) {
+    const last = contacts[contacts.length - 1];
+    if (Array.isArray(last?.searchAfter) && last.searchAfter.length > 0) {
+      nextCursor = last.searchAfter;
+    }
+  }
+
+  return { data: contacts, nextCursor };
 }
 
 async function fetchTasksPage(locationId, accessToken, skip, filters = {}) {
@@ -1935,7 +1946,7 @@ exports.handler = async (event, context) => {
       cursor = hasMoreData ? String(currentSkip) : null;
 
     } else if (job.exportType === 'contacts') {
-      // === CONTACTS: cursor pagination via { startAfter, startAfterId } ===
+      // === CONTACTS: cursor pagination via searchAfter array (ES sort tuple) ===
       // The cursor is persisted as a JSON string between Lambda invocations.
       let contactsCursor = null;
       if (cursor) {
