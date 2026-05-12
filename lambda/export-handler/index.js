@@ -190,19 +190,14 @@ function nonNullValue(val){
 /**
  * Fetch a single page of contacts via POST /contacts/search.
  * Cursor pagination: each contact in the response carries its own `searchAfter`
- * array (the ES sort tuple). The next page's cursor is the LAST contact's
- * searchAfter. A stable sort (date_added desc + _id asc tiebreaker) is required
- * for cursor pagination to be deterministic.
+ * array (the ES sort tuple — default sort is date_added desc with _id tiebreaker).
+ * The next page's cursor is the LAST contact's searchAfter array.
  */
 async function fetchContactsPage(locationId, accessToken, filters, cursor) {
   const PAGE_LIMIT = 500; // OAuth/Marketplace hard cap is 500 per request
   const body = {
     locationId,
-    pageLimit: PAGE_LIMIT,
-    sort: [
-      { field: 'date_added', direction: 'desc' },
-      { field: '_id', direction: 'asc' }
-    ]
+    pageLimit: PAGE_LIMIT
   };
   if (Array.isArray(cursor) && cursor.length > 0) {
     body.searchAfter = cursor;
