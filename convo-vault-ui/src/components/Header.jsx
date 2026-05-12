@@ -5,7 +5,7 @@ import { docsAPI } from '../api/docs';
 import { APP_UPDATES, FEATURE_REQUEST_CTA, BADGE_CONFIGS } from '../constants/updates';
 import { API_DOCS_BASE_URL } from '../constants/api';
 
-export default function Header({ onExportsClick, onSupportClick }) {
+export default function Header() {
   const { location, ghlContext } = useAuth();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -68,24 +68,6 @@ export default function Header({ onExportsClick, onSupportClick }) {
 
           {/* Updates, API Docs & Sub-Account */}
           <div className="flex items-center gap-2">
-            {/* Export History Button */}
-            <button
-              onClick={onExportsClick}
-              className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-md px-2.5 py-1 border border-white/20 transition-all flex items-center gap-1.5"
-            >
-              <span className="text-sm">📤</span>
-              <span className="text-white font-semibold text-xs hidden sm:inline">Export History</span>
-            </button>
-
-            {/* Support Button */}
-            <button
-              onClick={onSupportClick}
-              className="group bg-white/10 backdrop-blur-sm hover:bg-white/20 rounded-md px-2.5 py-1 border border-white/20 transition-all flex items-center gap-1.5"
-            >
-              <span className="text-sm">🆘</span>
-              <span className="text-white font-semibold text-xs hidden sm:inline">Support</span>
-            </button>
-
             {/* Updates Button with Popover */}
             <div className="relative">
               <button

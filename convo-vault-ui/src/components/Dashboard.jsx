@@ -122,7 +122,9 @@ export default function Dashboard() {
   }, [dataMode, tabs.length]);
 
   const switchMode = (mode) => {
-    if (mode === dataMode) return;
+    const onStandaloneTab = ['exports', 'support'].includes(activeTab);
+    // Allow re-clicking the active mode to escape standalone tabs (Export History, Support).
+    if (mode === dataMode && !onStandaloneTab) return;
     setDataMode(mode);
     setShowConversationView(false);
     // Snap activeTab to first sub-tab of new mode immediately so content updates without a frame of mismatch.
@@ -137,10 +139,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <Header
-        onExportsClick={() => { setActiveTab('exports'); setShowConversationView(false); }}
-        onSupportClick={() => { setActiveTab('support'); setShowConversationView(false); }}
-      />
+      <Header />
       
       <div className="max-w-12xl mx-auto px-3 py-3">
         {/* Updates Banner */}
@@ -196,7 +195,9 @@ export default function Dashboard() {
             { key: 'export', label: 'Export Data', tagline: 'Pull data out as CSV / JSON' },
             { key: 'import', label: 'Import Data', tagline: 'Bring data in from a CSV' },
           ].map(m => {
-            const active = dataMode === m.key;
+            // Only highlight the mode tab when the user is actually inside the export/import sub-tabs.
+            // Standalone tabs (Export History, Support) take focus away from both mode tabs.
+            const active = dataMode === m.key && !['exports', 'support'].includes(activeTab);
             return (
               <button
                 key={m.key}
@@ -235,11 +236,49 @@ export default function Dashboard() {
               </button>
             );
           })}
+
+          {/* Export History & Support — quick-access tabs, same visual style as mode tabs */}
+          {[
+            { key: 'exports', label: 'Export History', tagline: 'View past exports', icon: '📤' },
+            { key: 'support', label: 'Support', tagline: 'Get help', icon: '🆘' },
+          ].map(t => {
+            const active = activeTab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => { setActiveTab(t.key); setShowConversationView(false); }}
+                className={`
+                  group relative flex items-center gap-3 px-5 pt-3 pb-4 rounded-t-xl transition-all
+                  ${active
+                    ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg z-10'
+                    : 'bg-white/70 hover:bg-white text-gray-600 border border-gray-200 border-b-0'
+                  }
+                `}
+              >
+                <div className={`
+                  w-9 h-9 rounded-lg flex items-center justify-center text-lg transition-colors
+                  ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500 group-hover:text-gray-700'}
+                `}>
+                  {t.icon}
+                </div>
+                <div className="text-left">
+                  <div className={`font-bold text-sm leading-tight ${active ? 'text-white' : 'text-gray-700'}`}>
+                    {t.label}
+                  </div>
+                  <div className={`text-xs leading-tight mt-0.5 ${active ? 'text-blue-100' : 'text-gray-500'}`}>
+                    {t.tagline}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Sidebar nav + content panel — same layout for Export and Import */}
+        {/* Sidebar nav + content panel — same layout for Export and Import.
+            Sidebar is hidden for standalone tabs (Export History, Support) where it doesn't apply. */}
         <div className="bg-white rounded-xl shadow-lg flex overflow-hidden border-t border-gray-200">
           {/* Sidebar */}
+          {!['exports', 'support'].includes(activeTab) && (
           <aside className="w-52 flex-shrink-0 border-r border-gray-100 py-4 bg-gray-50/60">
             {(dataMode === 'export' ? exportGroups : importGroups).map((group, gi) => (
               <div key={group.label || `g-${gi}`} className="mb-1">
@@ -273,6 +312,7 @@ export default function Dashboard() {
               </div>
             ))}
           </aside>
+          )}
 
           {/* Content */}
           <div className="flex-1 min-w-0 p-8">

@@ -5,8 +5,29 @@
 
 export const APP_UPDATES = [
   {
+    title: 'Custom Fields & Values',
+    description: 'Export and import custom fields and custom values directly from CSV',
+    badge: 'new',
+    icon: '✨',
+    color: 'green'
+  },
+  {
+    title: 'Contacts Import',
+    description: 'Bring contacts in from a CSV with volume discounts on bulk imports',
+    badge: 'new',
+    icon: '✨',
+    color: 'green'
+  },
+  {
+    title: 'Notes Import',
+    description: 'Bulk import notes by contact name, email, or phone — auto-matched',
+    badge: 'live',
+    icon: '✓',
+    color: 'green'
+  },
+  {
     title: 'New Export Tabs',
-    description: 'Export Notes, Tasks, Opportunities, Forms, Links, Templates, and Voice AI data',
+    description: 'Export Notes, Tasks, Opportunities, Forms, Links, Templates, Social Posts and Voice AI data',
     badge: 'live',
     icon: '✓',
     color: 'green'
@@ -19,8 +40,8 @@ export const APP_UPDATES = [
     color: 'green'
   },
   {
-    title: 'Social Posts Export',
-    description: 'Export your social media posts and analytics data',
+    title: 'Tags Export',
+    description: 'View and export every tag in your sub-account',
     badge: 'upcoming',
     icon: '🔜',
     color: 'blue'
