@@ -42,9 +42,9 @@ export const APP_UPDATES = [
   {
     title: 'Tags Export',
     description: 'View and export every tag in your sub-account',
-    badge: 'upcoming',
-    icon: '🔜',
-    color: 'blue'
+    badge: 'new',
+    icon: '✨',
+    color: 'green'
   }
 ];
 
