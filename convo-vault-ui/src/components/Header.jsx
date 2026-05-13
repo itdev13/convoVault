@@ -105,8 +105,10 @@ export default function Header() {
                             <div className="flex items-center gap-2">
                               <strong className="text-gray-900">{update.title}</strong>
                               <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-                                update.badge === 'live' 
-                                  ? 'bg-green-100 text-green-700' 
+                                update.badge === 'live'
+                                  ? 'bg-green-100 text-green-700'
+                                  : update.badge === 'priceDrop'
+                                  ? 'bg-emerald-600 text-white shadow-sm animate-pulse'
                                   : 'bg-blue-100 text-blue-700'
                               }`}>
                                 {BADGE_CONFIGS[update.badge].label}

@@ -27,13 +27,31 @@ const METER_IDS = {
   tags: '69864aed1265653fdd7c0620'
 };
 
+// Email pricing tiers:
+//   ≤ 10,000 emails → 3 credits × $0.018 = $0.054/email
+//   > 10,000 emails → 2 credits × $0.018 = $0.036/email
+//   > 50,000 emails → 2 credits × $0.010 = $0.020/email
+function getEmailPricing(emailCount) {
+  if (emailCount > 50000) return { creditsPerEmail: 2, creditPrice: 0.01,  unitPrice: 0.02  };
+  if (emailCount > 10000) return { creditsPerEmail: 2, creditPrice: 0.018, unitPrice: 0.036 };
+  return                         { creditsPerEmail: 3, creditPrice: 0.018, unitPrice: 0.054 };
+}
+
+// Non-email message pricing tiers (SMS / WhatsApp / etc.):
+//   ≤ 50,000 messages → 1 credit × $0.018 = $0.018/message
+//   > 50,000 messages → 1 credit × $0.010 = $0.010/message
+function getSmsPricing(smsCount) {
+  if (smsCount > 50000) return { creditsPerItem: 1, creditPrice: 0.01,  unitPrice: 0.01  };
+  return                       { creditsPerItem: 1, creditPrice: 0.018, unitPrice: 0.018 };
+}
+
 // Default unit prices in dollars (fallback if API fails)
 // All export types are billed at $0.018 per item with the same volume discount tiers.
-// Email is the only exception — kept at 3x base to reflect higher cost of email data.
+// Email is handled dynamically via getEmailPricing() based on volume.
 const DEFAULT_UNIT_PRICES = {
   conversations: 0.018,
   smsWhatsapp: 0.018,
-  email: 0.054,            // 3x base — email is more expensive
+  email: 0.054,            // base rate (≤10k emails); overridden at higher volumes
   notesAndTasks: 0.018,
   opportunities: 0.018,
   formSubmissions: 0.018,
@@ -173,10 +191,13 @@ class BillingService {
 
     // Use provided prices or defaults
     const unitPrices = prices || DEFAULT_UNIT_PRICES;
+    // Email and SMS pricing are tiered by volume (see getEmailPricing / getSmsPricing)
+    const emailPricing = getEmailPricing(emailMessages);
+    const smsPricing = getSmsPricing(smsMessages);
     // Every export type is now discountable. Volume tiers apply to the total item count.
     const conversationsCost = conversations * unitPrices.conversations;
-    const textMessagesCost = smsMessages * unitPrices.smsWhatsapp;
-    const emailCost = emailMessages * unitPrices.email;
+    const textMessagesCost = smsMessages * smsPricing.unitPrice;
+    const emailCost = emailMessages * emailPricing.unitPrice;
     const opportunitiesCost = opportunities * (unitPrices.opportunities || DEFAULT_UNIT_PRICES.opportunities);
     const formSubmissionsCost = formSubmissions * (unitPrices.formSubmissions || DEFAULT_UNIT_PRICES.formSubmissions);
     const linksCost = links * (unitPrices.links || DEFAULT_UNIT_PRICES.links);
@@ -234,12 +255,16 @@ class BillingService {
         },
         smsWhatsapp: {
           count: smsMessages,
-          unitPrice: unitPrices.smsWhatsapp,
+          unitPrice: smsPricing.unitPrice,
+          creditsPerItem: smsPricing.creditsPerItem,
+          creditPrice: smsPricing.creditPrice,
           subtotal: textMessagesCost
         },
         email: {
           count: emailMessages,
-          unitPrice: unitPrices.email,
+          unitPrice: emailPricing.unitPrice,
+          creditsPerItem: emailPricing.creditsPerEmail,
+          creditPrice: emailPricing.creditPrice,
           subtotal: emailCost
         },
         notes: {

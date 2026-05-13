@@ -146,6 +146,39 @@ export default function Dashboard() {
         {/* Updates Banner */}
         {/* <UpdatesBanner /> */}
 
+        {/* Price Drop Promo Strip */}
+        <div className="mb-3 rounded-xl overflow-hidden border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 relative">
+          <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-emerald-100/60 to-transparent pointer-events-none"></div>
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-300/20 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="relative px-4 py-2.5 flex items-center gap-3 flex-wrap">
+            <div className="relative flex-shrink-0 flex items-center gap-2">
+              <span className="text-xl leading-none">🎉</span>
+              <span className="inline-flex items-center text-[10px] font-bold bg-emerald-600 text-white px-2 py-1 rounded-md uppercase tracking-wider shadow-sm">
+                Price Drop
+              </span>
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full"></span>
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <p className="text-sm text-gray-800">
+                <span className="font-semibold text-emerald-900">Volume tiers just got cheaper.</span>
+                <span className="hidden sm:inline text-gray-700 ml-1.5">
+                  Up to <strong className="text-emerald-700">63% off</strong> on emails over 50k and <strong className="text-emerald-700">44% off</strong> on messages over 50k — credit rate drops to <strong className="text-emerald-700">$0.01</strong> automatically.
+                </span>
+              </p>
+            </div>
+            <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-white px-2 py-1 rounded-md border border-emerald-200">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                Auto-applied
+              </span>
+              <span className="inline-flex items-center text-[10px] font-semibold text-emerald-700 bg-white px-2 py-1 rounded-md border border-emerald-200">
+                Stacks with vol. discounts
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Custom Work / AI Agents Promo Banner */}
         <div className="mb-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-xl px-5 py-3 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">

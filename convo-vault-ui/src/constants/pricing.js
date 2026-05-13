@@ -6,7 +6,8 @@
  */
 
 // Unit prices in dollars — every export type is 1.8 cents/item with volume discounts.
-// Email keeps its 3x multiplier (5.4 cents/item) because email data is more expensive.
+// Email is tiered: ≤10k → $0.054 (3 credits), >10k → $0.036 (2 credits), >100k → $0.020 (2 credits @ $0.01).
+// The value here is the base (≤10k) fallback; the modal uses backend-computed breakdown.email.unitPrice.
 export const UNIT_PRICES = {
   conversations: 0.018,
   smsWhatsapp: 0.018,

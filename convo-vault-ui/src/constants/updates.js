@@ -5,6 +5,13 @@
 
 export const APP_UPDATES = [
   {
+    title: 'Volume Pricing Drop',
+    description: 'Credit rate drops to $0.01 on high-volume exports — up to 63% off emails over 50k and 44% off messages over 50k. Auto-applied. Stacks with existing volume discounts.',
+    badge: 'priceDrop',
+    icon: '🎉',
+    color: 'green'
+  },
+  {
     title: 'Custom Fields & Values',
     description: 'Export and import custom fields and custom values directly from CSV',
     badge: 'new',
@@ -70,6 +77,11 @@ export const BADGE_CONFIGS = {
   new: {
     label: 'NEW',
     bgColor: '#f59e0b',
+    textColor: '#ffffff'
+  },
+  priceDrop: {
+    label: 'PRICE DROP',
+    bgColor: '#10b981',
     textColor: '#ffffff'
   }
 };

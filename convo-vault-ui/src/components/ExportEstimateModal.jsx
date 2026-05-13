@@ -63,12 +63,13 @@ export default function ExportEstimateModal({
   };
 
   // Calculate total credits from estimate.
-  // Email keeps its 3x multiplier; every other type is 1 credit per item.
+  // Email uses tiered creditsPerItem from breakdown (2 or 3); every other type is 1 credit per item.
   const getTotalCredits = (est) => {
     if (!est?.breakdown) return 0;
     const flatTypes = ['conversations', 'smsWhatsapp', 'contacts', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'customFields', 'customValues', 'tags'];
     const flat = flatTypes.reduce((sum, k) => sum + (Number(est.breakdown[k]?.count) || 0), 0);
-    return flat + getCredits('email', est.breakdown.email?.count);
+    const emailCreditsPerItem = est.breakdown.email?.creditsPerItem || CREDIT_MULTIPLIERS.email;
+    return flat + (Number(est.breakdown.email?.count) || 0) * emailCreditsPerItem;
   };
 
   // Calculate price per credit
@@ -240,6 +241,43 @@ export default function ExportEstimateModal({
       {/* Estimate Content */}
       {!postExportBilling && estimate && !estimating && estimate.itemCounts?.total > 0 && (
         <div className="space-y-2">
+          {/* Dynamic Volume Pricing Callout — celebrates the discount tier the user just unlocked */}
+          {(() => {
+            const emailCount = Number(estimate.breakdown?.email?.count) || 0;
+            const smsCount = Number(estimate.breakdown?.smsWhatsapp?.count) || 0;
+            const tiers = [];
+            if (emailCount > 50000) tiers.push({ pct: 63, label: `${formatNumber(emailCount)} emails`, detail: 'credit rate dropped to $0.01' });
+            else if (emailCount > 10000) tiers.push({ pct: 33, label: `${formatNumber(emailCount)} emails`, detail: '2 credits each instead of 3' });
+            if (smsCount > 50000) tiers.push({ pct: 44, label: `${formatNumber(smsCount)} messages`, detail: 'credit rate dropped to $0.01' });
+            if (tiers.length === 0) return null;
+            const topPct = Math.max(...tiers.map(t => t.pct));
+            return (
+              <div className="relative overflow-hidden rounded-lg bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 p-3 shadow-md">
+                <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/15 rounded-full blur-2xl pointer-events-none"></div>
+                <div className="absolute -bottom-10 -left-6 w-32 h-32 bg-teal-300/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="relative flex items-start gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-xl">
+                    🎉
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-[10px] font-bold bg-white text-emerald-700 px-1.5 py-0.5 rounded uppercase tracking-wider">Tier unlocked</span>
+                      <span className="text-white font-bold text-sm">You're saving up to {topPct}%</span>
+                    </div>
+                    <ul className="space-y-0.5">
+                      {tiers.map((t, i) => (
+                        <li key={i} className="text-emerald-50 text-xs flex items-center gap-1.5">
+                          <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          <span><strong className="text-white">{t.label}</strong> — {t.detail} <span className="text-emerald-100">({t.pct}% off)</span></span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Default Date Range Info Banner */}
           {usingDefaultDates && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
@@ -290,15 +328,15 @@ export default function ExportEstimateModal({
               )}
 
               {/* Email Messages */}
-              {estimate.breakdown?.email?.count > 0 && (
+              {estimate.breakdown?.email?.count > 0 && !importMode && (
                 <div className="flex justify-between items-center py-2 border-b border-gray-100">
                   <div>
                     <span className="text-gray-700 font-medium">Email Messages</span>
-                    <div className="text-xs text-gray-500">{CREDIT_MULTIPLIERS.email} credits per email</div>
+                    <div className="text-xs text-gray-500">{estimate.breakdown.email.creditsPerItem || CREDIT_MULTIPLIERS.email} credits per email</div>
                   </div>
                   <div className="text-right">
                     <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.email.count)} emails</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(getCredits('email', estimate.breakdown.email.count))} credits</div>
+                    <div className="text-xs text-indigo-600 font-medium">{formatNumber((Number(estimate.breakdown.email.count) || 0) * (estimate.breakdown.email.creditsPerItem || CREDIT_MULTIPLIERS.email))} credits</div>
                   </div>
                 </div>
               )}
@@ -476,7 +514,7 @@ export default function ExportEstimateModal({
           {/* Pricing Breakdown */}
           <div className="bg-blue-50 rounded-lg px-4 py-2 border border-blue-200">
             <div className="space-y-2 text-sm">
-              {/* Credit-based pricing for every export type. Every $0.018 item = 1 credit; email = 3 credits. */}
+              {/* Credit-based pricing for every export type. Every $0.018 item = 1 credit; email is tiered (2–3 credits). */}
               {!importMode && ['conversations', 'messages', 'contacts', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'customFields', 'customValues', 'tags'].includes(exportType) && (
                 <>
                   <div className="flex justify-between items-center">
