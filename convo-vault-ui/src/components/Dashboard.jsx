@@ -25,9 +25,10 @@ import CustomValuesTab from './tabs/CustomValuesTab';
 import TagsTab from './tabs/TagsTab';
 import ImportCustomFieldsTab from './tabs/ImportCustomFieldsTab';
 import ImportCustomValuesTab from './tabs/ImportCustomValuesTab';
+import OpportunityStageHistoryTab from './tabs/OpportunityStageHistoryTab';
 
 export default function Dashboard() {
-  const { location } = useAuth();
+  const { location, features } = useAuth();
 
   // Top-level mode: 'export' (default) or 'import'
   const savedMode = localStorage.getItem('dataMode') || 'export';
@@ -68,6 +69,7 @@ export default function Dashboard() {
       items: [
         { id: 'contacts', label: 'Contacts', icon: '👤' },
         { id: 'opportunities', label: 'Opportunities', icon: '💰' },
+        ...(features?.opportunityStageHistory ? [{ id: 'opportunityStageHistory', label: 'Stage History', icon: '🪜' }] : []),
         { id: 'formSubmissions', label: 'Forms', icon: '📋' },
       ]
     },
@@ -386,6 +388,7 @@ export default function Dashboard() {
                 {activeTab === 'customFields' && <CustomFieldsTab />}
                 {activeTab === 'customValues' && <CustomValuesTab />}
                 {activeTab === 'tags' && <TagsTab />}
+                {activeTab === 'opportunityStageHistory' && features?.opportunityStageHistory && <OpportunityStageHistoryTab />}
                 {activeTab === 'callTranscriptions' && callTranscriptionsEnabled && <CallTranscriptionsTab />}
                 {activeTab === 'customCharge' && customChargeEnabled && <CustomChargeTab />}
                 {activeTab === 'importContacts' && <ImportContactsTab />}

@@ -556,6 +556,23 @@ export default function ExportEstimateModal({
                 );
               })()}
 
+              {exportType === 'opportunityStageHistory' && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Projected stage rows</span>
+                    <span className="font-medium">{formatNumber(estimate.itemCounts?.opportunityStageHistory || estimate.itemCounts?.total)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Price per row</span>
+                    <span className="font-medium text-gray-800">${(estimate.breakdown?.opportunityStageHistory?.unitPrice ?? 0.10).toFixed(2)}</span>
+                  </div>
+                  <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
+                    Custom-built export — flat per-row pricing, no volume discounts.
+                    Final row count reconciled at export time; you're charged for actual rows delivered.
+                  </div>
+                </>
+              )}
+
               {exportType === 'specialTabMessages' && (
                 <>
                   <div className="flex justify-between items-center">
@@ -640,7 +657,7 @@ export default function ExportEstimateModal({
           )}
 
           {/* Volume Discount Tiers - Shown when the estimate provides tiers. Hidden for the standalone-billed flows (specialTabMessages/callTranscriptions) which have no volume discounts. */}
-          {(estimate.discountTiers?.length > 0) && !['specialTabMessages', 'callTranscriptions'].includes(exportType) && (
+          {(estimate.discountTiers?.length > 0) && !['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory'].includes(exportType) && (
           <Collapse ghost className="bg-gray-50 rounded-lg" defaultActiveKey={estimate.discountPercent > 0 ? [] : []}>
             <Panel
               header={

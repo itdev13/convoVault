@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const CryptoJS = require('crypto-js');
 const OAuthToken = require('../models/OAuthToken');
 const CompanyLocation = require('../models/CompanyLocation');
+const AppConfig = require('../models/AppConfig');
 const GHLService = require('../services/ghlService');
 const logger = require('../utils/logger');
 const { logError } = require('../utils/errorLogger');
@@ -294,6 +295,12 @@ router.get('/session', async (req, res) => {
       });
     }
 
+    // Feature gates — location/company-scoped access to custom-built tabs.
+    // Add new gates here by adding a new AppConfig key.
+    const features = {
+      opportunityStageHistory: await AppConfig.hasValue('opportunityStageExportLocations', decoded.locationId)
+    };
+
     res.json({
       success: true,
       session: {
@@ -311,7 +318,8 @@ router.get('/session', async (req, res) => {
         address: oauthToken.locationAddress,
         website: oauthToken.locationWebsite,
         timezone: oauthToken.locationTimezone
-      }
+      },
+      features
     });
 
   } catch (error) {

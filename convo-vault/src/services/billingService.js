@@ -24,7 +24,8 @@ const METER_IDS = {
   businesses: '69864aed1265653fdd7c0620',
   customFields: '69864aed1265653fdd7c0620',
   customValues: '69864aed1265653fdd7c0620',
-  tags: '69864aed1265653fdd7c0620'
+  tags: '69864aed1265653fdd7c0620',
+  opportunityStageHistory: '69864aed1265653fdd7c0620'
 };
 
 // Email pricing tiers:
@@ -62,6 +63,7 @@ const DEFAULT_UNIT_PRICES = {
   customFields: 0.018,
   customValues: 0.018,
   tags: 0.018,
+  opportunityStageHistory: 0.10,   // Custom build — flat per-row, no volume tier
   importNotes: 0.018,
   importContacts: 0.018,
   importCustomFields: 0.018,
@@ -186,7 +188,8 @@ class BillingService {
       contacts = 0,
       customFields = 0,
       customValues = 0,
-      tags = 0
+      tags = 0,
+      opportunityStageHistory = 0
     } = counts;
 
     // Use provided prices or defaults
@@ -208,23 +211,29 @@ class BillingService {
     const customFieldsCost = customFields * (unitPrices.customFields || DEFAULT_UNIT_PRICES.customFields);
     const customValuesCost = customValues * (unitPrices.customValues || DEFAULT_UNIT_PRICES.customValues);
     const tagsCost = tags * (unitPrices.tags || DEFAULT_UNIT_PRICES.tags);
+    // Opportunity Stage History: flat $0.10 per row, no volume discount tier (custom build, excluded from totals below).
+    const opportunityStagePrice = unitPrices.opportunityStageHistory || DEFAULT_UNIT_PRICES.opportunityStageHistory;
+    const opportunityStageCost = opportunityStageHistory * opportunityStagePrice;
 
     const notesTasksPrice = unitPrices.notesAndTasks || DEFAULT_UNIT_PRICES.notesAndTasks;
     const notesCost = notes * notesTasksPrice;
     const tasksCost = tasks * notesTasksPrice;
 
+    // opportunityStageHistory is billed flat (no discount), so it stays out of the discounted totals.
     const totalItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs + templates + contacts + customFields + customValues + tags + notes + tasks;
     const baseAmount = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost + templatesCost + contactsCost + customFieldsCost + customValuesCost + tagsCost + notesCost + tasksCost;
 
     const discountPercent = totalItems > 0 ? this.getDiscountPercent(totalItems) : 0;
     const discountAmount = baseAmount * (discountPercent / 100);
-    const finalAmount = baseAmount - discountAmount;
+    // Add opportunityStageHistory flat cost AFTER discount — custom build doesn't get volume tiers.
+    const finalAmount = (baseAmount - discountAmount) + opportunityStageCost;
 
     logger.info('Billing calculation:', {
       totalItems,
       baseAmount,
       discountPercent,
       discountAmount,
+      opportunityStageCost,
       finalAmount
     });
 
@@ -245,7 +254,8 @@ class BillingService {
         customFields,
         customValues,
         tags,
-        total: totalItems
+        opportunityStageHistory,
+        total: totalItems + opportunityStageHistory
       },
       breakdown: {
         conversations: {
@@ -326,6 +336,11 @@ class BillingService {
           count: tags,
           unitPrice: unitPrices.tags || DEFAULT_UNIT_PRICES.tags,
           subtotal: tagsCost
+        },
+        opportunityStageHistory: {
+          count: opportunityStageHistory,
+          unitPrice: opportunityStagePrice,
+          subtotal: opportunityStageCost
         }
       },
       baseAmount,
@@ -622,6 +637,14 @@ class BillingService {
         meterId: METER_IDS.tags,
         qty: counts.tags,
         description: 'Tag exports'
+      });
+    }
+
+    if (counts.opportunityStageHistory > 0) {
+      charges.push({
+        meterId: METER_IDS.opportunityStageHistory,
+        qty: counts.opportunityStageHistory,
+        description: 'Opportunity stage history exports'
       });
     }
 

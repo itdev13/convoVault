@@ -16,6 +16,7 @@ export const AuthProvider = ({ children }) => {
   const { context: ghlContext, loading: ghlLoading, error: ghlError } = useGHLContext();
   const [session, setSession] = useState(null);
   const [location, setLocation] = useState(null);
+  const [features, setFeatures] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const authAttemptCount = useRef(0); // Track number of attempts
@@ -83,7 +84,8 @@ export const AuthProvider = ({ children }) => {
       setError(null);
 
       try {
-        await authAPI.getSession();
+        const sessionInfo = await authAPI.getSession();
+        if (sessionInfo?.features) setFeatures(sessionInfo.features);
       } catch (validationError) {
         // Check if it's a token expiration error
         const errorMsg = validationError.message || '';
@@ -154,6 +156,7 @@ export const AuthProvider = ({ children }) => {
     ghlContext,
     session,
     location,
+    features,
     loading: combinedLoading,
     error: combinedError,
     isAuthenticated,

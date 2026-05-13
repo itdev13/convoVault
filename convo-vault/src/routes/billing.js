@@ -74,12 +74,23 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
         error: `exportType must be one of: ${validExportTypes.join(', ')}`
       });
+    }
+
+    // Feature-gate: opportunityStageHistory is a custom build for specific locations only.
+    if (exportType === 'opportunityStageHistory') {
+      const allowed = await AppConfig.hasValue('opportunityStageExportLocations', locationId);
+      if (!allowed) {
+        return res.status(403).json({
+          success: false,
+          error: 'Opportunity Stage History export is not enabled for this sub-account.'
+        });
+      }
     }
 
     // Validate date range (not applicable for notes/links/templates/customFields/customValues/tags)
@@ -115,7 +126,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       contacts: 0,
       customFields: 0,
       customValues: 0,
-      tags: 0
+      tags: 0,
+      opportunityStageHistory: 0
     };
 
     if (exportType === 'contacts') {
@@ -344,6 +356,89 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       // Tags: single-shot list, no pagination, no filters
       const result = await ghlService.getLocationTags(locationId);
       counts.tags = result.total || 0;
+
+    } else if (exportType === 'opportunityStageHistory') {
+      // Opportunity Stage History (gated custom build):
+      //   1) Walk all opportunities → total opp count.
+      //   2) Sample N unique contacts → fetch activity messages → find TYPE_ACTIVITY_OPPORTUNITY
+      //      rows → derive real avg-stages-per-contact (instead of a hardcoded multiplier).
+      //   3) Project total rows = uniqueContacts × avgStages.
+      // The first activity row is logged for shape verification (one-time, on each estimate call).
+      const SAMPLE_CONTACTS = Math.min(Number(filters?.sampleContacts) || 5, 25);
+      let totalOpps = 0;
+      const allOpps = [];
+      let searchAfter = null;
+      let pageNum = 0;
+      while (true) {
+        pageNum++;
+        const result = await ghlService.searchOpportunities(locationId, {
+          limit: 100,
+          searchAfter: searchAfter || undefined
+        });
+        const ops = result.opportunities || [];
+        allOpps.push(...ops);
+        totalOpps += ops.length;
+        if (ops.length < 100 || !result.searchAfter || result.searchAfter.length === 0) break;
+        searchAfter = result.searchAfter;
+        if (pageNum > 500) break; // safety cap (~50k opportunities)
+      }
+      const uniqueContactIds = [...new Set(allOpps.map(o => o.contactId).filter(Boolean))];
+
+      // Sample N contacts: walk their activity log and count TYPE_ACTIVITY_OPPORTUNITY rows.
+      const sampleIds = uniqueContactIds.slice(0, SAMPLE_CONTACTS);
+      let stageEventsInSample = 0;
+      let firstActivityRow = null;
+      const sampleStartedAt = Date.now();
+
+      for (const cId of sampleIds) {
+        let cursor = null;
+        let pages = 0;
+        while (true) {
+          pages++;
+          const result = await ghlService.exportMessages(locationId, {
+            contactId: cId,
+            startDate: new Date(0).toISOString(),
+            endDate: new Date().toISOString(),
+            limit: 100,
+            cursor: cursor || undefined
+          });
+          const msgs = result.messages || [];
+          for (const m of msgs) {
+            const t = String(m.type || m.messageType || '').toUpperCase();
+            if (t === 'TYPE_ACTIVITY_OPPORTUNITY') {
+              stageEventsInSample++;
+              if (!firstActivityRow) firstActivityRow = m;
+            }
+          }
+          if (msgs.length < 100 || !result.nextPage) break;
+          cursor = result.lastMessageId;
+          if (pages > 20) break; // per-contact safety
+        }
+      }
+
+      const avgStagesPerContact = sampleIds.length > 0 ? stageEventsInSample / sampleIds.length : 0;
+      // Fallback to 3 if sample produced nothing (e.g. opportunities exist but never moved stages).
+      const effectiveAvg = avgStagesPerContact > 0 ? avgStagesPerContact : 3;
+      counts.opportunityStageHistory = Math.round(uniqueContactIds.length * effectiveAvg);
+
+      logger.info('Opportunity Stage History — feasibility probe', {
+        locationId,
+        opportunities: totalOpps,
+        uniqueContacts: uniqueContactIds.length,
+        sampleSize: sampleIds.length,
+        stageEventsInSample,
+        avgStagesPerContact: avgStagesPerContact.toFixed(2),
+        usedFallback: avgStagesPerContact === 0,
+        projectedRows: counts.opportunityStageHistory,
+        sampleElapsedMs: Date.now() - sampleStartedAt
+      });
+      if (firstActivityRow) {
+        logger.info('Opportunity Stage History — sample activity row (shape verification)', {
+          row: firstActivityRow
+        });
+      } else if (sampleIds.length > 0) {
+        logger.warn('Opportunity Stage History — no TYPE_ACTIVITY_OPPORTUNITY rows in sample. Either contacts never moved stages, or type string differs.');
+      }
 
     } else if (exportType === 'specialTabMessages') {
       // Special Messages: fetch ALL conversations, then fetch + store messages matching the type(s)
@@ -785,11 +880,29 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
         error: `exportType must be one of: ${validExportTypes.join(', ')}`
+      });
+    }
+
+    // Feature-gate: opportunityStageHistory is a custom build for specific locations only.
+    if (exportType === 'opportunityStageHistory') {
+      const allowed = await AppConfig.hasValue('opportunityStageExportLocations', locationId);
+      if (!allowed) {
+        return res.status(403).json({
+          success: false,
+          error: 'Opportunity Stage History export is not enabled for this sub-account.'
+        });
+      }
+      // Safety stop: the data-walker isn't wired into the Lambda yet. Estimate flow works
+      // (used for feasibility verification), but blocking charge until the worker lands so
+      // we don't bill for a job that produces nothing.
+      return res.status(501).json({
+        success: false,
+        error: 'Opportunity Stage History export pipeline is in final integration — estimates work for sizing but exports are not yet enabled. Remove this guard in billing.js once the Lambda walker is deployed.'
       });
     }
 
