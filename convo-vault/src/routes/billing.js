@@ -346,8 +346,14 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       counts.tags = result.total || 0;
 
     } else if (exportType === 'specialTabMessages') {
-      // Special Messages: fetch ALL conversations, then fetch + store messages matching the type
+      // Special Messages: fetch ALL conversations, then fetch + store messages matching the type(s)
+      // typeFilter may be a single string (one type selected) or an array (all activity types).
+      // Single string → passed to GHL API directly. Array → fetch unfiltered, filter client-side.
       const typeFilter = filters?.type;
+      const isTypeArray = Array.isArray(typeFilter);
+      const allowedTypesSet = isTypeArray
+        ? new Set(typeFilter.map(t => String(t).toLowerCase()))
+        : null;
       let allConversationIds = [];
       let startAfterDate = undefined;
 
@@ -404,13 +410,16 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             while (true) {
               const msgOptions = { limit: PAGE_SIZE };
               if (cursor) msgOptions.lastMessageId = cursor;
-              if (typeFilter) msgOptions.type = typeFilter;
+              // Only pass `type` to GHL API when a single type is selected;
+              // for arrays we fetch unfiltered and filter client-side below.
+              if (typeFilter && !isTypeArray) msgOptions.type = typeFilter;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               // GHL response: { messages: { lastMessageId, nextPage, messages: [...] } }
               const wrapper = result.messages || {};
               const pageMsgs = wrapper.messages || [];
               const filtered = pageMsgs
                 .filter(m => !isEmail(m))
+                .filter(m => !allowedTypesSet || allowedTypesSet.has(String(m.type || '').toLowerCase()))
                 .map(m => ({ ...m, conversationId: cId }));
               msgs.push(...filtered);
               if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;

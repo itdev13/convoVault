@@ -6,19 +6,9 @@ import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 import dayjs from 'dayjs';
 
+// Activity messages — these aren't available on the standard Messages tab,
+// so the Activity Messages tab is dedicated to them.
 const MESSAGE_TYPES = [
-  { value: 'TYPE_CALL', label: 'Call' },
-  { value: 'TYPE_SMS', label: 'SMS' },
-  { value: 'TYPE_RCS', label: 'RCS' },
-  { value: 'TYPE_FACEBOOK', label: 'Facebook' },
-  { value: 'TYPE_GMB', label: 'Google My Business' },
-  { value: 'TYPE_INSTAGRAM', label: 'Instagram' },
-  { value: 'TYPE_WHATSAPP', label: 'WhatsApp' },
-  { value: 'TYPE_TIKTOK', label: 'TikTok' },
-  { value: 'TYPE_LIVE_CHAT', label: 'Live Chat' },
-  { value: 'TYPE_INTERNAL_CHAT', label: 'Internal Chat' },
-  { value: 'TYPE_INTERNAL_COMMENTS', label: 'Internal Comments' },
-  { value: 'TYPE_FORM_SUBMISSION', label: 'Form Submission' },
   { value: 'TYPE_ACTIVITY_APPOINTMENT', label: 'Appointment Activity' },
   { value: 'TYPE_ACTIVITY_CONTACT', label: 'Contact Activity' },
   { value: 'TYPE_ACTIVITY_INVOICE', label: 'Invoice Activity' },
@@ -27,6 +17,8 @@ const MESSAGE_TYPES = [
   { value: 'TYPE_ACTIVITY_WHATSAPP', label: 'WhatsApp Activity' },
   { value: 'TYPE_ACTIVITY_EMPLOYEE_ACTION_LOG', label: 'Employee Action Log' },
 ];
+
+const ALL_ACTIVITY_TYPES = MESSAGE_TYPES.map(t => t.value);
 
 export default function SpecialMessagesTab() {
   const { location } = useAuth();
@@ -66,7 +58,8 @@ export default function SpecialMessagesTab() {
 
   const buildExportFilters = () => {
     const f = {};
-    if (chatType) f.type = chatType;
+    // Single type → string; "All" (none selected) → array of every activity type
+    f.type = chatType ? chatType : ALL_ACTIVITY_TYPES;
     if (startDate) f.startDate = dayjs(startDate).startOf('day').valueOf();
     if (endDate) f.endDate = dayjs(endDate).endOf('day').valueOf();
     return f;
@@ -142,8 +135,8 @@ export default function SpecialMessagesTab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Complete Messages</h2>
-          <p className="text-sm text-gray-500 mt-1">Most accurate export — we walk every conversation for the selected message type so nothing is missed. Takes a bit longer than the standard Messages export.</p>
+          <h2 className="text-2xl font-bold text-gray-900">Activity Messages</h2>
+          <p className="text-sm text-gray-500 mt-1">Export appointment, contact, invoice, payment, opportunity, WhatsApp, and employee-action activity logs — types not available on the standard Messages tab. We walk every conversation so nothing is missed.</p>
         </div>
       </div>
 
@@ -222,8 +215,8 @@ export default function SpecialMessagesTab() {
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
             This will search all conversations{chatType
-              ? <> for <strong>{MESSAGE_TYPES.find(t => t.value === chatType)?.label || chatType}</strong> messages</>
-              : <> and fetch <strong>all message types (except email)</strong></>
+              ? <> for <strong>{MESSAGE_TYPES.find(t => t.value === chatType)?.label || chatType}</strong> activity messages</>
+              : <> and fetch <strong>all {ALL_ACTIVITY_TYPES.length} activity message types</strong></>
             }, then export as CSV. Slower than the standard Messages export, but the most accurate —
             we walk every conversation so nothing is missed. Pricing: <strong>$0.018 per message</strong> (no volume discount).
           </p>

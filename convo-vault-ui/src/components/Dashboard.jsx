@@ -60,7 +60,7 @@ export default function Dashboard() {
       label: 'Conversations',
       items: [
         { id: 'messages', label: 'Messages', icon: '📊' },
-        { id: 'specialTabMessages', label: 'Complete Messages', icon: '💎' },
+        { id: 'specialTabMessages', label: 'Activity Messages', icon: '💎' },
       ]
     },
     {
