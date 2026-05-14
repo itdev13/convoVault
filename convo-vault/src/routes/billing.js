@@ -358,87 +358,378 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       counts.tags = result.total || 0;
 
     } else if (exportType === 'opportunityStageHistory') {
-      // Opportunity Stage History (gated custom build):
-      //   1) Walk all opportunities → total opp count.
-      //   2) Sample N unique contacts → fetch activity messages → find TYPE_ACTIVITY_OPPORTUNITY
-      //      rows → derive real avg-stages-per-contact (instead of a hardcoded multiplier).
-      //   3) Project total rows = uniqueContacts × avgStages.
-      // The first activity row is logged for shape verification (one-time, on each estimate call).
-      const SAMPLE_CONTACTS = Math.min(Number(filters?.sampleContacts) || 5, 25);
-      let totalOpps = 0;
-      const allOpps = [];
-      let searchAfter = null;
-      let pageNum = 0;
-      while (true) {
-        pageNum++;
-        const result = await ghlService.searchOpportunities(locationId, {
-          limit: 100,
-          searchAfter: searchAfter || undefined
-        });
-        const ops = result.opportunities || [];
-        allOpps.push(...ops);
-        totalOpps += ops.length;
-        if (ops.length < 100 || !result.searchAfter || result.searchAfter.length === 0) break;
-        searchAfter = result.searchAfter;
-        if (pageNum > 500) break; // safety cap (~50k opportunities)
-      }
-      const uniqueContactIds = [...new Set(allOpps.map(o => o.contactId).filter(Boolean))];
+      // Opportunity Stage History (gated custom build) — full walk:
+      //   1) Walk all opportunities → group by contact, snapshot opportunity custom fields.
+      //   2) Build pipelines + custom-field name maps (one call each).
+      //   3) Per contact: walk full message timeline, find TYPE_ACTIVITY_OPPORTUNITY rows,
+      //      derive [enteredAt, leftAt] window per opportunity stage.
+      //   4) Bucket conversation messages (SMS/Email/Webchat/Call) into each stage window.
+      //   5) Per contact: pull custom field snapshot (one call).
+      //   6) For each (opportunity × stage) emit one row → store all rows in SpecialExport
+      //      (chunked, `messages` field — reuses the specialTabMessages chunk reader in Lambda).
+      // Transcripts are deferred to a Phase-2 pass (call message IDs are stored for later resolution).
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const THROTTLE_MS = 120;
 
-      // Sample N contacts: walk their activity log and count TYPE_ACTIVITY_OPPORTUNITY rows.
-      const sampleIds = uniqueContactIds.slice(0, SAMPLE_CONTACTS);
-      let stageEventsInSample = 0;
-      let firstActivityRow = null;
-      const sampleStartedAt = Date.now();
-
-      for (const cId of sampleIds) {
-        let cursor = null;
-        let pages = 0;
-        while (true) {
-          pages++;
-          const result = await ghlService.exportMessages(locationId, {
-            contactId: cId,
-            startDate: new Date(0).toISOString(),
-            endDate: new Date().toISOString(),
-            limit: 100,
-            cursor: cursor || undefined
-          });
-          const msgs = result.messages || [];
-          for (const m of msgs) {
-            const t = String(m.type || m.messageType || '').toUpperCase();
-            if (t === 'TYPE_ACTIVITY_OPPORTUNITY') {
-              stageEventsInSample++;
-              if (!firstActivityRow) firstActivityRow = m;
-            }
+      const withRetry = async (fn, maxRetries = 4) => {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            return await fn();
+          } catch (err) {
+            const status = err.response?.status;
+            const transient = status === 429 || (status >= 500 && status < 600);
+            if (transient && attempt < maxRetries) {
+              const delay = Math.min(30000, Math.pow(2, attempt) * 1500);
+              logger.warn('Transient error walking opportunity stages, retrying', { status, attempt: attempt + 1, delay });
+              await sleep(delay);
+            } else throw err;
           }
-          if (msgs.length < 100 || !result.nextPage) break;
-          cursor = result.lastMessageId;
-          if (pages > 20) break; // per-contact safety
+        }
+      };
+
+      // Step 1: pipelines (stage id → stage name + pipeline name)
+      const pipelinesResp = await withRetry(() => ghlService.getPipelines(locationId));
+      const stageMap = {};
+      for (const p of (pipelinesResp.pipelines || [])) {
+        for (const s of (p.stages || [])) {
+          stageMap[s.id] = { stageName: s.name, pipelineId: p.id, pipelineName: p.name };
         }
       }
 
-      const avgStagesPerContact = sampleIds.length > 0 ? stageEventsInSample / sampleIds.length : 0;
-      // Fallback to 3 if sample produced nothing (e.g. opportunities exist but never moved stages).
-      const effectiveAvg = avgStagesPerContact > 0 ? avgStagesPerContact : 3;
-      counts.opportunityStageHistory = Math.round(uniqueContactIds.length * effectiveAvg);
+      // Step 2: custom field schemas (separate calls for contact + opportunity models)
+      const [cfContactResp, cfOppResp] = await Promise.all([
+        withRetry(() => ghlService.getCustomFields(locationId, 'contact')).catch(() => ({ customFields: [] })),
+        withRetry(() => ghlService.getCustomFields(locationId, 'opportunity')).catch(() => ({ customFields: [] }))
+      ]);
+      const contactCfMap = {};
+      for (const f of (cfContactResp.customFields || [])) contactCfMap[f.id] = f.name;
+      const oppCfMap = {};
+      for (const f of (cfOppResp.customFields || [])) oppCfMap[f.id] = f.name;
 
-      logger.info('Opportunity Stage History — feasibility probe', {
-        locationId,
-        opportunities: totalOpps,
-        uniqueContacts: uniqueContactIds.length,
-        sampleSize: sampleIds.length,
-        stageEventsInSample,
-        avgStagesPerContact: avgStagesPerContact.toFixed(2),
-        usedFallback: avgStagesPerContact === 0,
-        projectedRows: counts.opportunityStageHistory,
-        sampleElapsedMs: Date.now() - sampleStartedAt
-      });
-      if (firstActivityRow) {
-        logger.info('Opportunity Stage History — sample activity row (shape verification)', {
-          row: firstActivityRow
-        });
-      } else if (sampleIds.length > 0) {
-        logger.warn('Opportunity Stage History — no TYPE_ACTIVITY_OPPORTUNITY rows in sample. Either contacts never moved stages, or type string differs.');
+      // Step 3: walk all opportunities (cursor pagination)
+      const allOpps = [];
+      let oppCursor = null;
+      let oppPage = 0;
+      while (true) {
+        oppPage++;
+        const r = await withRetry(() => ghlService.searchOpportunities(locationId, {
+          limit: 100,
+          searchAfter: oppCursor || undefined
+        }));
+        const ops = r.opportunities || [];
+        allOpps.push(...ops);
+        if (ops.length < 100 || !r.searchAfter || r.searchAfter.length === 0) break;
+        oppCursor = r.searchAfter;
+        if (oppPage > 500) break;
+        await sleep(THROTTLE_MS);
       }
+
+      // Map: opportunityId → { ...opp, contactId, customFieldsResolved }
+      const oppById = {};
+      for (const o of allOpps) {
+        const cfResolved = {};
+        for (const cf of (o.customFields || [])) {
+          const name = oppCfMap[cf.id] || cf.id;
+          cfResolved[name] = cf.fieldValue ?? cf.value ?? cf.fieldValueString ?? '';
+        }
+        oppById[o.id] = { ...o, customFieldsResolved: cfResolved };
+      }
+
+      // Group opportunities by contactId so we walk each contact's message timeline once.
+      const oppsByContact = {};
+      for (const o of allOpps) {
+        if (!o.contactId) continue;
+        (oppsByContact[o.contactId] ||= []).push(o);
+      }
+
+      // Helpers — pulled out to keep the per-contact loop readable.
+      const isActivityOpportunity = (m) => String(m.type || m.messageType || '').toUpperCase() === 'TYPE_ACTIVITY_OPPORTUNITY';
+      // Activity-row shape from /conversations/messages/export is non-canonical across locations;
+      // be defensive and try multiple known paths for opportunityId + oldStage + newStage.
+      const extractStageEvent = (m) => {
+        const info = m.info || m.meta || (() => { try { return typeof m.body === 'string' ? JSON.parse(m.body) : m.body; } catch { return null; } })() || {};
+        const oppId = info.id || info.opportunityId || info.opportunity_id || m.opportunityId || null;
+        const stage = info.stage || info.stages || {};
+        const oldStageId = stage.oldStageId || stage.from || info.oldStageId || info.previousStageId || null;
+        const newStageId = stage.newStageId || stage.to || info.newStageId || info.currentStageId || null;
+        const oldStageName = stage.oldStageName || stage.fromName || info.oldStageName || (oldStageId && stageMap[oldStageId]?.stageName) || null;
+        const newStageName = stage.newStageName || stage.toName || info.newStageName || (newStageId && stageMap[newStageId]?.stageName) || null;
+        return { oppId, oldStageId, newStageId, oldStageName, newStageName, dateAdded: m.dateAdded || m.dateUpdated || null };
+      };
+
+      const isConversationMsg = (m) => {
+        const t = String(m.type || m.messageType || '').toUpperCase();
+        return t.startsWith('TYPE_SMS') || t === 'TYPE_EMAIL' || t === 'TYPE_LIVE_CHAT' || t === 'TYPE_WEBCHAT' || t === 'TYPE_CALL' || t === 'TYPE_WHATSAPP' || t === 'TYPE_FACEBOOK' || t === 'TYPE_INSTAGRAM';
+      };
+      const isCallMsg = (m) => String(m.type || m.messageType || '').toUpperCase() === 'TYPE_CALL';
+
+      const allRows = [];
+      let firstActivityRowLogged = false;
+
+      // Step 4: per-contact walk. Two separate endpoint paths because GHL splits message types:
+      //   • Activity messages (TYPE_ACTIVITY_OPPORTUNITY) → ONLY come from per-conversation
+      //     GET /conversations/{convId}/messages with type filter.
+      //   • Channel messages (SMS, Email, WhatsApp, Facebook, Instagram) → come from
+      //     GET /conversations/messages/export?contactId (one call per contact, paginated).
+      //
+      // So per contact:
+      //   a) list their conversations (for the activity-message pass)
+      //   b) for each conversation, fetch ONLY TYPE_ACTIVITY_OPPORTUNITY (server-side filter
+      //      keeps payload tiny — these are sparse compared to chat)
+      //   c) one export call per contact for all channel messages
+      //   d) merge into one timeline, split into activities + channel rows for processing
+      for (const [contactId, opps] of Object.entries(oppsByContact)) {
+        // a) Find conversations for this contact
+        const convosForContact = [];
+        let convoCursor = null;
+        let convoPages = 0;
+        while (true) {
+          convoPages++;
+          const convoResult = await withRetry(() => ghlService.searchConversations(locationId, {
+            contactId,
+            limit: 100,
+            startAfterDate: convoCursor || undefined
+          }));
+          const convos = convoResult.conversations || [];
+          convosForContact.push(...convos);
+          if (convos.length < 100) break;
+          const lastConvo = convos[convos.length - 1];
+          convoCursor = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
+          if (convoPages > 20) break;
+          await sleep(THROTTLE_MS);
+        }
+
+        // b) Per-conversation: pull ONLY activity-opportunity rows (server-side type filter)
+        const activityMsgs = [];
+        for (const convo of convosForContact) {
+          const convId = convo.id;
+          let msgCursor = null;
+          let msgPages = 0;
+          const PAGE_SIZE = 100;
+          while (true) {
+            msgPages++;
+            const msgOptions = { limit: PAGE_SIZE, type: 'TYPE_ACTIVITY_OPPORTUNITY' };
+            if (msgCursor) msgOptions.lastMessageId = msgCursor;
+            const r = await withRetry(() => ghlService.getMessages(locationId, convId, msgOptions));
+            const wrapper = r.messages || {};
+            const pageMsgs = wrapper.messages || [];
+            activityMsgs.push(...pageMsgs.map(m => ({ ...m, conversationId: convId })));
+            if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
+            msgCursor = wrapper.lastMessageId;
+            if (msgPages > 20) break; // activities are sparse — 20 pages × 100 = 2k events safety cap
+            await sleep(THROTTLE_MS);
+          }
+          await sleep(THROTTLE_MS);
+        }
+
+        // c) One export call per contact for all channel messages (SMS/Email/WhatsApp/FB/IG)
+        const channelMsgs = [];
+        let exportCursor = null;
+        let exportPages = 0;
+        while (true) {
+          exportPages++;
+          const r = await withRetry(() => ghlService.exportMessages(locationId, {
+            contactId,
+            startDate: new Date(0).toISOString(),
+            endDate: new Date().toISOString(),
+            limit: 100,
+            cursor: exportCursor || undefined
+          }));
+          const msgs = r.messages || [];
+          channelMsgs.push(...msgs);
+          if (msgs.length < 100 || !r.nextPage) break;
+          exportCursor = r.lastMessageId;
+          if (exportPages > 50) break;
+          await sleep(THROTTLE_MS);
+        }
+
+        // d) Merge for downstream code that treats `contactMsgs` as the unified timeline
+        const contactMsgs = [...activityMsgs, ...channelMsgs];
+
+        // Pull custom field snapshot for this contact (best-effort)
+        let contactCfResolved = {};
+        try {
+          const contactDetail = await withRetry(() => ghlService.getContact ? ghlService.getContact(locationId, contactId) : Promise.resolve(null));
+          for (const cf of (contactDetail?.contact?.customFields || contactDetail?.customFields || [])) {
+            const name = contactCfMap[cf.id] || cf.id;
+            contactCfResolved[name] = cf.value ?? cf.fieldValue ?? '';
+          }
+        } catch (e) {
+          // non-fatal — leave empty
+        }
+        await sleep(THROTTLE_MS);
+
+        // Group stage transitions per opportunity from activity rows.
+        const stageEventsByOpp = {};
+        for (const m of contactMsgs) {
+          if (!isActivityOpportunity(m)) continue;
+          const ev = extractStageEvent(m);
+          if (!ev.oppId) continue;
+          (stageEventsByOpp[ev.oppId] ||= []).push(ev);
+          if (!firstActivityRowLogged) {
+            logger.info('Opportunity Stage History — sample TYPE_ACTIVITY_OPPORTUNITY row', { row: m, extracted: ev });
+            firstActivityRowLogged = true;
+          }
+        }
+
+        // Pre-sort all conversation messages once for efficient window slicing.
+        const convoMsgs = contactMsgs
+          .filter(isConversationMsg)
+          .map(m => ({ ...m, _ts: m.dateAdded ? new Date(m.dateAdded).getTime() : 0 }))
+          .sort((a, b) => a._ts - b._ts);
+
+        const sliceWindow = (fromMs, toMs) => {
+          return convoMsgs
+            .filter(m => m._ts >= fromMs && (toMs ? m._ts < toMs : true))
+            .map(m => ({
+              dateAdded: m.dateAdded,
+              type: m.type || m.messageType,
+              direction: m.direction || (m.type === 'TYPE_EMAIL' && m.meta?.email?.direction) || '',
+              channel: m.channel || m.subType || '',
+              body: m.body || m.message || m.meta?.email?.subject || '',
+              from: m.meta?.email?.from || m.from || '',
+              to: (m.meta?.email?.to || []).join('; ') || m.to || m.phone || '',
+              messageId: m.id,
+              conversationId: m.conversationId || '',
+              isCall: isCallMsg(m)
+            }));
+        };
+
+        // Build a row per (opportunity, stage_session). For opps with no activity history,
+        // emit one row representing the current stage from opp.createdAt → now.
+        for (const opp of opps) {
+          const events = (stageEventsByOpp[opp.id] || []).sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));
+          if (events.length === 0) {
+            const enteredAt = opp.createdAt || opp.dateAdded || null;
+            const stageId = opp.pipelineStageId || opp.stageId || null;
+            const stageInfo = stageId ? stageMap[stageId] : null;
+            const fromMs = enteredAt ? new Date(enteredAt).getTime() : 0;
+            allRows.push({
+              contactId,
+              opportunityId: opp.id,
+              pipelineId: opp.pipelineId || stageInfo?.pipelineId || null,
+              pipelineName: stageInfo?.pipelineName || null,
+              stageId,
+              stageName: stageInfo?.stageName || null,
+              enteredAt,
+              leftAt: null,
+              durationSeconds: enteredAt ? Math.round((Date.now() - new Date(enteredAt).getTime()) / 1000) : null,
+              messages: sliceWindow(fromMs, null),
+              callMessageIds: sliceWindow(fromMs, null).filter(m => m.isCall).map(m => m.messageId),
+              contactCustomFields: contactCfResolved,
+              opportunityCustomFields: oppById[opp.id]?.customFieldsResolved || {},
+              currentStage: true
+            });
+            continue;
+          }
+
+          // First entry timestamp: prefer opp.createdAt as the entry into the first observed stage.
+          let entryMs = opp.createdAt ? new Date(opp.createdAt).getTime() : new Date(events[0].dateAdded).getTime();
+          let currentStageId = events[0].oldStageId || opp.pipelineStageId || null;
+          let currentStageName = events[0].oldStageName || (currentStageId && stageMap[currentStageId]?.stageName) || null;
+
+          for (const ev of events) {
+            const leftMs = new Date(ev.dateAdded).getTime();
+            const stageInfo = currentStageId ? stageMap[currentStageId] : null;
+            allRows.push({
+              contactId,
+              opportunityId: opp.id,
+              pipelineId: opp.pipelineId || stageInfo?.pipelineId || null,
+              pipelineName: stageInfo?.pipelineName || null,
+              stageId: currentStageId,
+              stageName: currentStageName || stageInfo?.stageName || null,
+              enteredAt: new Date(entryMs).toISOString(),
+              leftAt: new Date(leftMs).toISOString(),
+              durationSeconds: Math.round((leftMs - entryMs) / 1000),
+              messages: sliceWindow(entryMs, leftMs),
+              callMessageIds: sliceWindow(entryMs, leftMs).filter(m => m.isCall).map(m => m.messageId),
+              contactCustomFields: contactCfResolved,
+              opportunityCustomFields: oppById[opp.id]?.customFieldsResolved || {},
+              currentStage: false
+            });
+            entryMs = leftMs;
+            currentStageId = ev.newStageId;
+            currentStageName = ev.newStageName || (currentStageId && stageMap[currentStageId]?.stageName) || null;
+          }
+
+          // Current (open) stage row — after the last transition, still in progress.
+          const stageInfo = currentStageId ? stageMap[currentStageId] : null;
+          allRows.push({
+            contactId,
+            opportunityId: opp.id,
+            pipelineId: opp.pipelineId || stageInfo?.pipelineId || null,
+            pipelineName: stageInfo?.pipelineName || null,
+            stageId: currentStageId,
+            stageName: currentStageName || stageInfo?.stageName || null,
+            enteredAt: new Date(entryMs).toISOString(),
+            leftAt: null,
+            durationSeconds: Math.round((Date.now() - entryMs) / 1000),
+            messages: sliceWindow(entryMs, null),
+            callMessageIds: sliceWindow(entryMs, null).filter(m => m.isCall).map(m => m.messageId),
+            contactCustomFields: contactCfResolved,
+            opportunityCustomFields: oppById[opp.id]?.customFieldsResolved || {},
+            currentStage: true
+          });
+        }
+      }
+
+      counts.opportunityStageHistory = allRows.length;
+
+      logger.info('Opportunity Stage History — walk complete', {
+        locationId,
+        opportunities: allOpps.length,
+        contactsWalked: Object.keys(oppsByContact).length,
+        totalRows: allRows.length
+      });
+
+      if (allRows.length === 0) {
+        return res.status(400).json({ success: false, error: 'No stage transitions found for this sub-account.' });
+      }
+
+      // Chunked SpecialExport — Lambda reads the `messages` field via the existing specialTabMessages chunk path.
+      const CHUNK_SIZE = 5000;
+      const totalChunks = Math.max(1, Math.ceil(allRows.length / CHUNK_SIZE));
+      const firstChunk = allRows.slice(0, CHUNK_SIZE);
+      const specialExport = await SpecialExport.create({
+        locationId,
+        filters: { type: 'opportunityStageHistory' },
+        messages: firstChunk,
+        totalMessages: allRows.length,
+        totalConversations: Object.keys(oppsByContact).length,
+        chunkIndex: 0,
+        totalChunks,
+        status: 'ready'
+      });
+      if (totalChunks > 1) {
+        const chunkDocs = [];
+        for (let ci = 1; ci < totalChunks; ci++) {
+          chunkDocs.push({
+            locationId,
+            filters: { type: 'opportunityStageHistory' },
+            messages: allRows.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
+            totalMessages: allRows.length,
+            totalConversations: Object.keys(oppsByContact).length,
+            groupId: specialExport._id,
+            chunkIndex: ci,
+            totalChunks,
+            status: 'ready',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+        await SpecialExport.insertMany(chunkDocs);
+        logger.info('Opportunity Stage History — chunks stored', { totalChunks, totalRows: allRows.length });
+      }
+
+      // Build estimate response with the SpecialExport ref for the charge-and-export step.
+      const computedEstimate = billingService.calculateEstimate({ opportunityStageHistory: allRows.length });
+      return res.json({
+        success: true,
+        data: {
+          estimate: computedEstimate,
+          specialExportId: specialExport._id
+        }
+      });
 
     } else if (exportType === 'specialTabMessages') {
       // Special Messages: fetch ALL conversations, then fetch + store messages matching the type(s)
@@ -897,13 +1188,6 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
           error: 'Opportunity Stage History export is not enabled for this sub-account.'
         });
       }
-      // Safety stop: the data-walker isn't wired into the Lambda yet. Estimate flow works
-      // (used for feasibility verification), but blocking charge until the worker lands so
-      // we don't bill for a job that produces nothing.
-      return res.status(501).json({
-        success: false,
-        error: 'Opportunity Stage History export pipeline is in final integration — estimates work for sizing but exports are not yet enabled. Remove this guard in billing.js once the Lambda walker is deployed.'
-      });
     }
 
     // Validate email is provided (required for notification)
@@ -1068,6 +1352,11 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         // Use estimatedTotal from frontend (already counted during estimate — heavy task, do not re-walk)
         totalItems = filters?.estimatedTotal || 0;
 
+      } else if (exportType === 'opportunityStageHistory') {
+        // Pre-fetched in the dedicated walker block below; trust the frontend estimate count.
+        totalItems = filters?.estimatedTotal || 0;
+        counts.opportunityStageHistory = totalItems;
+
       } else {
         // Use estimatedTotal from the estimate step if available (avoids GHL returning a different count)
         if (filters?.estimatedTotal) {
@@ -1143,6 +1432,12 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Call transcriptions export' }];
+    } else if (exportType === 'opportunityStageHistory') {
+      // Opportunity Stage History: flat $0.10/row, single meter charge, no discount tier.
+      const unitPrice = 0.10;
+      const finalAmount = totalItems * unitPrice;
+      estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
+      meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Opportunity stage history export' }];
     } else {
       // Step 3: Calculate pricing with actual GHL meter prices
       estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
@@ -1304,8 +1599,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
     await transaction.save();
 
     // Step 9a: Link the SpecialExport to this job.
-    // For specialTabMessages it was created during /estimate; for callTranscriptions it was created in Step 7a (post-charge).
-    if (['specialTabMessages', 'callTranscriptions'].includes(exportType) && filters?.specialExportId) {
+    // For specialTabMessages and opportunityStageHistory it was created during /estimate; for callTranscriptions it was created in Step 7a (post-charge).
+    if (['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory'].includes(exportType) && filters?.specialExportId) {
       try {
         await SpecialExport.findByIdAndUpdate(filters.specialExportId, {
           exportJobId: exportJob._id

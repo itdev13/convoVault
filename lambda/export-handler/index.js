@@ -1129,6 +1129,45 @@ function callLogsToCSV(callLogs, includeHeader = true) {
 /**
  * Convert live chat messages to CSV format
  */
+/**
+ * Opportunity Stage History — one row per (opportunity × stage_session).
+ * Each input record is a flat row built by the billing-route walker.
+ * Messages + custom fields are JSON-encoded into single CSV cells so the
+ * row count stays one-per-stage. Power users open the JSON cells in Excel
+ * or pipe through jq for richer analysis.
+ */
+function opportunityStageHistoryToCSV(rows, includeHeader = true) {
+  const header = includeHeader
+    ? 'ContactID,OpportunityID,PipelineName,StageName,EnteredAt,LeftAt,DurationSeconds,CurrentStage,InboundMessageCount,OutboundMessageCount,CallMessageCount,MessagesJSON,ContactCustomFieldsJSON,OpportunityCustomFieldsJSON,CallMessageIDs\n'
+    : '';
+
+  const csvRows = rows.map(r => {
+    const msgs = Array.isArray(r.messages) ? r.messages : [];
+    const inbound = msgs.filter(m => String(m.direction || '').toLowerCase() === 'inbound').length;
+    const outbound = msgs.filter(m => String(m.direction || '').toLowerCase() === 'outbound').length;
+    const calls = msgs.filter(m => m.isCall).length;
+    return [
+      escapeCsv(r.contactId || ''),
+      escapeCsv(r.opportunityId || ''),
+      escapeCsv(r.pipelineName || ''),
+      escapeCsv(r.stageName || ''),
+      escapeCsv(r.enteredAt || ''),
+      escapeCsv(r.leftAt || ''),
+      escapeCsv(r.durationSeconds != null ? String(r.durationSeconds) : ''),
+      escapeCsv(r.currentStage ? 'true' : 'false'),
+      escapeCsv(String(inbound)),
+      escapeCsv(String(outbound)),
+      escapeCsv(String(calls)),
+      escapeCsv(JSON.stringify(msgs)),
+      escapeCsv(JSON.stringify(r.contactCustomFields || {})),
+      escapeCsv(JSON.stringify(r.opportunityCustomFields || {})),
+      escapeCsv((r.callMessageIds || []).join('; '))
+    ].join(',');
+  }).join('\n');
+
+  return header + csvRows + (csvRows.length > 0 ? '\n' : '');
+}
+
 function specialMessagesToCSV(messages, includeHeader = true) {
   const header = includeHeader
     ? 'Date,ConversationID,ContactID,MessageType,Direction,Status,From,To,Message,Attachments,Source\n'
@@ -1224,6 +1263,7 @@ async function sendEmail(email, downloadUrl, jobDetails) {
         jobDetails.exportType === 'tags' ? 'Tags' :
         jobDetails.exportType === 'specialTabMessages' ? 'Special Messages' :
         jobDetails.exportType === 'callTranscriptions' ? 'Call Transcriptions' :
+        jobDetails.exportType === 'opportunityStageHistory' ? 'Opportunity Stage History' :
         jobDetails.exportType === 'contacts' ? 'Contacts' : 'Messages'
       } Export is Ready`,
       htmlContent: `
@@ -1983,7 +2023,7 @@ exports.handler = async (event, context) => {
       cursor = contactsCursor ? JSON.stringify(contactsCursor) : null;
       hasMoreData = !!cursor;
 
-    } else if (job.exportType === 'specialTabMessages' || job.exportType === 'callTranscriptions') {
+    } else if (job.exportType === 'specialTabMessages' || job.exportType === 'callTranscriptions' || job.exportType === 'opportunityStageHistory') {
       // === SPECIAL MESSAGES / CALL TRANSCRIPTIONS: Read pre-fetched records from chunked specialexports ===
       // Chunk 0 is the "root" doc (has exportJobId). Remaining chunks share groupId = root._id.
       // Each chunk holds up to CHUNK_SIZE (5000) messages, matching BATCH_SIZE so one invocation = one chunk.
@@ -2166,6 +2206,8 @@ exports.handler = async (event, context) => {
         content = tagsToCSV(records, isFirstContent);
       } else if (job.exportType === 'specialTabMessages') {
         content = specialMessagesToCSV(records, isFirstContent);
+      } else if (job.exportType === 'opportunityStageHistory') {
+        content = opportunityStageHistoryToCSV(records, isFirstContent);
       } else if (job.exportType === 'callTranscriptions') {
         content = callTranscriptionsToCSV(records, isFirstContent);
       } else if (job.exportType === 'contacts') {
