@@ -371,6 +371,26 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
       const THROTTLE_MS = 120;
 
+      // End-to-end logging for the OSH (Opportunity Stage History) flow. Tag every line with [OSH]
+      // so this single custom-build location's trace can be greppped in production logs without
+      // dragging in unrelated export-type noise.
+      const oshRunId = `osh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const oshStart = Date.now();
+      const oshLog = (msg, meta = {}) => logger.info(`[OSH] ${msg}`, {
+        runId: oshRunId,
+        locationId,
+        elapsedMs: Date.now() - oshStart,
+        ...meta
+      });
+      const oshWarn = (msg, meta = {}) => logger.warn(`[OSH] ${msg}`, {
+        runId: oshRunId,
+        locationId,
+        elapsedMs: Date.now() - oshStart,
+        ...meta
+      });
+      const oshSample = (arr, n = 1) => Array.isArray(arr) ? arr.slice(0, n) : arr;
+      oshLog('flow started', { filters });
+
       const withRetry = async (fn, maxRetries = 4) => {
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
           try {
@@ -388,6 +408,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       };
 
       // Step 1: pipelines (stage id → stage name + pipeline name)
+      oshLog('step1.pipelines: request', { endpoint: 'GET /opportunities/pipelines' });
       const pipelinesResp = await withRetry(() => ghlService.getPipelines(locationId));
       const stageMap = {};
       for (const p of (pipelinesResp.pipelines || [])) {
@@ -395,34 +416,80 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           stageMap[s.id] = { stageName: s.name, pipelineId: p.id, pipelineName: p.name };
         }
       }
+      oshLog('step1.pipelines: response', {
+        pipelineCount: (pipelinesResp.pipelines || []).length,
+        totalStages: Object.keys(stageMap).length,
+        samplePipeline: oshSample((pipelinesResp.pipelines || []).map(p => ({
+          id: p.id,
+          name: p.name,
+          stageCount: (p.stages || []).length
+        })), 3)
+      });
 
       // Step 2: custom field schemas (separate calls for contact + opportunity models)
+      oshLog('step2.customFields: request', {
+        endpoints: [
+          'GET /locations/{locationId}/customFields?model=contact',
+          'GET /locations/{locationId}/customFields?model=opportunity'
+        ]
+      });
       const [cfContactResp, cfOppResp] = await Promise.all([
-        withRetry(() => ghlService.getCustomFields(locationId, 'contact')).catch(() => ({ customFields: [] })),
-        withRetry(() => ghlService.getCustomFields(locationId, 'opportunity')).catch(() => ({ customFields: [] }))
+        withRetry(() => ghlService.getCustomFields(locationId, 'contact')).catch((e) => {
+          oshWarn('step2.customFields: contact fetch failed (non-fatal)', { error: e.message, status: e.response?.status });
+          return { customFields: [] };
+        }),
+        withRetry(() => ghlService.getCustomFields(locationId, 'opportunity')).catch((e) => {
+          oshWarn('step2.customFields: opportunity fetch failed (non-fatal)', { error: e.message, status: e.response?.status });
+          return { customFields: [] };
+        })
       ]);
       const contactCfMap = {};
       for (const f of (cfContactResp.customFields || [])) contactCfMap[f.id] = f.name;
       const oppCfMap = {};
       for (const f of (cfOppResp.customFields || [])) oppCfMap[f.id] = f.name;
+      oshLog('step2.customFields: response', {
+        contactCustomFieldCount: Object.keys(contactCfMap).length,
+        opportunityCustomFieldCount: Object.keys(oppCfMap).length,
+        sampleContactFields: oshSample(Object.values(contactCfMap), 5),
+        sampleOpportunityFields: oshSample(Object.values(oppCfMap), 5)
+      });
 
       // Step 3: walk all opportunities (cursor pagination)
+      oshLog('step3.opportunities: walk start', { endpoint: 'POST /opportunities/search', pageSize: 100, maxPages: 500 });
       const allOpps = [];
       let oppCursor = null;
       let oppPage = 0;
       while (true) {
         oppPage++;
+        oshLog('step3.opportunities: page request', { page: oppPage, cursor: oppCursor, limit: 100 });
         const r = await withRetry(() => ghlService.searchOpportunities(locationId, {
           limit: 100,
           searchAfter: oppCursor || undefined
         }));
         const ops = r.opportunities || [];
         allOpps.push(...ops);
+        oshLog('step3.opportunities: page response', {
+          page: oppPage,
+          returned: ops.length,
+          runningTotal: allOpps.length,
+          nextCursor: r.searchAfter || null,
+          sampleOpp: oshSample(ops.map(o => ({
+            id: o.id,
+            contactId: o.contactId,
+            pipelineId: o.pipelineId,
+            pipelineStageId: o.pipelineStageId,
+            createdAt: o.createdAt
+          })), 1)
+        });
         if (ops.length < 100 || !r.searchAfter || r.searchAfter.length === 0) break;
         oppCursor = r.searchAfter;
-        if (oppPage > 500) break;
+        if (oppPage > 500) {
+          oshWarn('step3.opportunities: hit hard page cap (500), truncating', { totalCollected: allOpps.length });
+          break;
+        }
         await sleep(THROTTLE_MS);
       }
+      oshLog('step3.opportunities: walk complete', { totalOpportunities: allOpps.length, pagesWalked: oppPage });
 
       // Map: opportunityId → { ...opp, contactId, customFieldsResolved }
       const oppById = {};
@@ -437,10 +504,18 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
       // Group opportunities by contactId so we walk each contact's message timeline once.
       const oppsByContact = {};
+      let oppsWithoutContact = 0;
       for (const o of allOpps) {
-        if (!o.contactId) continue;
+        if (!o.contactId) { oppsWithoutContact++; continue; }
         (oppsByContact[o.contactId] ||= []).push(o);
       }
+      oshLog('step3.opportunities: grouped by contact', {
+        uniqueContacts: Object.keys(oppsByContact).length,
+        opportunitiesSkippedNoContact: oppsWithoutContact,
+        avgOppsPerContact: Object.keys(oppsByContact).length
+          ? +(allOpps.length / Object.keys(oppsByContact).length).toFixed(2)
+          : 0
+      });
 
       // Helpers — pulled out to keep the per-contact loop readable.
       const isActivityOpportunity = (m) => String(m.type || m.messageType || '').toUpperCase() === 'TYPE_ACTIVITY_OPPORTUNITY';
@@ -478,13 +553,27 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       //      keeps payload tiny — these are sparse compared to chat)
       //   c) one export call per contact for all channel messages
       //   d) merge into one timeline, split into activities + channel rows for processing
+      let contactIndex = 0;
+      const contactsTotal = Object.keys(oppsByContact).length;
       for (const [contactId, opps] of Object.entries(oppsByContact)) {
+        contactIndex++;
+        const contactStart = Date.now();
+        oshLog('step4.contact: start', {
+          contactIndex,
+          contactsTotal,
+          contactId,
+          opportunityCount: opps.length,
+          opportunityIds: opps.map(o => o.id)
+        });
+
         // a) Find conversations for this contact
+        oshLog('step4a.conversations: walk start', { contactId, endpoint: 'GET /conversations/search', pageSize: 100, maxPages: 20 });
         const convosForContact = [];
         let convoCursor = null;
         let convoPages = 0;
         while (true) {
           convoPages++;
+          oshLog('step4a.conversations: page request', { contactId, page: convoPages, startAfterDate: convoCursor });
           const convoResult = await withRetry(() => ghlService.searchConversations(locationId, {
             contactId,
             limit: 100,
@@ -492,42 +581,86 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           }));
           const convos = convoResult.conversations || [];
           convosForContact.push(...convos);
+          oshLog('step4a.conversations: page response', {
+            contactId,
+            page: convoPages,
+            returned: convos.length,
+            runningTotal: convosForContact.length,
+            sampleConvo: oshSample(convos.map(c => ({
+              id: c.id,
+              lastMessageDate: c.lastMessageDate || c.dateUpdated || c.dateAdded
+            })), 1)
+          });
           if (convos.length < 100) break;
           const lastConvo = convos[convos.length - 1];
           convoCursor = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
-          if (convoPages > 20) break;
+          if (convoPages > 20) {
+            oshWarn('step4a.conversations: hit hard page cap (20)', { contactId, totalConvosCollected: convosForContact.length });
+            break;
+          }
           await sleep(THROTTLE_MS);
         }
+        oshLog('step4a.conversations: walk complete', { contactId, totalConversations: convosForContact.length, pages: convoPages });
 
         // b) Per-conversation: pull ONLY activity-opportunity rows (server-side type filter)
+        oshLog('step4b.activityMessages: walk start', {
+          contactId,
+          endpoint: 'GET /conversations/{convId}/messages?type=TYPE_ACTIVITY_OPPORTUNITY',
+          conversationsToWalk: convosForContact.length
+        });
         const activityMsgs = [];
         for (const convo of convosForContact) {
           const convId = convo.id;
           let msgCursor = null;
           let msgPages = 0;
           const PAGE_SIZE = 100;
+          const before = activityMsgs.length;
           while (true) {
             msgPages++;
             const msgOptions = { limit: PAGE_SIZE, type: 'TYPE_ACTIVITY_OPPORTUNITY' };
             if (msgCursor) msgOptions.lastMessageId = msgCursor;
+            oshLog('step4b.activityMessages: page request', { contactId, conversationId: convId, page: msgPages, lastMessageId: msgCursor });
             const r = await withRetry(() => ghlService.getMessages(locationId, convId, msgOptions));
             const wrapper = r.messages || {};
             const pageMsgs = wrapper.messages || [];
             activityMsgs.push(...pageMsgs.map(m => ({ ...m, conversationId: convId })));
+            oshLog('step4b.activityMessages: page response', {
+              contactId,
+              conversationId: convId,
+              page: msgPages,
+              returned: pageMsgs.length,
+              hasNextPage: !!wrapper.nextPage,
+              sampleActivity: oshSample(pageMsgs.map(m => ({
+                id: m.id,
+                type: m.type || m.messageType,
+                dateAdded: m.dateAdded
+              })), 1)
+            });
             if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
             msgCursor = wrapper.lastMessageId;
-            if (msgPages > 20) break; // activities are sparse — 20 pages × 100 = 2k events safety cap
+            if (msgPages > 20) {
+              oshWarn('step4b.activityMessages: hit hard page cap (20)', { contactId, conversationId: convId, collected: activityMsgs.length - before });
+              break;
+            }
             await sleep(THROTTLE_MS);
           }
           await sleep(THROTTLE_MS);
         }
+        oshLog('step4b.activityMessages: walk complete', { contactId, totalActivityMessages: activityMsgs.length });
 
         // c) One export call per contact for all channel messages (SMS/Email/WhatsApp/FB/IG)
+        oshLog('step4c.channelMessages: walk start', {
+          contactId,
+          endpoint: 'GET /conversations/messages/export?contactId',
+          pageSize: 100,
+          maxPages: 50
+        });
         const channelMsgs = [];
         let exportCursor = null;
         let exportPages = 0;
         while (true) {
           exportPages++;
+          oshLog('step4c.channelMessages: page request', { contactId, page: exportPages, cursor: exportCursor });
           const r = await withRetry(() => ghlService.exportMessages(locationId, {
             contactId,
             startDate: new Date(0).toISOString(),
@@ -537,16 +670,41 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           }));
           const msgs = r.messages || [];
           channelMsgs.push(...msgs);
+          oshLog('step4c.channelMessages: page response', {
+            contactId,
+            page: exportPages,
+            returned: msgs.length,
+            runningTotal: channelMsgs.length,
+            hasNextPage: !!r.nextPage,
+            nextCursor: r.lastMessageId || null,
+            sampleMessage: oshSample(msgs.map(m => ({
+              id: m.id,
+              type: m.type || m.messageType,
+              direction: m.direction,
+              dateAdded: m.dateAdded
+            })), 1)
+          });
           if (msgs.length < 100 || !r.nextPage) break;
           exportCursor = r.lastMessageId;
-          if (exportPages > 50) break;
+          if (exportPages > 50) {
+            oshWarn('step4c.channelMessages: hit hard page cap (50)', { contactId, collected: channelMsgs.length });
+            break;
+          }
           await sleep(THROTTLE_MS);
         }
+        oshLog('step4c.channelMessages: walk complete', { contactId, totalChannelMessages: channelMsgs.length, pages: exportPages });
 
         // d) Merge for downstream code that treats `contactMsgs` as the unified timeline
         const contactMsgs = [...activityMsgs, ...channelMsgs];
+        oshLog('step4d.timeline: merged', {
+          contactId,
+          totalMessages: contactMsgs.length,
+          activityCount: activityMsgs.length,
+          channelCount: channelMsgs.length
+        });
 
         // Pull custom field snapshot for this contact (best-effort)
+        oshLog('step4e.contactSnapshot: request', { contactId, endpoint: 'GET /contacts/{contactId}' });
         let contactCfResolved = {};
         try {
           const contactDetail = await withRetry(() => ghlService.getContact ? ghlService.getContact(locationId, contactId) : Promise.resolve(null));
@@ -554,29 +712,52 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             const name = contactCfMap[cf.id] || cf.id;
             contactCfResolved[name] = cf.value ?? cf.fieldValue ?? '';
           }
+          oshLog('step4e.contactSnapshot: response', {
+            contactId,
+            customFieldCount: Object.keys(contactCfResolved).length,
+            sampleFieldNames: oshSample(Object.keys(contactCfResolved), 5)
+          });
         } catch (e) {
-          // non-fatal — leave empty
+          oshWarn('step4e.contactSnapshot: failed (non-fatal)', { contactId, error: e.message, status: e.response?.status });
         }
         await sleep(THROTTLE_MS);
 
         // Group stage transitions per opportunity from activity rows.
         const stageEventsByOpp = {};
+        let activityRowsScanned = 0;
+        let activityRowsSkippedNoOppId = 0;
         for (const m of contactMsgs) {
           if (!isActivityOpportunity(m)) continue;
+          activityRowsScanned++;
           const ev = extractStageEvent(m);
-          if (!ev.oppId) continue;
+          if (!ev.oppId) { activityRowsSkippedNoOppId++; continue; }
           (stageEventsByOpp[ev.oppId] ||= []).push(ev);
           if (!firstActivityRowLogged) {
             logger.info('Opportunity Stage History — sample TYPE_ACTIVITY_OPPORTUNITY row', { row: m, extracted: ev });
             firstActivityRowLogged = true;
           }
         }
+        oshLog('step5.stageEvents: extracted', {
+          contactId,
+          activityRowsScanned,
+          activityRowsSkippedNoOppId,
+          opportunitiesWithEvents: Object.keys(stageEventsByOpp).length,
+          eventCountByOpp: Object.fromEntries(
+            Object.entries(stageEventsByOpp).map(([k, v]) => [k, v.length])
+          )
+        });
 
         // Pre-sort all conversation messages once for efficient window slicing.
         const convoMsgs = contactMsgs
           .filter(isConversationMsg)
           .map(m => ({ ...m, _ts: m.dateAdded ? new Date(m.dateAdded).getTime() : 0 }))
           .sort((a, b) => a._ts - b._ts);
+        oshLog('step6.timeline: prepared for windowing', {
+          contactId,
+          conversationMessageCount: convoMsgs.length,
+          earliestMessage: convoMsgs.length ? new Date(convoMsgs[0]._ts).toISOString() : null,
+          latestMessage: convoMsgs.length ? new Date(convoMsgs[convoMsgs.length - 1]._ts).toISOString() : null
+        });
 
         const sliceWindow = (fromMs, toMs) => {
           return convoMsgs
@@ -597,6 +778,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
         // Build a row per (opportunity, stage_session). For opps with no activity history,
         // emit one row representing the current stage from opp.createdAt → now.
+        const rowsBeforeContact = allRows.length;
         for (const opp of opps) {
           const events = (stageEventsByOpp[opp.id] || []).sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));
           if (events.length === 0) {
@@ -671,9 +853,43 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             currentStage: true
           });
         }
+        oshLog('step4.contact: done', {
+          contactIndex,
+          contactsTotal,
+          contactId,
+          rowsEmitted: allRows.length - rowsBeforeContact,
+          runningTotalRows: allRows.length,
+          contactDurationMs: Date.now() - contactStart
+        });
       }
 
       counts.opportunityStageHistory = allRows.length;
+
+      // Summarize the row distribution so we can sanity-check the walk at a glance:
+      // rows with both enteredAt + leftAt (closed stage sessions) vs current-stage rows still open.
+      const closedRows = allRows.filter(r => r.leftAt).length;
+      const openRows = allRows.length - closedRows;
+      const rowsWithMessages = allRows.filter(r => Array.isArray(r.messages) && r.messages.length > 0).length;
+      const rowsWithCalls = allRows.filter(r => Array.isArray(r.callMessageIds) && r.callMessageIds.length > 0).length;
+      oshLog('step7.walk: complete', {
+        opportunities: allOpps.length,
+        contactsWalked: Object.keys(oppsByContact).length,
+        totalRows: allRows.length,
+        closedStageRows: closedRows,
+        openStageRows: openRows,
+        rowsWithAnyMessages: rowsWithMessages,
+        rowsWithCallMessages: rowsWithCalls,
+        sampleRow: oshSample(allRows.map(r => ({
+          contactId: r.contactId,
+          opportunityId: r.opportunityId,
+          stageName: r.stageName,
+          enteredAt: r.enteredAt,
+          leftAt: r.leftAt,
+          durationSeconds: r.durationSeconds,
+          messageCount: (r.messages || []).length,
+          callCount: (r.callMessageIds || []).length
+        })), 2)
+      });
 
       logger.info('Opportunity Stage History — walk complete', {
         locationId,
@@ -683,6 +899,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
 
       if (allRows.length === 0) {
+        oshWarn('step8.persist: aborting — no rows to persist', { reason: 'No stage transitions found for this sub-account.' });
         return res.status(400).json({ success: false, error: 'No stage transitions found for this sub-account.' });
       }
 
@@ -690,6 +907,12 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const CHUNK_SIZE = 5000;
       const totalChunks = Math.max(1, Math.ceil(allRows.length / CHUNK_SIZE));
       const firstChunk = allRows.slice(0, CHUNK_SIZE);
+      oshLog('step8.persist: writing first chunk', {
+        totalRows: allRows.length,
+        totalChunks,
+        chunkSize: CHUNK_SIZE,
+        firstChunkSize: firstChunk.length
+      });
       const specialExport = await SpecialExport.create({
         locationId,
         filters: { type: 'opportunityStageHistory' },
@@ -700,6 +923,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         totalChunks,
         status: 'ready'
       });
+      oshLog('step8.persist: first chunk written', { specialExportId: String(specialExport._id) });
       if (totalChunks > 1) {
         const chunkDocs = [];
         for (let ci = 1; ci < totalChunks; ci++) {
@@ -718,11 +942,17 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           });
         }
         await SpecialExport.insertMany(chunkDocs);
+        oshLog('step8.persist: extra chunks written', { extraChunks: chunkDocs.length, groupId: String(specialExport._id) });
         logger.info('Opportunity Stage History — chunks stored', { totalChunks, totalRows: allRows.length });
       }
 
       // Build estimate response with the SpecialExport ref for the charge-and-export step.
       const computedEstimate = billingService.calculateEstimate({ opportunityStageHistory: allRows.length });
+      oshLog('step9.response: estimate returned to client', {
+        specialExportId: String(specialExport._id),
+        estimate: computedEstimate,
+        totalDurationMs: Date.now() - oshStart
+      });
       return res.json({
         success: true,
         data: {
