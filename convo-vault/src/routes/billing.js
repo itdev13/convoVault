@@ -410,10 +410,13 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       // Step 1: pipelines (stage id → stage name + pipeline name)
       oshLog('step1.pipelines: request', { endpoint: 'GET /opportunities/pipelines' });
       const pipelinesResp = await withRetry(() => ghlService.getPipelines(locationId));
-      const stageMap = {};
+      const stageMap = {};                 // stageId → { stageName, pipelineId, pipelineName }
+      const stageIdByPipelineAndName = {}; // pipelineId → { stageName → stageId } (name-based lookup, scoped per pipeline because names can collide across pipelines)
       for (const p of (pipelinesResp.pipelines || [])) {
+        stageIdByPipelineAndName[p.id] = {};
         for (const s of (p.stages || [])) {
           stageMap[s.id] = { stageName: s.name, pipelineId: p.id, pipelineName: p.name };
+          stageIdByPipelineAndName[p.id][s.name] = s.id;
         }
       }
       oshLog('step1.pipelines: response', {
@@ -527,17 +530,77 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         if (t === 28 || t === '28') return true;
         return String(t || '').toUpperCase() === 'TYPE_ACTIVITY_OPPORTUNITY';
       };
-      // Activity-row shape from /conversations/messages/export is non-canonical across locations;
-      // be defensive and try multiple known paths for opportunityId + oldStage + newStage.
+      // Activity-row shape (verified against GHL DB records / webhook payloads):
+      //
+      //   STAGE CHANGE event:
+      //     activity: {
+      //       type: 'opportunity_stage_updated',
+      //       title: 'Opportunity updated',
+      //       data: {
+      //         id: <opportunityId>,
+      //         name: <opportunityName>,
+      //         status: 'open' | 'won' | 'lost' | ...,
+      //         pipeline: <pipelineName>,   // NAME, not id
+      //         stage: { oldStageName: <name>, newStageName: <name> }   // NAMES, not ids
+      //       }
+      //     }
+      //
+      //   CREATION event:
+      //     activity: {
+      //       type: 'opportunity_created',
+      //       data: { id, name, status, pipeline, stage: { newStageName } }   // no oldStageName
+      //     }
+      //
+      // Pipeline + stage are returned as names; we resolve back to IDs by name lookup via
+      // stageMap (built in step 1). The leaner shape from /conversations/{convId}/messages may
+      // omit `activity` entirely (still being verified) — legacy info/meta/body paths kept as
+      // a fallback so this works against either response.
       const extractStageEvent = (m) => {
+        // Preferred: structured activity field (webhook + DB shape)
+        const act = m.activity || null;
+        const actData = act?.data || null;
+        const actStage = actData?.stage || {};
+
+        // Legacy fallback: try info/meta/body-as-JSON
         const info = m.info || m.meta || (() => { try { return typeof m.body === 'string' ? JSON.parse(m.body) : m.body; } catch { return null; } })() || {};
-        const oppId = info.id || info.opportunityId || info.opportunity_id || m.opportunityId || null;
-        const stage = info.stage || info.stages || {};
-        const oldStageId = stage.oldStageId || stage.from || info.oldStageId || info.previousStageId || null;
-        const newStageId = stage.newStageId || stage.to || info.newStageId || info.currentStageId || null;
-        const oldStageName = stage.oldStageName || stage.fromName || info.oldStageName || (oldStageId && stageMap[oldStageId]?.stageName) || null;
-        const newStageName = stage.newStageName || stage.toName || info.newStageName || (newStageId && stageMap[newStageId]?.stageName) || null;
-        return { oppId, oldStageId, newStageId, oldStageName, newStageName, dateAdded: m.dateAdded || m.dateUpdated || null };
+        const legacyStage = info.stage || info.stages || {};
+
+        const oppId =
+          actData?.id ||
+          info.id || info.opportunityId || info.opportunity_id ||
+          m.opportunityId || null;
+
+        const oldStageId =
+          actStage.oldStageId || actStage.fromStageId ||
+          legacyStage.oldStageId || legacyStage.from ||
+          info.oldStageId || info.previousStageId || null;
+        const newStageId =
+          actStage.newStageId || actStage.toStageId ||
+          legacyStage.newStageId || legacyStage.to ||
+          info.newStageId || info.currentStageId || null;
+
+        const oldStageName =
+          actStage.oldStageName || actStage.fromStageName ||
+          legacyStage.oldStageName || legacyStage.fromName ||
+          info.oldStageName ||
+          (oldStageId && stageMap[oldStageId]?.stageName) || null;
+        const newStageName =
+          actStage.newStageName || actStage.toStageName ||
+          legacyStage.newStageName || legacyStage.toName ||
+          info.newStageName ||
+          (newStageId && stageMap[newStageId]?.stageName) || null;
+
+        // Event type lets the caller distinguish creation (1 row, current stage) from
+        // stage transitions (emit a row for the FROM stage window).
+        const eventType = act?.type || info.type || null;
+
+        return {
+          oppId,
+          oldStageId, newStageId,
+          oldStageName, newStageName,
+          eventType,
+          dateAdded: m.dateAdded || m.dateUpdated || null
+        };
       };
 
       const isConversationMsg = (m) => {
@@ -644,13 +707,23 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         oshLog('step4b.activityMessages: walk complete', { contactId, totalActivityMessages: activityMsgs.length });
 
         // Diagnostic: dump the FULL first raw activity row we encounter across the entire run.
-        // Why: extractStageEvent reads info/meta/body — without seeing the raw shape we can't
-        // confirm the field paths are right. This fires at most once per run.
+        // We log both the parsed object AND the JSON.stringify version with no winston meta-handling,
+        // so we can be certain whether the GHL API actually includes the nested `activity` field
+        // or strips it on the wire. Fires at most once per run.
         if (!firstActivityRowLogged && activityMsgs.length > 0) {
           const sample = activityMsgs[0];
+          const topLevelKeys = Object.keys(sample);
+          const hasActivityField = Object.prototype.hasOwnProperty.call(sample, 'activity');
           oshLog('step4b.activityMessages: RAW first row (one-time diagnostic)', {
             contactId,
-            rawRow: sample,
+            topLevelKeys,
+            hasActivityField,
+            activityTypeIfPresent: hasActivityField ? (sample.activity?.type ?? null) : null,
+            activityOppIdIfPresent: hasActivityField ? (sample.activity?.data?.id ?? null) : null,
+            // Full JSON dump bypasses winston's util.inspect depth limits and any meta merging.
+            // If `activity` is in this string, it's coming back from GHL; if not, we know the API
+            // doesn't return it and we need a different endpoint (e.g. GET /conversations/messages/{id}).
+            rawJson: JSON.stringify(sample),
             isActivityOpportunityResult: isActivityOpportunity(sample),
             extractedPreview: extractStageEvent(sample)
           });
@@ -742,6 +815,19 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           if (!ev.oppId) { activityRowsSkippedNoOppId++; continue; }
           (stageEventsByOpp[ev.oppId] ||= []).push(ev);
         }
+        // Surface stage transitions by NAME (not id) so we can sanity-check the walk against the
+        // GHL UI without needing to map ids back to stages first.
+        const transitionsByOpp = Object.fromEntries(
+          Object.entries(stageEventsByOpp).map(([oppId, evs]) => [
+            oppId,
+            evs.map(e => ({
+              type: e.eventType,
+              from: e.oldStageName,
+              to: e.newStageName,
+              at: e.dateAdded
+            }))
+          ])
+        );
         oshLog('step5.stageEvents: extracted', {
           contactId,
           activityRowsScanned,
@@ -749,7 +835,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           opportunitiesWithEvents: Object.keys(stageEventsByOpp).length,
           eventCountByOpp: Object.fromEntries(
             Object.entries(stageEventsByOpp).map(([k, v]) => [k, v.length])
-          )
+          ),
+          transitionsByOpp
         });
 
         // Pre-sort all conversation messages once for efficient window slicing.
@@ -781,12 +868,41 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             }));
         };
 
-        // Build a row per (opportunity, stage_session). For opps with no activity history,
-        // emit one row representing the current stage from opp.createdAt → now.
+        // Build a row per (opportunity, stage_session).
+        //
+        // Canonical key: stage NAME, not stage ID. Activity events from GHL only expose names
+        // (oldStageName / newStageName) — IDs are not in the activity payload. We resolve ID
+        // as best-effort enrichment via stageIdByPipelineAndName[opp.pipelineId][stageName],
+        // but if it doesn't resolve (test pipelines, deleted stages) the export still has the
+        // stage name and remains useful.
+        //
+        // Event types we handle from activity.type:
+        //   - "opportunity_created"        → seeds the initial stage (newStageName only)
+        //   - "opportunity_stage_updated"  → closes prior stage row, opens new one
+        // Other event types are ignored as non-transitions.
         const rowsBeforeContact = allRows.length;
+
+        // Resolve a stage name → id within this opportunity's pipeline (best-effort).
+        const resolveStageId = (pipelineId, stageName) => {
+          if (!stageName) return null;
+          return stageIdByPipelineAndName[pipelineId]?.[stageName] || null;
+        };
+        // Pipeline name for the row (display field). Derived from stageMap via the opp's current
+        // stageId, or from any event's resolved id. Falls back to null.
+        const resolvePipelineName = (opp) => {
+          const sid = opp.pipelineStageId || opp.stageId;
+          return (sid && stageMap[sid]?.pipelineName) || null;
+        };
+
         for (const opp of opps) {
-          const events = (stageEventsByOpp[opp.id] || []).sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));
-          if (events.length === 0) {
+          const oppPipelineName = resolvePipelineName(opp);
+          const allEvents = (stageEventsByOpp[opp.id] || []).sort(
+            (a, b) => new Date(a.dateAdded) - new Date(b.dateAdded)
+          );
+
+          // No events: emit a single open-stage row using opp.pipelineStageId (the only ID we
+          // can trust here, since it came directly from /opportunities/search).
+          if (allEvents.length === 0) {
             const enteredAt = opp.createdAt || opp.dateAdded || null;
             const stageId = opp.pipelineStageId || opp.stageId || null;
             const stageInfo = stageId ? stageMap[stageId] : null;
@@ -795,9 +911,9 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               contactId,
               opportunityId: opp.id,
               pipelineId: opp.pipelineId || stageInfo?.pipelineId || null,
-              pipelineName: stageInfo?.pipelineName || null,
-              stageId,
+              pipelineName: stageInfo?.pipelineName || oppPipelineName,
               stageName: stageInfo?.stageName || null,
+              stageId,
               enteredAt,
               leftAt: null,
               durationSeconds: enteredAt ? Math.round((Date.now() - new Date(enteredAt).getTime()) / 1000) : null,
@@ -810,21 +926,42 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             continue;
           }
 
-          // First entry timestamp: prefer opp.createdAt as the entry into the first observed stage.
-          let entryMs = opp.createdAt ? new Date(opp.createdAt).getTime() : new Date(events[0].dateAdded).getTime();
-          let currentStageId = events[0].oldStageId || opp.pipelineStageId || null;
-          let currentStageName = events[0].oldStageName || (currentStageId && stageMap[currentStageId]?.stageName) || null;
+          // Determine the INITIAL stage name + entry timestamp.
+          // If the first event is `opportunity_created`, use its newStageName at its dateAdded.
+          // Otherwise (the created event is missing or pruned), infer from the first
+          // stage_updated event's oldStageName, anchored at opp.createdAt.
+          const firstEvt = allEvents[0];
+          let currentStageName;
+          let entryMs;
+          if (firstEvt.eventType === 'opportunity_created') {
+            currentStageName = firstEvt.newStageName || null;
+            entryMs = new Date(firstEvt.dateAdded).getTime();
+          } else {
+            currentStageName = firstEvt.oldStageName
+              || (opp.pipelineStageId && stageMap[opp.pipelineStageId]?.stageName)
+              || null;
+            entryMs = opp.createdAt
+              ? new Date(opp.createdAt).getTime()
+              : new Date(firstEvt.dateAdded).getTime();
+          }
 
-          for (const ev of events) {
+          // Walk events and emit a CLOSED row each time the opp leaves a stage.
+          for (const ev of allEvents) {
+            if (ev.eventType !== 'opportunity_stage_updated') {
+              // 'opportunity_created' already consumed by the initial-stage seed above.
+              // Any other event types (status change, etc.) are not stage transitions.
+              continue;
+            }
             const leftMs = new Date(ev.dateAdded).getTime();
-            const stageInfo = currentStageId ? stageMap[currentStageId] : null;
+            const stageId = resolveStageId(opp.pipelineId, currentStageName);
+            const stageInfo = stageId ? stageMap[stageId] : null;
             allRows.push({
               contactId,
               opportunityId: opp.id,
               pipelineId: opp.pipelineId || stageInfo?.pipelineId || null,
-              pipelineName: stageInfo?.pipelineName || null,
-              stageId: currentStageId,
-              stageName: currentStageName || stageInfo?.stageName || null,
+              pipelineName: stageInfo?.pipelineName || oppPipelineName,
+              stageName: currentStageName,
+              stageId,
               enteredAt: new Date(entryMs).toISOString(),
               leftAt: new Date(leftMs).toISOString(),
               durationSeconds: Math.round((leftMs - entryMs) / 1000),
@@ -835,19 +972,19 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               currentStage: false
             });
             entryMs = leftMs;
-            currentStageId = ev.newStageId;
-            currentStageName = ev.newStageName || (currentStageId && stageMap[currentStageId]?.stageName) || null;
+            currentStageName = ev.newStageName || null;
           }
 
-          // Current (open) stage row — after the last transition, still in progress.
-          const stageInfo = currentStageId ? stageMap[currentStageId] : null;
+          // Final OPEN row: the stage the opp is currently in, still in progress.
+          const finalStageId = resolveStageId(opp.pipelineId, currentStageName);
+          const finalStageInfo = finalStageId ? stageMap[finalStageId] : null;
           allRows.push({
             contactId,
             opportunityId: opp.id,
-            pipelineId: opp.pipelineId || stageInfo?.pipelineId || null,
-            pipelineName: stageInfo?.pipelineName || null,
-            stageId: currentStageId,
-            stageName: currentStageName || stageInfo?.stageName || null,
+            pipelineId: opp.pipelineId || finalStageInfo?.pipelineId || null,
+            pipelineName: finalStageInfo?.pipelineName || oppPipelineName,
+            stageName: currentStageName,
+            stageId: finalStageId,
             enteredAt: new Date(entryMs).toISOString(),
             leftAt: null,
             durationSeconds: Math.round((Date.now() - entryMs) / 1000),
