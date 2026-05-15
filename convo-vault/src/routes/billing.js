@@ -629,7 +629,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       // return the `activity` field — confirmed via runId osh_1778848016968_r5ciy6), we run the
       // walk against ONE contact at a time so production logs stay readable. Set to null (or
       // delete this block) once the data pipeline is verified end-to-end.
-      const OSH_DEBUG_ONLY_CONTACT_ID = 'V3X1XMmaBcTnX2Q3MEpt';
+      const OSH_DEBUG_ONLY_CONTACT_ID = 'hGFKHeZCWwcx6R42bpHA';
       const contactsToWalk = OSH_DEBUG_ONLY_CONTACT_ID
         ? Object.fromEntries(Object.entries(oppsByContact).filter(([cid]) => cid === OSH_DEBUG_ONLY_CONTACT_ID))
         : oppsByContact;
