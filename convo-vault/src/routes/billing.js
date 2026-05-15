@@ -518,7 +518,15 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
 
       // Helpers — pulled out to keep the per-contact loop readable.
-      const isActivityOpportunity = (m) => String(m.type || m.messageType || '').toUpperCase() === 'TYPE_ACTIVITY_OPPORTUNITY';
+      // GHL's per-conversation /conversations/{convId}/messages endpoint returns `type` as a
+      // NUMERIC code (28 = TYPE_ACTIVITY_OPPORTUNITY), while the bulk /conversations/messages/export
+      // endpoint returns the STRING form. We accept both — production logs at runId
+      // osh_1778836221027_2955gc confirmed the numeric variant was silently dropping every event.
+      const isActivityOpportunity = (m) => {
+        const t = m.type ?? m.messageType;
+        if (t === 28 || t === '28') return true;
+        return String(t || '').toUpperCase() === 'TYPE_ACTIVITY_OPPORTUNITY';
+      };
       // Activity-row shape from /conversations/messages/export is non-canonical across locations;
       // be defensive and try multiple known paths for opportunityId + oldStage + newStage.
       const extractStageEvent = (m) => {
@@ -566,41 +574,28 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           opportunityIds: opps.map(o => o.id)
         });
 
-        // a) Find conversations for this contact
-        oshLog('step4a.conversations: walk start', { contactId, endpoint: 'GET /conversations/search', pageSize: 100, maxPages: 20 });
-        const convosForContact = [];
-        let convoCursor = null;
-        let convoPages = 0;
-        while (true) {
-          convoPages++;
-          oshLog('step4a.conversations: page request', { contactId, page: convoPages, startAfterDate: convoCursor });
-          const convoResult = await withRetry(() => ghlService.searchConversations(locationId, {
-            contactId,
-            limit: 100,
-            startAfterDate: convoCursor || undefined
-          }));
-          const convos = convoResult.conversations || [];
-          convosForContact.push(...convos);
-          oshLog('step4a.conversations: page response', {
-            contactId,
-            page: convoPages,
-            returned: convos.length,
-            runningTotal: convosForContact.length,
-            sampleConvo: oshSample(convos.map(c => ({
-              id: c.id,
-              lastMessageDate: c.lastMessageDate || c.dateUpdated || c.dateAdded
-            })), 1)
-          });
-          if (convos.length < 100) break;
-          const lastConvo = convos[convos.length - 1];
-          convoCursor = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
-          if (convoPages > 20) {
-            oshWarn('step4a.conversations: hit hard page cap (20)', { contactId, totalConvosCollected: convosForContact.length });
-            break;
-          }
-          await sleep(THROTTLE_MS);
+        // a) Find conversations for this contact.
+        // GHL has an effectively 1:1 contact↔conversation mapping (a few channels may split into
+        // separate convos, but never anywhere near 100). One call with limit=100 covers every
+        // realistic case — no pagination loop needed. If we ever see exactly 100, warn so we
+        // know the assumption broke.
+        oshLog('step4a.conversations: request', { contactId, endpoint: 'GET /conversations/search', limit: 100 });
+        const convoResult = await withRetry(() => ghlService.searchConversations(locationId, {
+          contactId,
+          limit: 100
+        }));
+        const convosForContact = convoResult.conversations || [];
+        oshLog('step4a.conversations: response', {
+          contactId,
+          returned: convosForContact.length,
+          sampleConvo: oshSample(convosForContact.map(c => ({
+            id: c.id,
+            lastMessageDate: c.lastMessageDate || c.dateUpdated || c.dateAdded
+          })), 1)
+        });
+        if (convosForContact.length >= 100) {
+          oshWarn('step4a.conversations: returned 100 — 1:1 contact↔conversation assumption may no longer hold; check this contact for hidden pagination', { contactId });
         }
-        oshLog('step4a.conversations: walk complete', { contactId, totalConversations: convosForContact.length, pages: convoPages });
 
         // b) Per-conversation: pull ONLY activity-opportunity rows (server-side type filter)
         oshLog('step4b.activityMessages: walk start', {
@@ -647,6 +642,20 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           await sleep(THROTTLE_MS);
         }
         oshLog('step4b.activityMessages: walk complete', { contactId, totalActivityMessages: activityMsgs.length });
+
+        // Diagnostic: dump the FULL first raw activity row we encounter across the entire run.
+        // Why: extractStageEvent reads info/meta/body — without seeing the raw shape we can't
+        // confirm the field paths are right. This fires at most once per run.
+        if (!firstActivityRowLogged && activityMsgs.length > 0) {
+          const sample = activityMsgs[0];
+          oshLog('step4b.activityMessages: RAW first row (one-time diagnostic)', {
+            contactId,
+            rawRow: sample,
+            isActivityOpportunityResult: isActivityOpportunity(sample),
+            extractedPreview: extractStageEvent(sample)
+          });
+          firstActivityRowLogged = true;
+        }
 
         // c) One export call per contact for all channel messages (SMS/Email/WhatsApp/FB/IG)
         oshLog('step4c.channelMessages: walk start', {
@@ -732,10 +741,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           const ev = extractStageEvent(m);
           if (!ev.oppId) { activityRowsSkippedNoOppId++; continue; }
           (stageEventsByOpp[ev.oppId] ||= []).push(ev);
-          if (!firstActivityRowLogged) {
-            logger.info('Opportunity Stage History — sample TYPE_ACTIVITY_OPPORTUNITY row', { row: m, extracted: ev });
-            firstActivityRowLogged = true;
-          }
         }
         oshLog('step5.stageEvents: extracted', {
           contactId,
@@ -863,7 +868,15 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         });
       }
 
-      counts.opportunityStageHistory = allRows.length;
+      // Billing inputs: charge by (opportunities + channel messages), NOT by stage-rows.
+      // — opportunityCount: unique opportunities that produced any row.
+      // — channelMessageCount: total messages bucketed across all stage windows.
+      // Activity-opportunity rows themselves (the internal stage-change events) are NOT counted —
+      // those are infrastructure, not customer-visible messages.
+      const opportunityCount = allOpps.length;
+      const channelMessageCount = allRows.reduce((sum, r) => sum + ((r.messages || []).length), 0);
+      const billableUnits = opportunityCount + channelMessageCount;
+      counts.opportunityStageHistory = billableUnits;
 
       // Summarize the row distribution so we can sanity-check the walk at a glance:
       // rows with both enteredAt + leftAt (closed stage sessions) vs current-stage rows still open.
@@ -871,6 +884,13 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const openRows = allRows.length - closedRows;
       const rowsWithMessages = allRows.filter(r => Array.isArray(r.messages) && r.messages.length > 0).length;
       const rowsWithCalls = allRows.filter(r => Array.isArray(r.callMessageIds) && r.callMessageIds.length > 0).length;
+      oshLog('step7.billing: computed billable units', {
+        opportunityCount,
+        channelMessageCount,
+        billableUnits,
+        stageRows: allRows.length,
+        unitPrice: 0.10
+      });
       oshLog('step7.walk: complete', {
         opportunities: allOpps.length,
         contactsWalked: Object.keys(oppsByContact).length,
@@ -919,6 +939,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         messages: firstChunk,
         totalMessages: allRows.length,
         totalConversations: Object.keys(oppsByContact).length,
+        totalOpportunities: opportunityCount,
+        totalChannelMessages: channelMessageCount,
         chunkIndex: 0,
         totalChunks,
         status: 'ready'
@@ -933,6 +955,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             messages: allRows.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
             totalMessages: allRows.length,
             totalConversations: Object.keys(oppsByContact).length,
+            totalOpportunities: opportunityCount,
+            totalChannelMessages: channelMessageCount,
             groupId: specialExport._id,
             chunkIndex: ci,
             totalChunks,
@@ -947,7 +971,12 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       }
 
       // Build estimate response with the SpecialExport ref for the charge-and-export step.
-      const computedEstimate = billingService.calculateEstimate({ opportunityStageHistory: allRows.length });
+      // Pass the (opps + msgs) breakdown so the response shows the customer exactly what they're paying for.
+      const computedEstimate = billingService.calculateEstimate({
+        opportunityStageHistory: billableUnits,
+        opportunityStageOppCount: opportunityCount,
+        opportunityStageMsgCount: channelMessageCount
+      });
       oshLog('step9.response: estimate returned to client', {
         specialExportId: String(specialExport._id),
         estimate: computedEstimate,
@@ -1583,9 +1612,24 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         totalItems = filters?.estimatedTotal || 0;
 
       } else if (exportType === 'opportunityStageHistory') {
-        // Pre-fetched in the dedicated walker block below; trust the frontend estimate count.
-        totalItems = filters?.estimatedTotal || 0;
-        counts.opportunityStageHistory = totalItems;
+        // Billed by (opportunities + messages), not stage-rows. Read both counts off the
+        // SpecialExport persisted during /estimate so we don't have to re-walk GHL. If the
+        // doc is missing the new fields (older estimate), fall back to the frontend total.
+        const se = filters?.specialExportId
+          ? await SpecialExport.findById(filters.specialExportId).lean().catch(() => null)
+          : null;
+        const oppCount = se?.totalOpportunities ?? 0;
+        const msgCount = se?.totalChannelMessages ?? 0;
+        if (se && (oppCount > 0 || msgCount > 0)) {
+          totalItems = oppCount + msgCount;
+          counts.opportunityStageHistory = totalItems;
+          counts.opportunityStageOppCount = oppCount;
+          counts.opportunityStageMsgCount = msgCount;
+        } else {
+          // Legacy / fallback: estimatedTotal from frontend is already (opps + msgs) post-change.
+          totalItems = filters?.estimatedTotal || 0;
+          counts.opportunityStageHistory = totalItems;
+        }
 
       } else {
         // Use estimatedTotal from the estimate step if available (avoids GHL returning a different count)
@@ -1663,11 +1707,24 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Call transcriptions export' }];
     } else if (exportType === 'opportunityStageHistory') {
-      // Opportunity Stage History: flat $0.10/row, single meter charge, no discount tier.
+      // Opportunity Stage History: flat $0.10 per (opportunity + message), single meter charge,
+      // no discount tier. totalItems = oppCount + msgCount (set above from the SpecialExport doc).
       const unitPrice = 0.10;
       const finalAmount = totalItems * unitPrice;
-      estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
-      meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Opportunity stage history export' }];
+      estimate = {
+        baseAmount: finalAmount,
+        discountPercent: 0,
+        discountAmount: 0,
+        finalAmount,
+        opportunityCount: counts.opportunityStageOppCount || 0,
+        messageCount: counts.opportunityStageMsgCount || 0
+      };
+      const oppC = counts.opportunityStageOppCount || 0;
+      const msgC = counts.opportunityStageMsgCount || 0;
+      const desc = (oppC || msgC)
+        ? `Opportunity stage history export (${oppC} opportunities + ${msgC} messages)`
+        : 'Opportunity stage history export';
+      meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: desc }];
     } else {
       // Step 3: Calculate pricing with actual GHL meter prices
       estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);

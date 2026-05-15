@@ -189,7 +189,12 @@ class BillingService {
       customFields = 0,
       customValues = 0,
       tags = 0,
-      opportunityStageHistory = 0
+      opportunityStageHistory = 0,
+      // OSH sub-counts: passed in for transparency on the customer-facing breakdown.
+      // The billable total is still `opportunityStageHistory` (= opps + msgs from the caller),
+      // but exposing these two lets the UI show "X opportunities + Y messages × $0.10".
+      opportunityStageOppCount = 0,
+      opportunityStageMsgCount = 0
     } = counts;
 
     // Use provided prices or defaults
@@ -340,7 +345,14 @@ class BillingService {
         opportunityStageHistory: {
           count: opportunityStageHistory,
           unitPrice: opportunityStagePrice,
-          subtotal: opportunityStageCost
+          subtotal: opportunityStageCost,
+          // Sub-detail so the UI can render "X opportunities + Y messages × $0.10 = $Z"
+          // instead of a single opaque "N units" line. Falls back to zero when not provided
+          // (e.g. legacy callers that pass only the rolled-up count).
+          opportunityCount: opportunityStageOppCount,
+          messageCount: opportunityStageMsgCount,
+          opportunityCost: opportunityStageOppCount * opportunityStagePrice,
+          messageCost: opportunityStageMsgCount * opportunityStagePrice
         }
       },
       baseAmount,

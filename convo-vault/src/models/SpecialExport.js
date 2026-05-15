@@ -52,6 +52,17 @@ const specialExportSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Opportunity Stage History pricing inputs. We bill (opps + messages), not stage-rows,
+  // so the confirm-step needs both counts persisted from /estimate to re-derive the charge
+  // without re-walking GHL.
+  totalOpportunities: {
+    type: Number,
+    default: 0
+  },
+  totalChannelMessages: {
+    type: Number,
+    default: 0
+  },
   filters: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
