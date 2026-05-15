@@ -624,9 +624,28 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       //      keeps payload tiny — these are sparse compared to chat)
       //   c) one export call per contact for all channel messages
       //   d) merge into one timeline, split into activities + channel rows for processing
+      // ── TEMPORARY DEBUG SCOPE — REMOVE BEFORE GENERAL ROLLOUT ────────────────────────────
+      // While we iterate on the activity-row extraction strategy (the bulk messages API doesn't
+      // return the `activity` field — confirmed via runId osh_1778848016968_r5ciy6), we run the
+      // walk against ONE contact at a time so production logs stay readable. Set to null (or
+      // delete this block) once the data pipeline is verified end-to-end.
+      const OSH_DEBUG_ONLY_CONTACT_ID = 'V3X1XMmaBcTnX2Q3MEpt';
+      const contactsToWalk = OSH_DEBUG_ONLY_CONTACT_ID
+        ? Object.fromEntries(Object.entries(oppsByContact).filter(([cid]) => cid === OSH_DEBUG_ONLY_CONTACT_ID))
+        : oppsByContact;
+      if (OSH_DEBUG_ONLY_CONTACT_ID) {
+        oshWarn('step4: DEBUG scope active — walking ONE contact only', {
+          onlyContactId: OSH_DEBUG_ONLY_CONTACT_ID,
+          totalContactsAvailable: Object.keys(oppsByContact).length,
+          contactsRemaining: Object.keys(contactsToWalk).length,
+          contactFound: Object.keys(contactsToWalk).length > 0
+        });
+      }
+      // ─────────────────────────────────────────────────────────────────────────────────────
+
       let contactIndex = 0;
-      const contactsTotal = Object.keys(oppsByContact).length;
-      for (const [contactId, opps] of Object.entries(oppsByContact)) {
+      const contactsTotal = Object.keys(contactsToWalk).length;
+      for (const [contactId, opps] of Object.entries(contactsToWalk)) {
         contactIndex++;
         const contactStart = Date.now();
         oshLog('step4.contact: start', {
@@ -727,6 +746,38 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             isActivityOpportunityResult: isActivityOpportunity(sample),
             extractedPreview: extractStageEvent(sample)
           });
+
+          // Experiment: try fetching the SAME message via GET /conversations/messages/{id}
+          // (single-message endpoint) to see if it returns the enriched record with the
+          // `activity` field that the list endpoint strips. If yes, we'll switch step 4b to
+          // do a list-then-fetch-by-id pattern for activity rows.
+          try {
+            oshLog('step4b.activityMessages: SINGLE-MESSAGE probe request', {
+              messageId: sample.id,
+              endpoint: 'GET /conversations/messages/{messageId}'
+            });
+            const single = await ghlService.getMessageById(locationId, sample.id);
+            // GHL wrapper may nest under .message or return the row directly
+            const singleRow = single?.message || single;
+            const singleHasActivity = singleRow && Object.prototype.hasOwnProperty.call(singleRow, 'activity');
+            oshLog('step4b.activityMessages: SINGLE-MESSAGE probe response', {
+              messageId: sample.id,
+              singleTopLevelKeys: singleRow ? Object.keys(singleRow) : null,
+              singleHasActivityField: singleHasActivity,
+              singleActivityType: singleHasActivity ? (singleRow.activity?.type ?? null) : null,
+              singleActivityOppId: singleHasActivity ? (singleRow.activity?.data?.id ?? null) : null,
+              singleActivityOldStage: singleHasActivity ? (singleRow.activity?.data?.stage?.oldStageName ?? null) : null,
+              singleActivityNewStage: singleHasActivity ? (singleRow.activity?.data?.stage?.newStageName ?? null) : null,
+              singleRawJson: JSON.stringify(singleRow)
+            });
+          } catch (e) {
+            oshWarn('step4b.activityMessages: SINGLE-MESSAGE probe failed', {
+              messageId: sample.id,
+              status: e.response?.status,
+              error: e.message
+            });
+          }
+
           firstActivityRowLogged = true;
         }
 

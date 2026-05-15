@@ -686,6 +686,26 @@ class GHLService {
   }
 
   /**
+   * Get a single message by ID. Reference:
+   *   https://marketplace.gohighlevel.com/docs/ghl/conversations/get-message
+   *   GET /conversations/messages/{messageId}
+   *
+   * Used for the Opportunity Stage History flow: the list endpoint
+   * GET /conversations/{convId}/messages STRIPS the nested `activity` field for type=28 rows,
+   * but the single-message endpoint may return the enriched record with activity.data.{id,stage}.
+   */
+  async getMessageById(locationId, messageId) {
+    const result = await this.apiRequest(
+      'GET',
+      `/conversations/messages/${messageId}`,
+      locationId,
+      null,
+      null
+    );
+    return result;
+  }
+
+  /**
    * Download the transcription for a single call/voicemail message as plain text.
    * Returns a string like "00:01: Hello\n00:03: Hi there\n..." (or empty string if none).
    * Reference: https://marketplace.gohighlevel.com/docs/ghl/conversations/download-message-transcription
