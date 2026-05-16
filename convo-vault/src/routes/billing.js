@@ -2881,7 +2881,12 @@ router.post('/pricing-request', authenticateSession, async (req, res) => {
       });
     }
 
-    const base = process.env.BACKEND_URL || '';
+    // BASE_URL is the canonical server URL across this app (also used in referrals.js, server.js).
+    // Strip any trailing slash so we don't end up with `https://host//api/...`.
+    const base = (process.env.BASE_URL || process.env.BACKEND_URL || '').replace(/\/+$/, '');
+    if (!base) {
+      logger.warn('BASE_URL is not set — approve/reject email links will be relative and non-clickable');
+    }
     const approveUrl = `${base}/api/billing/pricing-request/${request._id}/approve?token=${request.approvalToken}`;
     const rejectUrl  = `${base}/api/billing/pricing-request/${request._id}/reject?token=${request.approvalToken}`;
 
