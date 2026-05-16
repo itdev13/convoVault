@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { billingAPI } from '../api/billing';
 
 const AUTO_APPROVE_THRESHOLD = 10000;
+// Lowest credit price a customer can propose. Floor exists to prevent typo / abuse —
+// $0.005 is already a 72% discount off the $0.018 default, which is the lowest we'd
+// reasonably accept on a one-off deal.
+const MIN_PROPOSED_PRICE = 0.005;
 
 export default function PricingRequestModal({ isOpen, onClose, locationId, currentPrice = 0.018, defaultEmail = '' }) {
   const [proposedPrice, setProposedPrice] = useState('0.012');
@@ -17,7 +21,8 @@ export default function PricingRequestModal({ isOpen, onClose, locationId, curre
   const volumeNum = parseInt(expectedVolume, 10);
   const priceNum = parseFloat(proposedPrice);
   const willAutoApprove = Number.isFinite(volumeNum) && volumeNum >= AUTO_APPROVE_THRESHOLD;
-  const canSubmit = Number.isFinite(priceNum) && priceNum > 0
+  const priceBelowFloor = Number.isFinite(priceNum) && priceNum < MIN_PROPOSED_PRICE;
+  const canSubmit = Number.isFinite(priceNum) && priceNum >= MIN_PROPOSED_PRICE
                  && Number.isFinite(volumeNum) && volumeNum > 0
                  && /\S+@\S+\.\S+/.test(email)
                  && !submitting;
@@ -97,11 +102,16 @@ export default function PricingRequestModal({ isOpen, onClose, locationId, curre
                 <input
                   type="number"
                   step="0.001"
-                  min="0.001"
+                  min={MIN_PROPOSED_PRICE}
                   value={proposedPrice}
                   onChange={(e) => setProposedPrice(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${priceBelowFloor ? 'border-red-400 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'}`}
                 />
+                <p className={`text-xs mt-1 ${priceBelowFloor ? 'text-red-600' : 'text-gray-500'}`}>
+                  {priceBelowFloor
+                    ? `Minimum is $${MIN_PROPOSED_PRICE.toFixed(3)}. Anything lower needs to come through sales.`
+                    : `Default is $${currentPrice.toFixed(3)}/credit. Minimum proposable: $${MIN_PROPOSED_PRICE.toFixed(3)}.`}
+                </p>
               </div>
 
               <div>

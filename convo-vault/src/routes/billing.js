@@ -28,6 +28,9 @@ const pricingMailer = nodemailer.createTransport({
 
 const INTERNAL_REVIEW_EMAIL = 'rapiddev21@gmail.com';
 const AUTO_APPROVE_VOLUME_THRESHOLD = 10000;
+// Server-side floor on customer-proposed credit prices. Matches the UI hint in
+// PricingRequestModal so the client and server agree on what's submittable.
+const MIN_PROPOSED_CREDIT_PRICE = 0.005;
 
 // Initialize AWS Lambda client
 const lambda = new LambdaClient({
@@ -2819,6 +2822,9 @@ router.post('/pricing-request', authenticateSession, async (req, res) => {
     const volume = parseInt(expectedVolume, 10);
     if (!locationId || !email || !Number.isFinite(price) || price <= 0 || !Number.isFinite(volume) || volume <= 0) {
       return res.status(400).json({ success: false, error: 'Missing or invalid fields' });
+    }
+    if (price < MIN_PROPOSED_CREDIT_PRICE) {
+      return res.status(400).json({ success: false, error: `Proposed price below the minimum allowed ($${MIN_PROPOSED_CREDIT_PRICE.toFixed(3)}/credit). Contact sales for lower rates.` });
     }
     if (!isValidEmail(email)) {
       return res.status(400).json({ success: false, error: 'Invalid email format' });
