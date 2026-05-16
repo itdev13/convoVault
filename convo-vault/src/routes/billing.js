@@ -2843,7 +2843,7 @@ router.post('/pricing-request', authenticateSession, async (req, res) => {
 
     const expectedRevenue = (price * volume).toFixed(2);
     const internalSummary = `
-      <p><strong>Location:</strong> ${escapeHtml(locationId)}</p>
+      <p><strong>Account:</strong> ${escapeHtml(locationId)}</p>
       <p><strong>Company:</strong> ${escapeHtml(companyId || 'n/a')}</p>
       <p><strong>Customer email:</strong> ${escapeHtml(email)}</p>
       <p><strong>Proposed rate:</strong> $${price.toFixed(4)} per credit</p>
@@ -2860,7 +2860,7 @@ router.post('/pricing-request', authenticateSession, async (req, res) => {
         to: email,
         subject: '[ConvoVault] Your custom rate is now active',
         html: `<h2>Custom rate approved</h2>
-               <p>Based on your expected volume of <strong>${volume.toLocaleString()}</strong> records, your custom credit rate of <strong>$${price.toFixed(4)}</strong> is now active for your location.</p>
+               <p>Based on your expected volume of <strong>${volume.toLocaleString()}</strong> records, your custom credit rate of <strong>$${price.toFixed(4)}</strong> is now active for your account.</p>
                <p>You can return to your export — the new pricing is reflected immediately.</p>
                <p>Thanks,<br/>ExportKit Team</p>`
       }).catch(err => logger.warn('Auto-approve customer email failed', { error: err.message }));
@@ -2942,7 +2942,7 @@ router.get('/pricing-request/:id/approve', async (req, res) => {
       to: request.email,
       subject: '[ConvoVault] Your custom rate is now active',
       html: `<h2>Custom rate approved</h2>
-             <p>Your custom credit rate of <strong>$${request.proposedCreditPrice.toFixed(4)}</strong> is now active for your location.</p>
+             <p>Your custom credit rate of <strong>$${request.proposedCreditPrice.toFixed(4)}</strong> is now active for your account.</p>
              <p>You can return to your export — the new pricing is reflected immediately.</p>
              <p>Thanks,<br/>ExportKit Team</p>`
     }).catch(err => logger.warn('Customer approval email failed', { error: err.message }));
@@ -2950,7 +2950,7 @@ router.get('/pricing-request/:id/approve', async (req, res) => {
     return res.send(
       `<html><body style="font-family:sans-serif;padding:40px;text-align:center;">
          <h2 style="color:#16a34a;">✓ Approved</h2>
-         <p>Custom rate of <strong>$${request.proposedCreditPrice.toFixed(4)}/credit</strong> applied to location <strong>${escapeHtml(request.locationId)}</strong>.</p>
+         <p>Custom rate of <strong>$${request.proposedCreditPrice.toFixed(4)}/credit</strong> applied to account <strong>${escapeHtml(request.locationId)}</strong>.</p>
          <p>Customer notified at ${escapeHtml(request.email)}.</p>
        </body></html>`
     );
