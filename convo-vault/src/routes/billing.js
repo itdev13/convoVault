@@ -12,6 +12,22 @@ const { logError, getUserFriendlyMessage } = require('../utils/errorLogger');
 const { authenticateSession } = require('../middleware/auth');
 const SpecialExport = require('../models/SpecialExport');
 const AppConfig = require('../models/AppConfig');
+const PricingRequest = require('../models/PricingRequest');
+const nodemailer = require('nodemailer');
+const { escapeHtml, isValidEmail } = require('../utils/sanitize');
+
+// Reuse the same Gmail/nodemailer pattern as routes/support.js. Same env vars.
+const pricingMailer = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.SUPPORT_EMAIL_USER,
+    pass: process.env.SUPPORT_EMAIL_PASSWORD
+  },
+  tls: { rejectUnauthorized: false }
+});
+
+const INTERNAL_REVIEW_EMAIL = 'rapiddev21@gmail.com';
+const AUTO_APPROVE_VOLUME_THRESHOLD = 10000;
 
 // Initialize AWS Lambda client
 const lambda = new LambdaClient({
@@ -1160,11 +1176,12 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
       // Build estimate response with the SpecialExport ref for the charge-and-export step.
       // Pass the (opps + msgs) breakdown so the response shows the customer exactly what they're paying for.
-      const computedEstimate = billingService.calculateEstimate({
+      // `calculateEstimateForLocation` honors the per-location credit-price override in AppConfig.
+      const computedEstimate = await billingService.calculateEstimateForLocation({
         opportunityStageHistory: billableUnits,
         opportunityStageOppCount: opportunityCount,
         opportunityStageMsgCount: channelMessageCount
-      });
+      }, locationId);
       oshLog('step9.response: estimate returned to client', {
         specialExportId: String(specialExport._id),
         estimate: computedEstimate,
@@ -2785,6 +2802,192 @@ router.post('/custom-charge', authenticateSession, async (req, res) => {
   } catch (error) {
     logError('Custom charge error', error, { locationId: req.body?.locationId });
     res.status(500).json({ success: false, error: 'Custom charge failed' });
+  }
+});
+
+/**
+ * POST /api/billing/pricing-request
+ * Customer submits a custom-rate request from the estimate modal.
+ * Auto-approves when expectedVolume >= 10K; otherwise saves pending + emails internal team.
+ */
+router.post('/pricing-request', authenticateSession, async (req, res) => {
+  try {
+    const { proposedCreditPrice, expectedVolume, email, reason, locationId } = req.body;
+    const companyId = req.user?.companyId || null;
+
+    const price = parseFloat(proposedCreditPrice);
+    const volume = parseInt(expectedVolume, 10);
+    if (!locationId || !email || !Number.isFinite(price) || price <= 0 || !Number.isFinite(volume) || volume <= 0) {
+      return res.status(400).json({ success: false, error: 'Missing or invalid fields' });
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ success: false, error: 'Invalid email format' });
+    }
+
+    const autoApprove = volume >= AUTO_APPROVE_VOLUME_THRESHOLD;
+    const request = await PricingRequest.create({
+      locationId, companyId, email,
+      proposedCreditPrice: price,
+      expectedVolume: volume,
+      reason: reason || '',
+      status: autoApprove ? 'auto-approved' : 'pending',
+      decidedAt: autoApprove ? new Date() : null,
+      decidedBy: autoApprove ? 'system' : null
+    });
+
+    const expectedRevenue = (price * volume).toFixed(2);
+    const internalSummary = `
+      <p><strong>Location:</strong> ${escapeHtml(locationId)}</p>
+      <p><strong>Company:</strong> ${escapeHtml(companyId || 'n/a')}</p>
+      <p><strong>Customer email:</strong> ${escapeHtml(email)}</p>
+      <p><strong>Proposed rate:</strong> $${price.toFixed(4)} per credit</p>
+      <p><strong>Expected volume:</strong> ${volume.toLocaleString()} records</p>
+      <p><strong>Expected revenue:</strong> $${expectedRevenue}</p>
+      <p><strong>Reason:</strong> ${escapeHtml(reason || '—')}</p>
+    `;
+
+    if (autoApprove) {
+      await AppConfig.setLocationCreditPrice(locationId, price);
+
+      pricingMailer.sendMail({
+        from: 'support@vaultsuite.store',
+        to: email,
+        subject: '[ConvoVault] Your custom rate is now active',
+        html: `<h2>Custom rate approved</h2>
+               <p>Based on your expected volume of <strong>${volume.toLocaleString()}</strong> records, your custom credit rate of <strong>$${price.toFixed(4)}</strong> is now active for your location.</p>
+               <p>You can return to your export — the new pricing is reflected immediately.</p>
+               <p>Thanks,<br/>ExportKit Team</p>`
+      }).catch(err => logger.warn('Auto-approve customer email failed', { error: err.message }));
+
+      pricingMailer.sendMail({
+        from: 'support@vaultsuite.store',
+        to: INTERNAL_REVIEW_EMAIL,
+        subject: `[Pricing Auto-Approved] ${locationId} → $${price.toFixed(4)}/credit`,
+        html: `<h3>Auto-approved pricing request</h3>${internalSummary}
+               <p>Auto-approved because volume ≥ ${AUTO_APPROVE_VOLUME_THRESHOLD.toLocaleString()}. No action needed.</p>`
+      }).catch(err => logger.warn('Auto-approve internal email failed', { error: err.message }));
+
+      return res.json({
+        success: true,
+        status: 'approved',
+        message: 'Your custom rate is now active. The new pricing is reflected immediately — close this and reopen the estimate to see the updated total.',
+        requestId: request._id
+      });
+    }
+
+    const base = process.env.BACKEND_URL || '';
+    const approveUrl = `${base}/api/billing/pricing-request/${request._id}/approve?token=${request.approvalToken}`;
+    const rejectUrl  = `${base}/api/billing/pricing-request/${request._id}/reject?token=${request.approvalToken}`;
+
+    pricingMailer.sendMail({
+      from: 'support@vaultsuite.store',
+      to: INTERNAL_REVIEW_EMAIL,
+      subject: `[Pricing Request] ${locationId} → $${price.toFixed(4)}/credit (${volume.toLocaleString()} records)`,
+      html: `<h3>New pricing request — manual review</h3>${internalSummary}
+             <hr/>
+             <p>
+               <a href="${approveUrl}" style="background:#16a34a;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;margin-right:10px;">Approve</a>
+               <a href="${rejectUrl}" style="background:#dc2626;color:white;padding:10px 20px;text-decoration:none;border-radius:6px;display:inline-block;">Reject</a>
+             </p>
+             <p style="font-size:11px;color:#666;">Request ID: ${request._id}</p>`
+    }).catch(err => logger.error('Pricing request internal email failed', { error: err.message }));
+
+    return res.json({
+      success: true,
+      status: 'pending',
+      message: `We'll review your request and respond to ${email} within 1-2 hours.`,
+      requestId: request._id
+    });
+  } catch (error) {
+    logError('Pricing request submit error', error, { locationId: req.body?.locationId });
+    res.status(500).json({ success: false, error: 'Failed to submit pricing request' });
+  }
+});
+
+/**
+ * GET /api/billing/pricing-request/:id/approve?token=XXX
+ * One-click approve from the internal review email.
+ */
+router.get('/pricing-request/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { token } = req.query;
+    const request = await PricingRequest.findById(id);
+    if (!request || request.approvalToken !== token) {
+      return res.status(404).send('Invalid or expired link');
+    }
+    if (request.status !== 'pending') {
+      return res.send(`This request was already <strong>${request.status}</strong>.`);
+    }
+
+    await AppConfig.setLocationCreditPrice(request.locationId, request.proposedCreditPrice);
+    request.status = 'approved';
+    request.decidedAt = new Date();
+    request.decidedBy = 'email-approve';
+    await request.save();
+
+    pricingMailer.sendMail({
+      from: 'support@vaultsuite.store',
+      to: request.email,
+      subject: '[ConvoVault] Your custom rate is now active',
+      html: `<h2>Custom rate approved</h2>
+             <p>Your custom credit rate of <strong>$${request.proposedCreditPrice.toFixed(4)}</strong> is now active for your location.</p>
+             <p>You can return to your export — the new pricing is reflected immediately.</p>
+             <p>Thanks,<br/>ExportKit Team</p>`
+    }).catch(err => logger.warn('Customer approval email failed', { error: err.message }));
+
+    return res.send(
+      `<html><body style="font-family:sans-serif;padding:40px;text-align:center;">
+         <h2 style="color:#16a34a;">✓ Approved</h2>
+         <p>Custom rate of <strong>$${request.proposedCreditPrice.toFixed(4)}/credit</strong> applied to location <strong>${escapeHtml(request.locationId)}</strong>.</p>
+         <p>Customer notified at ${escapeHtml(request.email)}.</p>
+       </body></html>`
+    );
+  } catch (error) {
+    logError('Pricing approve error', error, { id: req.params.id });
+    res.status(500).send('Failed to approve');
+  }
+});
+
+/**
+ * GET /api/billing/pricing-request/:id/reject?token=XXX
+ * One-click reject from the internal review email.
+ */
+router.get('/pricing-request/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { token } = req.query;
+    const request = await PricingRequest.findById(id);
+    if (!request || request.approvalToken !== token) {
+      return res.status(404).send('Invalid or expired link');
+    }
+    if (request.status !== 'pending') {
+      return res.send(`This request was already <strong>${request.status}</strong>.`);
+    }
+
+    request.status = 'rejected';
+    request.decidedAt = new Date();
+    request.decidedBy = 'email-reject';
+    await request.save();
+
+    pricingMailer.sendMail({
+      from: 'support@vaultsuite.store',
+      to: request.email,
+      subject: '[ConvoVault] Update on your pricing request',
+      html: `<h2>Pricing request update</h2>
+             <p>Thanks for reaching out. We weren't able to approve your requested rate at this volume. Reply to this email if you'd like to discuss alternatives — we're happy to find a fit.</p>
+             <p>Thanks,<br/>ExportKit Team</p>`
+    }).catch(err => logger.warn('Customer rejection email failed', { error: err.message }));
+
+    return res.send(
+      `<html><body style="font-family:sans-serif;padding:40px;text-align:center;">
+         <h2 style="color:#dc2626;">✗ Rejected</h2>
+         <p>Request marked as rejected. Customer notified at ${escapeHtml(request.email)}.</p>
+       </body></html>`
+    );
+  } catch (error) {
+    logError('Pricing reject error', error, { id: req.params.id });
+    res.status(500).send('Failed to reject');
   }
 });
 

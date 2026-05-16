@@ -28,22 +28,33 @@ const METER_IDS = {
   opportunityStageHistory: '69864aed1265653fdd7c0620'
 };
 
+// Base credit price used by all default unit prices. Custom per-location credit prices override this.
+const BASE_CREDIT_PRICE = 0.018;
+
 // Email pricing tiers:
 //   ≤ 10,000 emails → 3 credits × $0.018 = $0.054/email
 //   > 10,000 emails → 2 credits × $0.018 = $0.036/email
 //   > 50,000 emails → 2 credits × $0.010 = $0.020/email
-function getEmailPricing(emailCount) {
-  if (emailCount > 50000) return { creditsPerEmail: 2, creditPrice: 0.01,  unitPrice: 0.02  };
-  if (emailCount > 10000) return { creditsPerEmail: 2, creditPrice: 0.018, unitPrice: 0.036 };
-  return                         { creditsPerEmail: 3, creditPrice: 0.018, unitPrice: 0.054 };
+// When `customCreditPrice` is set (per-location override from AppConfig), it REPLACES the credit
+// price entirely — the volume tier still picks credits-per-email, but the credit rate is fixed
+// to the negotiated value (no further auto-discount at >50k).
+function getEmailPricing(emailCount, customCreditPrice = null) {
+  let creditsPerEmail, creditPrice;
+  if (emailCount > 50000)      { creditsPerEmail = 2; creditPrice = 0.01;  }
+  else if (emailCount > 10000) { creditsPerEmail = 2; creditPrice = 0.018; }
+  else                         { creditsPerEmail = 3; creditPrice = 0.018; }
+  if (customCreditPrice) creditPrice = customCreditPrice;
+  return { creditsPerEmail, creditPrice, unitPrice: creditsPerEmail * creditPrice };
 }
 
 // Non-email message pricing tiers (SMS / WhatsApp / etc.):
 //   ≤ 50,000 messages → 1 credit × $0.018 = $0.018/message
 //   > 50,000 messages → 1 credit × $0.010 = $0.010/message
-function getSmsPricing(smsCount) {
-  if (smsCount > 50000) return { creditsPerItem: 1, creditPrice: 0.01,  unitPrice: 0.01  };
-  return                       { creditsPerItem: 1, creditPrice: 0.018, unitPrice: 0.018 };
+function getSmsPricing(smsCount, customCreditPrice = null) {
+  const creditsPerItem = 1;
+  let creditPrice = smsCount > 50000 ? 0.01 : 0.018;
+  if (customCreditPrice) creditPrice = customCreditPrice;
+  return { creditsPerItem, creditPrice, unitPrice: creditsPerItem * creditPrice };
 }
 
 // Default unit prices in dollars (fallback if API fails)
@@ -172,7 +183,7 @@ class BillingService {
    * @param {Object} prices - Optional prices (if not provided, uses defaults)
    * @returns {Object} Pricing estimate with breakdown
    */
-  calculateEstimate(counts, prices = null) {
+  calculateEstimate(counts, prices = null, customCreditPrice = null) {
     const {
       conversations = 0,
       smsMessages = 0,
@@ -197,11 +208,18 @@ class BillingService {
       opportunityStageMsgCount = 0
     } = counts;
 
-    // Use provided prices or defaults
-    const unitPrices = prices || DEFAULT_UNIT_PRICES;
-    // Email and SMS pricing are tiered by volume (see getEmailPricing / getSmsPricing)
-    const emailPricing = getEmailPricing(emailMessages);
-    const smsPricing = getSmsPricing(smsMessages);
+    // Per-location credit-price override scales every default unit price proportionally,
+    // so OSH ($0.10 flat) and credit-based items move together. Tiered email/SMS get the
+    // override applied inside their helpers above.
+    let unitPrices = prices || DEFAULT_UNIT_PRICES;
+    if (customCreditPrice && !prices) {
+      const multiplier = customCreditPrice / BASE_CREDIT_PRICE;
+      unitPrices = Object.fromEntries(
+        Object.entries(DEFAULT_UNIT_PRICES).map(([k, v]) => [k, v * multiplier])
+      );
+    }
+    const emailPricing = getEmailPricing(emailMessages, customCreditPrice);
+    const smsPricing = getSmsPricing(smsMessages, customCreditPrice);
     // Every export type is now discountable. Volume tiers apply to the total item count.
     const conversationsCost = conversations * unitPrices.conversations;
     const textMessagesCost = smsMessages * smsPricing.unitPrice;
@@ -371,7 +389,21 @@ class BillingService {
    */
   async calculateEstimateWithPrices(counts, accessToken, locationId) {
     const prices = await this.fetchMeterPrices(accessToken, locationId);
+    // Per-location override (set via AppConfig `locationCreditPrice:<locationId>`) wins over
+    // both rebilling-config prices and defaults. Scales every tab's price by the negotiated rate.
+    const customCreditPrice = await AppConfig.getLocationCreditPrice(locationId);
+    if (customCreditPrice) return this.calculateEstimate(counts, null, customCreditPrice);
     return this.calculateEstimate(counts, prices);
+  }
+
+  /**
+   * Sync `calculateEstimate` but applies the per-location credit-price override from AppConfig.
+   * Use this from any caller that already has `locationId` and wants the override honored
+   * (e.g. the OSH branch in routes/billing.js which doesn't go through `calculateEstimateWithPrices`).
+   */
+  async calculateEstimateForLocation(counts, locationId) {
+    const customCreditPrice = await AppConfig.getLocationCreditPrice(locationId);
+    return this.calculateEstimate(counts, null, customCreditPrice);
   }
 
   /**

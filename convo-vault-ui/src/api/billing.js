@@ -192,4 +192,16 @@ export const billingAPI = {
     const response = await apiClient.post('/billing/custom-charge', { locationId, amount });
     return response;
   },
+
+  /**
+   * Submit a custom-rate request for this location.
+   * Auto-approves at the proposed rate when expectedVolume >= 10000;
+   * otherwise saves pending + emails internal team for manual review.
+   */
+  submitPricingRequest: async ({ locationId, proposedCreditPrice, expectedVolume, email, reason }) => {
+    const response = await apiClient.post('/billing/pricing-request', {
+      locationId, proposedCreditPrice, expectedVolume, email, reason
+    });
+    return response;
+  },
 };

@@ -56,6 +56,34 @@ appConfigSchema.statics.hasValue = async function (key, value) {
 };
 
 /**
+ * Per-location custom credit price. Stored as `locationCreditPrice:<locationId>` → values:[priceAsString].
+ * Returns a positive number when an override exists for this location, otherwise null.
+ */
+appConfigSchema.statics.getLocationCreditPrice = async function (locationId) {
+  if (!locationId) return null;
+  const values = await this.getValues(`locationCreditPrice:${locationId}`);
+  if (!values || values.length === 0) return null;
+  const price = parseFloat(values[0]);
+  return Number.isFinite(price) && price > 0 ? price : null;
+};
+
+/**
+ * Set (or update) the custom credit price for a location. Clears the cache so the next read sees it.
+ */
+appConfigSchema.statics.setLocationCreditPrice = async function (locationId, price) {
+  if (!locationId) throw new Error('locationId required');
+  const numeric = parseFloat(price);
+  if (!Number.isFinite(numeric) || numeric <= 0) throw new Error('price must be a positive number');
+  const key = `locationCreditPrice:${locationId}`;
+  await this.findOneAndUpdate(
+    { key },
+    { key, values: [String(numeric)], description: `Custom credit price for location ${locationId}` },
+    { upsert: true, new: true }
+  );
+  delete cache[key];
+};
+
+/**
  * Clear cache for a key (or all keys)
  */
 appConfigSchema.statics.clearCache = function (key) {

@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { Modal, Button, Spin, Alert, Input, Collapse, Radio } from 'antd';
 import { UNIT_PRICES, OLD_UNIT_PRICES, formatUnitPrice as formatPrice } from '../constants/pricing';
+import { useAuth } from '../context/AuthContext';
+import PricingRequestModal from './PricingRequestModal';
+
+// Threshold above which we surface the "Request custom rate" link inside this modal.
+const PRICING_REQUEST_THRESHOLD = 30;
+// Test location — always shows the link regardless of finalAmount, so we can exercise the flow
+// on small/free exports during QA. Remove once the feature is broadly rolled out.
+const PRICING_REQUEST_TEST_LOCATION_ID = 'WHspQgeC5SqFU8i55G7L';
 
 const { Panel } = Collapse;
 
@@ -25,6 +33,9 @@ export default function ExportEstimateModal({
   console.log('estimate modal props', estimate, exportType, postExportBilling);
   const [email, setEmail] = useState('');
   const [exportFormat, setExportFormat] = useState('csv');
+  const [pricingRequestOpen, setPricingRequestOpen] = useState(false);
+  const { location, ghlContext } = useAuth() || {};
+  const currentLocationId = location?.id || location?.locationId || ghlContext?.locationId || null;
 
   // Format currency (value is in dollars) - use 4 decimal places for sub-cent amounts
   const formatCurrency = (value) => {
@@ -633,6 +644,20 @@ export default function ExportEstimateModal({
             </div>
           </div>
 
+          {/* Custom-rate request link: surface when bill is meaningful ($30+) OR for the test location, and we have a location to scope the override to. */}
+          {currentLocationId && (Number(estimate.finalAmount) > PRICING_REQUEST_THRESHOLD || currentLocationId === PRICING_REQUEST_TEST_LOCATION_ID) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
+              <span className="text-sm text-amber-900">💬 Think the price is too high?</span>
+              <button
+                type="button"
+                onClick={() => setPricingRequestOpen(true)}
+                className="text-sm font-semibold text-amber-800 hover:text-amber-900 underline underline-offset-2"
+              >
+                Request a custom rate
+              </button>
+            </div>
+          )}
+
           {/* Savings Banner - Show prominently when discount applied */}
           {estimate.discountPercent > 0 && (
             <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg px-4 py-2 text-white">
@@ -792,6 +817,13 @@ export default function ExportEstimateModal({
           </div>
         </div>
       )}
+      <PricingRequestModal
+        isOpen={pricingRequestOpen}
+        onClose={() => setPricingRequestOpen(false)}
+        locationId={currentLocationId}
+        currentPrice={0.018}
+        defaultEmail={email}
+      />
     </Modal>
   );
 }
