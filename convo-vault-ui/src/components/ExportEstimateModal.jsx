@@ -718,7 +718,7 @@ export default function ExportEstimateModal({
           )}
 
           {/* Volume Discount Tiers - Shown when the estimate provides tiers. Hidden for the standalone-billed flows (specialTabMessages/callTranscriptions) which have no volume discounts. */}
-          {(estimate.discountTiers?.length > 0) && !['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory'].includes(exportType) && (
+          {(estimate.discountTiers?.length > 0) && !['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle'].includes(exportType) && (
           <Collapse ghost className="bg-gray-50 rounded-lg" defaultActiveKey={estimate.discountPercent > 0 ? [] : []}>
             <Panel
               header={
