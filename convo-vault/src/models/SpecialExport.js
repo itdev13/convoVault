@@ -63,6 +63,18 @@ const specialExportSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Custom-field column schema for the Opportunity Stage History export. The Lambda emits one CSV
+  // column per field, and headers must be known up-front (chunk 0 writes the header before any rows
+  // are seen), so we persist the canonical list here at /estimate time. Empty arrays for export
+  // types that don't use this.
+  contactCustomFieldNames: {
+    type: [String],
+    default: []
+  },
+  opportunityCustomFieldNames: {
+    type: [String],
+    default: []
+  },
   filters: {
     type: mongoose.Schema.Types.Mixed,
     default: {}

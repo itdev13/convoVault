@@ -1130,23 +1130,41 @@ function callLogsToCSV(callLogs, includeHeader = true) {
  * Convert live chat messages to CSV format
  */
 /**
- * Opportunity Stage History — one row per (opportunity × stage_session).
- * Each input record is a flat row built by the billing-route walker.
- * Messages + custom fields are JSON-encoded into single CSV cells so the
- * row count stays one-per-stage. Power users open the JSON cells in Excel
- * or pipe through jq for richer analysis.
+ * Opportunity Stage History — fully flattened for analytics ingestion.
+ *
+ * Each input record is one (opportunity × stage_session) emitted by the billing-route walker.
+ * Output shape:
+ *   - One CSV row per *message*, with stage metadata (ContactID, OpportunityID, PipelineName,
+ *     StageName, EnteredAt, LeftAt, DurationSeconds, CurrentStage, Deleted, GhostOpportunity)
+ *     repeated on every row.
+ *   - Stages with no messages still emit one CSV row with empty message columns, so stage
+ *     history isn't lost when a stage had no conversation activity.
+ *   - Each contact custom field becomes a column named `Contact CF: <fieldName>`.
+ *   - Each opportunity custom field becomes a column named `Opp CF: <fieldName>`.
+ *
+ * The custom-field column schema must be known up-front (chunk 0 writes the header before any
+ * row in any chunk is seen), so the canonical name lists are persisted on the SpecialExport doc
+ * during /estimate and passed in here as `contactCfNames` + `opportunityCfNames`.
  */
-function opportunityStageHistoryToCSV(rows, includeHeader = true) {
+function opportunityStageHistoryToCSV(rows, includeHeader = true, contactCfNames = [], opportunityCfNames = []) {
+  const baseColumns = [
+    'ContactID', 'OpportunityID', 'PipelineName', 'StageName',
+    'EnteredAt', 'LeftAt', 'DurationSeconds', 'CurrentStage', 'Deleted', 'GhostOpportunity',
+    'MessageTimestamp', 'MessageBody', 'MessageDirection', 'MessageChannel',
+    'MessageID', 'ConversationID', 'IsCall'
+  ];
+  const contactCfColumns = contactCfNames.map(n => `Contact CF: ${n}`);
+  const opportunityCfColumns = opportunityCfNames.map(n => `Opp CF: ${n}`);
+  const allColumns = [...baseColumns, ...contactCfColumns, ...opportunityCfColumns];
+
   const header = includeHeader
-    ? 'ContactID,OpportunityID,PipelineName,StageName,EnteredAt,LeftAt,DurationSeconds,CurrentStage,InboundMessageCount,OutboundMessageCount,CallMessageCount,MessagesJSON,ContactCustomFieldsJSON,OpportunityCustomFieldsJSON,CallMessageIDs\n'
+    ? allColumns.map(c => escapeCsv(c)).join(',') + '\n'
     : '';
 
-  const csvRows = rows.map(r => {
-    const msgs = Array.isArray(r.messages) ? r.messages : [];
-    const inbound = msgs.filter(m => String(m.direction || '').toLowerCase() === 'inbound').length;
-    const outbound = msgs.filter(m => String(m.direction || '').toLowerCase() === 'outbound').length;
-    const calls = msgs.filter(m => m.isCall).length;
-    return [
+  const csvLines = [];
+  for (const r of rows) {
+    // Stage-level fields, evaluated once per input row.
+    const stageCells = [
       escapeCsv(r.contactId || ''),
       escapeCsv(r.opportunityId || ''),
       escapeCsv(r.pipelineName || ''),
@@ -1155,17 +1173,44 @@ function opportunityStageHistoryToCSV(rows, includeHeader = true) {
       escapeCsv(r.leftAt || ''),
       escapeCsv(r.durationSeconds != null ? String(r.durationSeconds) : ''),
       escapeCsv(r.currentStage ? 'true' : 'false'),
-      escapeCsv(String(inbound)),
-      escapeCsv(String(outbound)),
-      escapeCsv(String(calls)),
-      escapeCsv(JSON.stringify(msgs)),
-      escapeCsv(JSON.stringify(r.contactCustomFields || {})),
-      escapeCsv(JSON.stringify(r.opportunityCustomFields || {})),
-      escapeCsv((r.callMessageIds || []).join('; '))
-    ].join(',');
-  }).join('\n');
+      escapeCsv(r.deleted ? 'true' : 'false'),
+      escapeCsv(r.ghostOpportunity ? 'true' : 'false')
+    ];
 
-  return header + csvRows + (csvRows.length > 0 ? '\n' : '');
+    // Custom-field cells (look up by field name, blank when missing).
+    const contactCfs = r.contactCustomFields || {};
+    const opportunityCfs = r.opportunityCustomFields || {};
+    const contactCfCells = contactCfNames.map(n => escapeCsv(contactCfs[n] != null ? String(contactCfs[n]) : ''));
+    const opportunityCfCells = opportunityCfNames.map(n => escapeCsv(opportunityCfs[n] != null ? String(opportunityCfs[n]) : ''));
+
+    const msgs = Array.isArray(r.messages) ? r.messages : [];
+
+    if (msgs.length === 0) {
+      // Stage had no messages — still emit one row so the stage history shows up.
+      const emptyMessageCells = ['', '', '', '', '', '', ''].map(escapeCsv);
+      csvLines.push([...stageCells, ...emptyMessageCells, ...contactCfCells, ...opportunityCfCells].join(','));
+      continue;
+    }
+
+    // One CSV row per message — stage metadata repeated.
+    for (const m of msgs) {
+      const messageCells = [
+        escapeCsv(m.dateAdded || ''),
+        escapeCsv(m.body || ''),
+        escapeCsv(m.direction || ''),
+        // Prefer the string type when present (TYPE_SMS / TYPE_EMAIL / …); fall back to the
+        // numeric type code from /conversations/messages/export (e.g. 20).
+        escapeCsv(m.channel || m.messageType || (m.type != null ? String(m.type) : '')),
+        escapeCsv(m.messageId || ''),
+        escapeCsv(m.conversationId || ''),
+        escapeCsv(m.isCall ? 'true' : 'false')
+      ];
+      csvLines.push([...stageCells, ...messageCells, ...contactCfCells, ...opportunityCfCells].join(','));
+    }
+  }
+
+  const body = csvLines.join('\n');
+  return header + body + (body.length > 0 ? '\n' : '');
 }
 
 function specialMessagesToCSV(messages, includeHeader = true) {
@@ -1531,6 +1576,11 @@ exports.handler = async (event, context) => {
     let records = [];
     let recordsFetched = 0;
     let hasMoreData = true;
+    // Custom-field column schema for opportunityStageHistory. Populated inside the SpecialExport
+    // branch (from rootExport.contactCustomFieldNames / opportunityCustomFieldNames) and consumed
+    // when we call opportunityStageHistoryToCSV. Empty for other export types.
+    let oshContactCfNames = [];
+    let oshOpportunityCfNames = [];
 
     log('Starting batch', { cursor, skip, alreadyProcessed: job.processedItems || 0 });
 
@@ -2055,6 +2105,14 @@ exports.handler = async (event, context) => {
       const totalMessages = rootExport.totalMessages || rootRecords.length;
       const groupId = rootExport._id; // chunk 0 _id is the groupId for all other chunks
 
+      // For opportunityStageHistory the CSV columns include one column per contact / opportunity
+      // custom field — pick those up from the root SpecialExport doc so chunk 0 emits the right
+      // header and every chunk lays out cells in the same column order.
+      if (job.exportType === 'opportunityStageHistory') {
+        oshContactCfNames = Array.isArray(rootExport.contactCustomFieldNames) ? rootExport.contactCustomFieldNames : [];
+        oshOpportunityCfNames = Array.isArray(rootExport.opportunityCustomFieldNames) ? rootExport.opportunityCustomFieldNames : [];
+      }
+
       // Load the correct chunk
       let chunkDoc;
       if (chunkIndex === 0) {
@@ -2207,7 +2265,7 @@ exports.handler = async (event, context) => {
       } else if (job.exportType === 'specialTabMessages') {
         content = specialMessagesToCSV(records, isFirstContent);
       } else if (job.exportType === 'opportunityStageHistory') {
-        content = opportunityStageHistoryToCSV(records, isFirstContent);
+        content = opportunityStageHistoryToCSV(records, isFirstContent, oshContactCfNames, oshOpportunityCfNames);
       } else if (job.exportType === 'callTranscriptions') {
         content = callTranscriptionsToCSV(records, isFirstContent);
       } else if (job.exportType === 'contacts') {

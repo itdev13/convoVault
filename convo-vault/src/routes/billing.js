@@ -479,6 +479,11 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       for (const f of (cfContactResp.customFields || [])) contactCfMap[f.id] = f.name;
       const oppCfMap = {};
       for (const f of (cfOppResp.customFields || [])) oppCfMap[f.id] = f.name;
+      // Sorted, deduped name lists for the Lambda CSV column schema. We persist these on the
+      // SpecialExport so chunk-0's CSV header has the full set of "Contact CF: <name>" /
+      // "Opp CF: <name>" columns up-front, even if some chunks lack any value for a field.
+      const contactCustomFieldNames = Array.from(new Set(Object.values(contactCfMap))).sort();
+      const opportunityCustomFieldNames = Array.from(new Set(Object.values(oppCfMap))).sort();
       oshLog('step2.customFields: response', {
         contactCustomFieldCount: Object.keys(contactCfMap).length,
         opportunityCustomFieldCount: Object.keys(oppCfMap).length,
@@ -684,28 +689,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       //      keeps payload tiny — these are sparse compared to chat)
       //   c) one export call per contact for all channel messages
       //   d) merge into one timeline, split into activities + channel rows for processing
-      // ── TEMPORARY DEBUG SCOPE — REMOVE BEFORE GENERAL ROLLOUT ────────────────────────────
-      // While we iterate on the activity-row extraction strategy (the bulk messages API doesn't
-      // return the `activity` field — confirmed via runId osh_1778848016968_r5ciy6), we run the
-      // walk against ONE contact at a time so production logs stay readable. Set to null (or
-      // delete this block) once the data pipeline is verified end-to-end.
-      const OSH_DEBUG_ONLY_CONTACT_ID = 'hGFKHeZCWwcx6R42bpHA';
-      const contactsToWalk = OSH_DEBUG_ONLY_CONTACT_ID
-        ? Object.fromEntries(Object.entries(oppsByContact).filter(([cid]) => cid === OSH_DEBUG_ONLY_CONTACT_ID))
-        : oppsByContact;
-      if (OSH_DEBUG_ONLY_CONTACT_ID) {
-        oshWarn('step4: DEBUG scope active — walking ONE contact only', {
-          onlyContactId: OSH_DEBUG_ONLY_CONTACT_ID,
-          totalContactsAvailable: Object.keys(oppsByContact).length,
-          contactsRemaining: Object.keys(contactsToWalk).length,
-          contactFound: Object.keys(contactsToWalk).length > 0
-        });
-      }
-      // ─────────────────────────────────────────────────────────────────────────────────────
 
       let contactIndex = 0;
-      const contactsTotal = Object.keys(contactsToWalk).length;
-      for (const [contactId, opps] of Object.entries(contactsToWalk)) {
+      const contactsTotal = Object.keys(oppsByContact).length;
+      for (const [contactId, opps] of Object.entries(oppsByContact)) {
         contactIndex++;
         const contactStart = Date.now();
         oshLog('step4.contact: start', {
@@ -1256,6 +1243,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         totalConversations: Object.keys(oppsByContact).length,
         totalOpportunities: opportunityCount,
         totalChannelMessages: channelMessageCount,
+        contactCustomFieldNames,
+        opportunityCustomFieldNames,
         chunkIndex: 0,
         totalChunks,
         status: 'ready'
@@ -1272,6 +1261,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             totalConversations: Object.keys(oppsByContact).length,
             totalOpportunities: opportunityCount,
             totalChannelMessages: channelMessageCount,
+            contactCustomFieldNames,
+            opportunityCustomFieldNames,
             groupId: specialExport._id,
             chunkIndex: ci,
             totalChunks,
