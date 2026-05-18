@@ -431,13 +431,23 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const pipelinesResp = await withRetry(() => ghlService.getPipelines(locationId));
       const stageMap = {};                 // stageId → { stageName, pipelineId, pipelineName }
       const stageIdByPipelineAndName = {}; // pipelineId → { stageName → stageId } (name-based lookup, scoped per pipeline because names can collide across pipelines)
+      // Activity events expose pipeline as a *name* (e.g. "Liam"), not an id, so we need:
+      //   pipelineByName: name → id (so we can resolve a ghost opp's pipelineId from activity data)
+      //   resolveStageId(pipelineName, stageName) → stageId (handles the collision-by-name case via pipeline scoping)
+      const pipelineByName = {};
       for (const p of (pipelinesResp.pipelines || [])) {
+        pipelineByName[p.name] = { id: p.id, name: p.name };
         stageIdByPipelineAndName[p.id] = {};
         for (const s of (p.stages || [])) {
           stageMap[s.id] = { stageName: s.name, pipelineId: p.id, pipelineName: p.name };
           stageIdByPipelineAndName[p.id][s.name] = s.id;
         }
       }
+      const resolveStageId = (pipelineName, stageName) => {
+        if (!pipelineName || !stageName) return null;
+        const pipelineId = pipelineByName[pipelineName]?.id;
+        return (pipelineId && stageIdByPipelineAndName[pipelineId]?.[stageName]) || null;
+      };
       oshLog('step1.pipelines: response', {
         pipelineCount: (pipelinesResp.pipelines || []).length,
         totalStages: Object.keys(stageMap).length,
@@ -609,24 +619,55 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           info.newStageName ||
           (newStageId && stageMap[newStageId]?.stageName) || null;
 
-        // Event type lets the caller distinguish creation (1 row, current stage) from
-        // stage transitions (emit a row for the FROM stage window).
+        // Pipeline name comes from `activity.data.pipeline` (e.g. "Liam"); fallback to legacy paths.
+        const pipelineName = actData?.pipeline || info.pipeline || info.pipelineName || null;
+        // Opportunity display name (useful when synthesizing ghost-opp rows for deleted opps).
+        const oppName = actData?.name || info.name || null;
+        // Event type lets the caller distinguish creation (no previous-stage row to close) from
+        // stage transitions (emit a row for the FROM stage window) from deletion (close final row).
         const eventType = act?.type || info.type || null;
+
+        // Activity events carry stage *names* but not *ids*. Reverse-resolve when missing,
+        // so downstream code has stageIds for both old and new (scoped by pipeline to avoid
+        // collisions when the same stage name exists in multiple pipelines).
+        const resolvedOldStageId = oldStageId || resolveStageId(pipelineName, oldStageName);
+        const resolvedNewStageId = newStageId || resolveStageId(pipelineName, newStageName);
 
         return {
           oppId,
-          oldStageId, newStageId,
+          oldStageId: resolvedOldStageId,
+          newStageId: resolvedNewStageId,
           oldStageName, newStageName,
+          pipelineName, oppName,
           eventType,
           dateAdded: m.dateAdded || m.dateUpdated || null
         };
       };
 
+      // Channel messages: GHL returns numeric type codes from /conversations/messages/export
+      // (e.g. type=20 inbound SMS) and from per-conversation /messages (when not filtered).
+      // String form is `TYPE_SMS` / `TYPE_EMAIL` / etc. We accept either.
+      //
+      // The 25–29 numeric range is reserved for activity events (28 = TYPE_ACTIVITY_OPPORTUNITY,
+      // confirmed in production). Everything else returned by these channel endpoints is a real
+      // conversation message — trust the endpoint rather than maintaining a whitelist.
+      const ACTIVITY_TYPE_NUMS = new Set([25, 26, 27, 28, 29]);
       const isConversationMsg = (m) => {
-        const t = String(m.type || m.messageType || '').toUpperCase();
-        return t.startsWith('TYPE_SMS') || t === 'TYPE_EMAIL' || t === 'TYPE_LIVE_CHAT' || t === 'TYPE_WEBCHAT' || t === 'TYPE_CALL' || t === 'TYPE_WHATSAPP' || t === 'TYPE_FACEBOOK' || t === 'TYPE_INSTAGRAM';
+        const t = m.type ?? m.messageType;
+        if (typeof t === 'number') return !ACTIVITY_TYPE_NUMS.has(t);
+        const str = String(t || '').toUpperCase();
+        if (!str) return false;
+        if (str.startsWith('TYPE_ACTIVITY')) return false;
+        return str.startsWith('TYPE_SMS') || str === 'TYPE_EMAIL' || str === 'TYPE_LIVE_CHAT'
+          || str === 'TYPE_WEBCHAT' || str === 'TYPE_CALL' || str === 'TYPE_WHATSAPP'
+          || str === 'TYPE_FACEBOOK' || str === 'TYPE_INSTAGRAM';
       };
-      const isCallMsg = (m) => String(m.type || m.messageType || '').toUpperCase() === 'TYPE_CALL';
+      // Calls: numeric type 1 = TYPE_CALL in GHL; also accept the string form for safety.
+      const isCallMsg = (m) => {
+        const t = m.type ?? m.messageType;
+        if (t === 1 || t === '1') return true;
+        return String(t || '').toUpperCase() === 'TYPE_CALL';
+      };
 
       const allRows = [];
       let firstActivityRowLogged = false;
@@ -909,6 +950,47 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           transitionsByOpp
         });
 
+        // Ghost-opp synthesis: activity events may reference opportunities that no longer exist
+        // in /opportunities/search (deleted, merged, archived). Their stage history is real and
+        // billable — synthesize minimal opp records from the event data so the row-emission loop
+        // below treats them uniformly. Without this, the customer loses the most valuable
+        // history (e.g. a sales rep's complete deleted-opp trail).
+        const knownOppIds = new Set(opps.map(o => o.id));
+        const ghostOppIds = Object.keys(stageEventsByOpp).filter(id => !knownOppIds.has(id));
+        for (const ghostId of ghostOppIds) {
+          const eventsForGhost = stageEventsByOpp[ghostId]
+            .slice()
+            .sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));
+          const firstEv = eventsForGhost[0];
+          const lastEv = eventsForGhost[eventsForGhost.length - 1];
+          const wasDeleted = eventsForGhost.some(ev => ev.eventType === 'opportunity_deleted');
+          opps.push({
+            id: ghostId,
+            contactId,
+            // Resolve pipelineId from the event's pipeline NAME (activity events expose
+            // `data.pipeline` as a name, not an id).
+            pipelineId: pipelineByName[firstEv.pipelineName]?.id || null,
+            pipelineName: firstEv.pipelineName || null,
+            pipelineStageId: null,
+            // Use the earliest event timestamp as a stand-in for createdAt — the opp existed
+            // at least as far back as its first observed event.
+            createdAt: firstEv.dateAdded,
+            customFieldsResolved: {},
+            _ghost: true,
+            _ghostName: firstEv.oppName || null,
+            _deleted: wasDeleted,
+            _lastSeenAt: lastEv.dateAdded
+          });
+        }
+        if (ghostOppIds.length > 0) {
+          oshLog('step5.stageEvents: ghost opportunities synthesized', {
+            contactId,
+            ghostCount: ghostOppIds.length,
+            ghostIds: ghostOppIds,
+            ghostsDeleted: opps.filter(o => o._ghost && o._deleted).length
+          });
+        }
+
         // Pre-sort all conversation messages once for efficient window slicing.
         const convoMsgs = contactMsgs
           .filter(isConversationMsg)
@@ -952,8 +1034,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         // Other event types are ignored as non-transitions.
         const rowsBeforeContact = allRows.length;
 
-        // Resolve a stage name → id within this opportunity's pipeline (best-effort).
-        const resolveStageId = (pipelineId, stageName) => {
+        // Resolve a stage name → id within a given pipeline (best-effort).
+        // Renamed from `resolveStageId` to avoid shadowing the outer `resolveStageId(pipelineName, stageName)`
+        // helper used by extractStageEvent — they have different signatures (id vs name).
+        const resolveStageIdByPipelineId = (pipelineId, stageName) => {
           if (!stageName) return null;
           return stageIdByPipelineAndName[pipelineId]?.[stageName] || null;
         };
@@ -1016,14 +1100,22 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           }
 
           // Walk events and emit a CLOSED row each time the opp leaves a stage.
+          // After an `opportunity_deleted` event we mark the opp as terminated so the trailing
+          // OPEN row at the bottom is skipped — a deleted opp has no current stage.
+          let oppTerminated = false;
           for (const ev of allEvents) {
-            if (ev.eventType !== 'opportunity_stage_updated') {
-              // 'opportunity_created' already consumed by the initial-stage seed above.
-              // Any other event types (status change, etc.) are not stage transitions.
+            if (ev.eventType === 'opportunity_created') {
+              // Already consumed by the initial-stage seed above; no row to emit here.
+              continue;
+            }
+            const isTransition = ev.eventType === 'opportunity_stage_updated';
+            const isDelete = ev.eventType === 'opportunity_deleted';
+            if (!isTransition && !isDelete) {
+              // Status change, etc. — not a stage event we model.
               continue;
             }
             const leftMs = new Date(ev.dateAdded).getTime();
-            const stageId = resolveStageId(opp.pipelineId, currentStageName);
+            const stageId = resolveStageIdByPipelineId(opp.pipelineId, currentStageName);
             const stageInfo = stageId ? stageMap[stageId] : null;
             allRows.push({
               contactId,
@@ -1039,31 +1131,47 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               callMessageIds: sliceWindow(entryMs, leftMs).filter(m => m.isCall).map(m => m.messageId),
               contactCustomFields: contactCfResolved,
               opportunityCustomFields: oppById[opp.id]?.customFieldsResolved || {},
-              currentStage: false
+              currentStage: false,
+              // Mark the row that closes a deletion so the customer can distinguish a
+              // "moved to next stage" close from a "removed from pipeline" close.
+              ...(isDelete ? { deleted: true, deletedAt: new Date(leftMs).toISOString() } : {}),
+              // Flag synthesized rows. A deleted opp that came from the activity stream
+              // (not /opportunities/search) will have BOTH `deleted: true` and `ghostOpportunity: true`.
+              ...(opp._ghost ? { ghostOpportunity: true } : {})
             });
+            if (isDelete) {
+              oppTerminated = true;
+              break; // No further events can apply to a deleted opp.
+            }
             entryMs = leftMs;
             currentStageName = ev.newStageName || null;
           }
 
-          // Final OPEN row: the stage the opp is currently in, still in progress.
-          const finalStageId = resolveStageId(opp.pipelineId, currentStageName);
-          const finalStageInfo = finalStageId ? stageMap[finalStageId] : null;
-          allRows.push({
-            contactId,
-            opportunityId: opp.id,
-            pipelineId: opp.pipelineId || finalStageInfo?.pipelineId || null,
-            pipelineName: finalStageInfo?.pipelineName || oppPipelineName,
-            stageName: currentStageName,
-            stageId: finalStageId,
-            enteredAt: new Date(entryMs).toISOString(),
-            leftAt: null,
-            durationSeconds: Math.round((Date.now() - entryMs) / 1000),
-            messages: sliceWindow(entryMs, null),
-            callMessageIds: sliceWindow(entryMs, null).filter(m => m.isCall).map(m => m.messageId),
-            contactCustomFields: contactCfResolved,
-            opportunityCustomFields: oppById[opp.id]?.customFieldsResolved || {},
-            currentStage: true
-          });
+          // Final OPEN row: only emitted when the opp is still active. Ghost opps that ended
+          // in `opportunity_deleted` skip this — their timeline closed on the deletion event.
+          if (!oppTerminated) {
+            const finalStageId = resolveStageIdByPipelineId(opp.pipelineId, currentStageName);
+            const finalStageInfo = finalStageId ? stageMap[finalStageId] : null;
+            allRows.push({
+              contactId,
+              opportunityId: opp.id,
+              pipelineId: opp.pipelineId || finalStageInfo?.pipelineId || null,
+              pipelineName: finalStageInfo?.pipelineName || oppPipelineName,
+              stageName: currentStageName,
+              stageId: finalStageId,
+              enteredAt: new Date(entryMs).toISOString(),
+              leftAt: null,
+              durationSeconds: Math.round((Date.now() - entryMs) / 1000),
+              messages: sliceWindow(entryMs, null),
+              callMessageIds: sliceWindow(entryMs, null).filter(m => m.isCall).map(m => m.messageId),
+              contactCustomFields: contactCfResolved,
+              opportunityCustomFields: oppById[opp.id]?.customFieldsResolved || {},
+              currentStage: true,
+              // Flag synthesized rows so downstream consumers can distinguish "real" opps
+              // from those reconstructed from activity events alone.
+              ...(opp._ghost ? { ghostOpportunity: true } : {})
+            });
+          }
         }
         oshLog('step4.contact: done', {
           contactIndex,
