@@ -236,7 +236,7 @@ export default function ContactBundleTab() {
           <p className="text-sm text-amber-800">
             <strong>Heavy task:</strong> we walk each selected contact's conversations to collect every message,
             fetch emails via bulk export, and pull a transcript for every eligible call.
-            Pricing: <strong>$0.20 / message</strong> + <strong>$0.40 / email</strong> + <strong>$0.05 / call transcription</strong>
+            Pricing: <strong>$0.02 / message</strong> + <strong>$0.04 / email</strong> + <strong>$0.05 / call transcription</strong>
             {' '}— no volume discount.
           </p>
         </div>

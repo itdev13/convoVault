@@ -633,14 +633,14 @@ export default function ExportEstimateModal({
                     <span className="text-gray-700">Messages (SMS / WhatsApp / Webchat / FB / IG)</span>
                     <span className="font-medium">
                       {formatNumber(estimate.itemCounts?.contactBundleSms ?? estimate.breakdown?.sms?.count ?? 0)}
-                      <span className="text-gray-400 ml-2">× $0.20</span>
+                      <span className="text-gray-400 ml-2">× $0.02</span>
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Emails</span>
                     <span className="font-medium">
                       {formatNumber(estimate.itemCounts?.contactBundleEmail ?? estimate.breakdown?.email?.count ?? 0)}
-                      <span className="text-gray-400 ml-2">× $0.40</span>
+                      <span className="text-gray-400 ml-2">× $0.04</span>
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
