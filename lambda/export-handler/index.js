@@ -787,6 +787,33 @@ function callTranscriptionsToCSV(records, includeHeader = true) {
   return header + rows + (rows.length > 0 ? '\n' : '');
 }
 
+/**
+ * Contact Bundle — one CSV row per message, already sorted by dateAdded ASC in the walker.
+ * Categories: sms / email / call (used for billing; surfaced as the `Category` column for QA).
+ */
+function contactBundleToCSV(records, includeHeader = true) {
+  const header = includeHeader
+    ? 'ContactID,ConversationID,MessageID,Category,Channel,Direction,DateAdded,From,To,Subject,Body,Transcription,Status,DurationSeconds\n'
+    : '';
+  const rows = records.map(r => [
+    escapeCsv(r.contactId || ''),
+    escapeCsv(r.conversationId || ''),
+    escapeCsv(r.messageId || ''),
+    escapeCsv(r.category || ''),
+    escapeCsv(r.channel || ''),
+    escapeCsv(r.direction || ''),
+    escapeCsv(r.dateAdded || ''),
+    escapeCsv(r.from || ''),
+    escapeCsv(r.to || ''),
+    escapeCsv(r.subject || ''),
+    escapeCsv(r.body || ''),
+    escapeCsv(r.transcription || ''),
+    escapeCsv(r.status || ''),
+    escapeCsv(r.durationSeconds != null ? String(r.durationSeconds) : '')
+  ].join(',')).join('\n');
+  return header + rows + (rows.length > 0 ? '\n' : '');
+}
+
 
 /**
  * Convert notes to CSV format
@@ -2073,7 +2100,7 @@ exports.handler = async (event, context) => {
       cursor = contactsCursor ? JSON.stringify(contactsCursor) : null;
       hasMoreData = !!cursor;
 
-    } else if (job.exportType === 'specialTabMessages' || job.exportType === 'callTranscriptions' || job.exportType === 'opportunityStageHistory') {
+    } else if (job.exportType === 'specialTabMessages' || job.exportType === 'callTranscriptions' || job.exportType === 'opportunityStageHistory' || job.exportType === 'contactBundle') {
       // === SPECIAL MESSAGES / CALL TRANSCRIPTIONS: Read pre-fetched records from chunked specialexports ===
       // Chunk 0 is the "root" doc (has exportJobId). Remaining chunks share groupId = root._id.
       // Each chunk holds up to CHUNK_SIZE (5000) messages, matching BATCH_SIZE so one invocation = one chunk.
@@ -2268,6 +2295,8 @@ exports.handler = async (event, context) => {
         content = opportunityStageHistoryToCSV(records, isFirstContent, oshContactCfNames, oshOpportunityCfNames);
       } else if (job.exportType === 'callTranscriptions') {
         content = callTranscriptionsToCSV(records, isFirstContent);
+      } else if (job.exportType === 'contactBundle') {
+        content = contactBundleToCSV(records, isFirstContent);
       } else if (job.exportType === 'contacts') {
         content = contactsToCSV(records, isFirstContent);
       } else {

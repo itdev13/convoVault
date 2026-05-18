@@ -93,7 +93,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -1655,6 +1655,293 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
+    if (exportType === 'contactBundle') {
+      // Per-contact unified bundle: all channel messages (non-email) via per-conversation
+      // getMessages, all emails via the ES bulk exportMessages endpoint, and call transcriptions
+      // for eligible calls. One CSV row per message, sorted by dateAdded ASC.
+      //
+      // Three-rate flat pricing: SMS-like $0.02 / Email $0.04 / Call $0.05 — no volume discount.
+      const requestedContactIds = Array.isArray(filters?.contactIds)
+        ? filters.contactIds.filter(Boolean)
+        : [];
+      if (requestedContactIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Contact Bundle export requires at least one contactId in filters.contactIds.'
+        });
+      }
+
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const withRetry = async (fn, maxRetries = 5) => {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try { return await fn(); }
+          catch (err) {
+            const is429 = err.response?.status === 429;
+            const is5xx = err.response?.status >= 500 && err.response?.status < 600;
+            if ((is429 || is5xx) && attempt < maxRetries) {
+              const delay = Math.min(20000, Math.pow(2, attempt) * 1500) + Math.floor(Math.random() * 400);
+              await sleep(delay);
+            } else throw err;
+          }
+        }
+      };
+
+      const CALL_STATUSES_OK = new Set(['completed', 'answered', 'voicemail']);
+      // Numeric type codes from /conversations/{convId}/messages:
+      //   1 = Call, 3 = Email; 25–29 = activity events (skip)
+      const isEmailMsg = (m) => {
+        const t = m.type ?? m.messageType;
+        if (typeof t === 'number') return t === 3;
+        return String(t || '').toUpperCase() === 'TYPE_EMAIL';
+      };
+      const isCallMsg = (m) => {
+        const t = m.type ?? m.messageType;
+        if (typeof t === 'number') return t === 1;
+        return String(t || '').toUpperCase() === 'TYPE_CALL';
+      };
+      const isActivity = (m) => {
+        const t = m.type ?? m.messageType;
+        if (typeof t === 'number') return t >= 25 && t <= 29;
+        return String(t || '').toUpperCase().startsWith('TYPE_ACTIVITY');
+      };
+      const channelLabel = (m) => {
+        const t = m.type ?? m.messageType;
+        if (typeof t === 'string') return t.replace(/^TYPE_/, '');
+        // Best-effort numeric → label mapping for the CSV.
+        switch (t) {
+          case 1: return 'CALL';
+          case 2: return 'SMS';
+          case 3: return 'EMAIL';
+          case 20: return 'SMS'; // observed in production logs
+          case 21: return 'EMAIL';
+          default: return String(t || 'UNKNOWN');
+        }
+      };
+
+      // Per-contact worker — returns the rows it collected. Stays self-contained so we can
+      // run several in parallel without sharing mutable state.
+      const walkOneContact = async (contactId) => {
+        const rows = [];
+
+        // 1) List the contact's conversations (1:1 in practice; one call with limit=100 covers it).
+        const convoResp = await withRetry(() => ghlService.searchConversations(locationId, {
+          contactId,
+          limit: 100
+        }));
+        const convoIds = (convoResp.conversations || []).map(c => c.id);
+
+        // 2) For each conversation, pull NON-EMAIL messages from the per-conversation endpoint.
+        //    Emails are fetched separately via ES below; activity events are dropped.
+        const CONV_PARALLEL = 2;
+        for (let i = 0; i < convoIds.length; i += CONV_PARALLEL) {
+          const batch = convoIds.slice(i, i + CONV_PARALLEL);
+          const batchResults = await Promise.all(batch.map(async (cId) => {
+            const out = [];
+            let cursor = undefined;
+            let pages = 0;
+            while (true) {
+              pages++;
+              const opts = { limit: 100 };
+              if (cursor) opts.lastMessageId = cursor;
+              const r = await withRetry(() => ghlService.getMessages(locationId, cId, opts));
+              const wrapper = r.messages || {};
+              const pageMsgs = wrapper.messages || [];
+              for (const m of pageMsgs) {
+                if (isActivity(m)) continue;       // skip TYPE_ACTIVITY_* rows
+                if (isEmailMsg(m)) continue;       // emails come from ES below
+                out.push({ ...m, conversationId: cId });
+              }
+              if (pageMsgs.length < 100 || !wrapper.nextPage) break;
+              cursor = wrapper.lastMessageId;
+              if (pages > 20) break;
+            }
+            return out;
+          }));
+          for (const arr of batchResults) {
+            for (const m of arr) {
+              const callEligible = isCallMsg(m) && CALL_STATUSES_OK.has(String(m.status || '').toLowerCase());
+              rows.push({
+                contactId,
+                conversationId: m.conversationId || '',
+                messageId: m.id,
+                category: isCallMsg(m) ? 'call' : 'sms',
+                channel: channelLabel(m),
+                direction: m.direction || '',
+                dateAdded: m.dateAdded || m.dateUpdated || '',
+                from: m.from || '',
+                to: m.to || '',
+                body: m.body || '',
+                subject: '',
+                status: m.status || '',
+                durationSeconds: m.duration || m.meta?.call?.duration || null,
+                _needsTranscript: callEligible
+              });
+            }
+          }
+        }
+
+        // 3) Fetch transcripts for eligible calls (concurrency 3, same as CallTranscriptions tab).
+        const transcribeQueue = rows.filter(r => r._needsTranscript);
+        const TRANSCRIBE_PARALLEL = 3;
+        for (let i = 0; i < transcribeQueue.length; i += TRANSCRIBE_PARALLEL) {
+          const batch = transcribeQueue.slice(i, i + TRANSCRIBE_PARALLEL);
+          await Promise.all(batch.map(async (row) => {
+            try {
+              const text = await withRetry(() => ghlService.getMessageTranscription(locationId, row.messageId));
+              row.transcription = text || '';
+            } catch {
+              row.transcription = '';
+            }
+          }));
+        }
+        for (const r of rows) delete r._needsTranscript;
+
+        // 4) Fetch ALL emails for this contact via the ES bulk endpoint (channel=Email).
+        let cursor = undefined;
+        let pages = 0;
+        while (true) {
+          pages++;
+          const r = await withRetry(() => ghlService.exportMessages(locationId, {
+            contactId,
+            channel: 'Email',
+            limit: 100,
+            cursor: cursor || undefined,
+            startDate: new Date(0).toISOString(),
+            endDate: new Date().toISOString()
+          }));
+          const msgs = r.messages || [];
+          for (const m of msgs) {
+            rows.push({
+              contactId,
+              conversationId: m.conversationId || '',
+              messageId: m.id,
+              category: 'email',
+              channel: 'EMAIL',
+              direction: m.direction || m.meta?.email?.direction || '',
+              dateAdded: m.dateAdded || m.dateUpdated || '',
+              from: m.meta?.email?.from || m.from || '',
+              to: (m.meta?.email?.to || []).join('; ') || m.to || '',
+              body: m.body || '',
+              subject: m.meta?.email?.subject || '',
+              status: m.status || '',
+              durationSeconds: null
+            });
+          }
+          if (msgs.length < 100 || !r.nextPage) break;
+          cursor = r.lastMessageId;
+          if (pages > 50) break;
+        }
+
+        return rows;
+      };
+
+      // Walk contacts in parallel batches of 2 (same conservative cap as OSH).
+      const allRows = [];
+      const CONTACT_PARALLEL = 2;
+      for (let i = 0; i < requestedContactIds.length; i += CONTACT_PARALLEL) {
+        const batch = requestedContactIds.slice(i, i + CONTACT_PARALLEL);
+        const results = await Promise.allSettled(batch.map(cid => walkOneContact(cid)));
+        for (const r of results) {
+          if (r.status === 'fulfilled') allRows.push(...r.value);
+          else logger.warn('Contact Bundle: contact walk failed', { error: r.reason?.message });
+        }
+      }
+
+      // Sort by dateAdded ASC so the CSV reads chronologically across all categories.
+      allRows.sort((a, b) => {
+        const ta = a.dateAdded ? new Date(a.dateAdded).getTime() : 0;
+        const tb = b.dateAdded ? new Date(b.dateAdded).getTime() : 0;
+        return ta - tb;
+      });
+
+      const smsCount = allRows.filter(r => r.category === 'sms').length;
+      const emailCount = allRows.filter(r => r.category === 'email').length;
+      const callCount = allRows.filter(r => r.category === 'call').length;
+      const SMS_PRICE = 0.02;
+      const EMAIL_PRICE = 0.04;
+      const CALL_PRICE = 0.05;
+      const finalAmount = smsCount * SMS_PRICE + emailCount * EMAIL_PRICE + callCount * CALL_PRICE;
+
+      logger.info('Contact Bundle: walk complete', {
+        locationId,
+        contactCount: requestedContactIds.length,
+        totalRows: allRows.length,
+        smsCount, emailCount, callCount, finalAmount
+      });
+
+      if (allRows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No messages found for the selected contacts.'
+        });
+      }
+
+      // Persist chunked. The Lambda reads from `messages` field via the existing path.
+      const CHUNK_SIZE = 5000;
+      const totalChunks = Math.max(1, Math.ceil(allRows.length / CHUNK_SIZE));
+      const specialExport = await SpecialExport.create({
+        locationId,
+        filters: { type: 'contactBundle', contactIds: requestedContactIds },
+        messages: allRows.slice(0, CHUNK_SIZE),
+        totalMessages: allRows.length,
+        totalConversations: 0,
+        contactBundleSmsCount: smsCount,
+        contactBundleEmailCount: emailCount,
+        contactBundleCallCount: callCount,
+        chunkIndex: 0,
+        totalChunks,
+        status: 'ready'
+      });
+      if (totalChunks > 1) {
+        const chunkDocs = [];
+        for (let ci = 1; ci < totalChunks; ci++) {
+          chunkDocs.push({
+            locationId,
+            filters: { type: 'contactBundle', contactIds: requestedContactIds },
+            messages: allRows.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
+            totalMessages: allRows.length,
+            contactBundleSmsCount: smsCount,
+            contactBundleEmailCount: emailCount,
+            contactBundleCallCount: callCount,
+            groupId: specialExport._id,
+            chunkIndex: ci,
+            totalChunks,
+            status: 'ready',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+        await SpecialExport.insertMany(chunkDocs);
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          estimate: {
+            itemCounts: {
+              contactBundleSms: smsCount,
+              contactBundleEmail: emailCount,
+              contactBundleCall: callCount,
+              total: allRows.length
+            },
+            breakdown: {
+              sms:   { count: smsCount,   unitPrice: SMS_PRICE,   subtotal: smsCount * SMS_PRICE },
+              email: { count: emailCount, unitPrice: EMAIL_PRICE, subtotal: emailCount * EMAIL_PRICE },
+              call:  { count: callCount,  unitPrice: CALL_PRICE,  subtotal: callCount * CALL_PRICE }
+            },
+            baseAmount: finalAmount,
+            discountPercent: 0,
+            discountAmount: 0,
+            finalAmount,
+            finalAmountDollars: finalAmount
+          },
+          filters,
+          exportType,
+          specialExportId: specialExport._id
+        }
+      });
+    }
+
     // Get access token to fetch actual prices from GHL
     const tokenData = await ghlService.getValidToken(locationId);
     const accessToken = tokenData.accessToken || tokenData;
@@ -1713,7 +2000,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -1914,6 +2201,21 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
           counts.opportunityStageHistory = totalItems;
         }
 
+      } else if (exportType === 'contactBundle') {
+        // Three-rate billing (sms / email / call). Pull the breakdown off the SpecialExport
+        // doc persisted during /estimate so we never re-walk GHL at charge time.
+        const se = filters?.specialExportId
+          ? await SpecialExport.findById(filters.specialExportId).lean().catch(() => null)
+          : null;
+        const smsC = se?.contactBundleSmsCount ?? 0;
+        const emailC = se?.contactBundleEmailCount ?? 0;
+        const callC = se?.contactBundleCallCount ?? 0;
+        totalItems = smsC + emailC + callC;
+        counts.contactBundleSmsCount = smsC;
+        counts.contactBundleEmailCount = emailC;
+        counts.contactBundleCallCount = callC;
+        counts.contactBundleTotal = totalItems;
+
       } else {
         // Use estimatedTotal from the estimate step if available (avoids GHL returning a different count)
         if (filters?.estimatedTotal) {
@@ -2008,6 +2310,29 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         ? `Opportunity stage history export (${oppC} opportunities + ${msgC} messages)`
         : 'Opportunity stage history export';
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: desc }];
+    } else if (exportType === 'contactBundle') {
+      // Contact Bundle: three flat rates, no discount.
+      //   SMS-like messages : $0.02 each
+      //   Email messages    : $0.04 each
+      //   Call transcripts  : $0.05 each
+      const smsC = counts.contactBundleSmsCount || 0;
+      const emailC = counts.contactBundleEmailCount || 0;
+      const callC = counts.contactBundleCallCount || 0;
+      const finalAmount = smsC * 0.02 + emailC * 0.04 + callC * 0.05;
+      estimate = {
+        baseAmount: finalAmount,
+        discountPercent: 0,
+        discountAmount: 0,
+        finalAmount,
+        contactBundleSmsCount: smsC,
+        contactBundleEmailCount: emailC,
+        contactBundleCallCount: callC
+      };
+      meterCharges = [{
+        meterId: '69864aed1265653fdd7c0620',
+        qty: totalItems,
+        description: `Contact bundle export (${smsC} SMS + ${emailC} email + ${callC} call)`
+      }];
     } else {
       // Step 3: Calculate pricing with actual GHL meter prices
       estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
@@ -2170,7 +2495,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     // Step 9a: Link the SpecialExport to this job.
     // For specialTabMessages and opportunityStageHistory it was created during /estimate; for callTranscriptions it was created in Step 7a (post-charge).
-    if (['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory'].includes(exportType) && filters?.specialExportId) {
+    if (['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle'].includes(exportType) && filters?.specialExportId) {
       try {
         await SpecialExport.findByIdAndUpdate(filters.specialExportId, {
           exportJobId: exportJob._id

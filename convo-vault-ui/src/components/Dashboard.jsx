@@ -14,6 +14,7 @@ import CallLogsTab from './tabs/CallLogsTab';
 import TemplatesTab from './tabs/TemplatesTab';
 import SpecialMessagesTab from './tabs/SpecialMessagesTab';
 import CallTranscriptionsTab from './tabs/CallTranscriptionsTab';
+import ContactBundleTab from './tabs/ContactBundleTab';
 import ExportContactsTab from './tabs/ExportContactsTab';
 import ConversationMessages from './ConversationMessages';
 import { billingAPI } from '../api/billing';
@@ -85,6 +86,7 @@ export default function Dashboard() {
         { id: 'customValues', label: 'Custom Values', icon: '🔖' },
         { id: 'tags', label: 'Tags', icon: '🏷️' },
         ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
+        { id: 'contactBundle', label: 'Contact Bundle', icon: '📦' },
       ]
     },
     ...(customChargeEnabled ? [{ label: 'Billing', items: [{ id: 'customCharge', label: 'Charge', icon: '💳' }] }] : []),
@@ -390,6 +392,7 @@ export default function Dashboard() {
                 {activeTab === 'tags' && <TagsTab />}
                 {activeTab === 'opportunityStageHistory' && features?.opportunityStageHistory && <OpportunityStageHistoryTab />}
                 {activeTab === 'callTranscriptions' && callTranscriptionsEnabled && <CallTranscriptionsTab />}
+                {activeTab === 'contactBundle' && <ContactBundleTab />}
                 {activeTab === 'customCharge' && customChargeEnabled && <CustomChargeTab />}
                 {activeTab === 'importContacts' && <ImportContactsTab />}
                 {activeTab === 'importNotes' && <ImportNotesTab />}

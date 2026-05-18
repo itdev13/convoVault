@@ -75,6 +75,20 @@ const specialExportSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
+  // Per-category counts for the `contactBundle` export type. We bill three separate rates
+  // (SMS $0.02 / Email $0.04 / Call $0.05) so the confirm step needs the breakdown persisted.
+  contactBundleSmsCount: {
+    type: Number,
+    default: 0
+  },
+  contactBundleEmailCount: {
+    type: Number,
+    default: 0
+  },
+  contactBundleCallCount: {
+    type: Number,
+    default: 0
+  },
   filters: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
