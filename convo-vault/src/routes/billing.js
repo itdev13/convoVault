@@ -1426,22 +1426,46 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
       };
 
-      // Paginate ALL conversations
+      // Conversation discovery. Two modes:
+      //   • filters.contactIds present → fetch conversations for just those contacts (GHL has a
+      //     near-1:1 contact↔conversation mapping, so 1 call per contact with limit=100 covers it).
+      //   • Otherwise → paginate the entire sub-account, the original behavior.
+      const contactIdsFilter = Array.isArray(filters?.contactIds) ? filters.contactIds.filter(Boolean) : null;
       const allConversationIds = [];
-      let startAfterDate = undefined;
-      while (true) {
-        const searchParams = { locationId, limit: 100 };
-        if (startAfterDate) searchParams.startAfterDate = startAfterDate;
-        const result = await withRetry(() => ghlService.searchConversations(locationId, searchParams));
-        const convos = result.conversations || [];
-        if (convos.length === 0) break;
-        allConversationIds.push(...convos.map(c => c.id));
-        if (convos.length < 100) break;
-        const lastConvo = convos[convos.length - 1];
-        startAfterDate = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
+      if (contactIdsFilter && contactIdsFilter.length > 0) {
+        // Walk per-contact, concurrency 3 (same as the message walk below).
+        const CONTACT_PARALLEL = 3;
+        for (let i = 0; i < contactIdsFilter.length; i += CONTACT_PARALLEL) {
+          const batch = contactIdsFilter.slice(i, i + CONTACT_PARALLEL);
+          const results = await Promise.allSettled(
+            batch.map(cid => withRetry(() => ghlService.searchConversations(locationId, { contactId: cid, limit: 100 })))
+          );
+          for (const r of results) {
+            if (r.status === 'fulfilled') {
+              const convos = r.value.conversations || [];
+              allConversationIds.push(...convos.map(c => c.id));
+            }
+          }
+        }
+        logger.info('Call Transcriptions: per-contact conversations fetched', {
+          contactCount: contactIdsFilter.length,
+          conversationCount: allConversationIds.length
+        });
+      } else {
+        let startAfterDate = undefined;
+        while (true) {
+          const searchParams = { locationId, limit: 100 };
+          if (startAfterDate) searchParams.startAfterDate = startAfterDate;
+          const result = await withRetry(() => ghlService.searchConversations(locationId, searchParams));
+          const convos = result.conversations || [];
+          if (convos.length === 0) break;
+          allConversationIds.push(...convos.map(c => c.id));
+          if (convos.length < 100) break;
+          const lastConvo = convos[convos.length - 1];
+          startAfterDate = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
+        }
+        logger.info('Call Transcriptions: conversations fetched (whole sub-account)', { count: allConversationIds.length });
       }
-
-      logger.info('Call Transcriptions: conversations fetched', { count: allConversationIds.length });
 
       // Step A — collect transcribable call messages.
       // Lower concurrency (3) to reduce 429 pressure on GHL; the tradeoff is wall-clock time.

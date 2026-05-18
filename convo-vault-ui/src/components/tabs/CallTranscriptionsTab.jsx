@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
-import { Button, message as antMessage } from 'antd';
+import { contactsAPI } from '../../api/contacts';
+import { Button, Select, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 
@@ -15,6 +16,67 @@ export default function CallTranscriptionsTab() {
   const [specialExportId, setSpecialExportId] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
+
+  // Contact filter — when non-empty, the backend scopes the conversation walk to just these
+  // contacts; empty = whole sub-account (existing behavior).
+  const [selectedContactIds, setSelectedContactIds] = useState([]);
+  const [contactOptions, setContactOptions] = useState([]); // [{ value, label, contact }]
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const searchTimeoutRef = useRef(null);
+
+  const getContactName = (c) =>
+    c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || c?.email || c?.phone || 'Unknown';
+
+  // Load an initial pool of 100 contacts on mount, then refresh via debounced search.
+  useEffect(() => {
+    if (!location?.id) return;
+    setContactsLoading(true);
+    contactsAPI.search(location.id, '', 100)
+      .then(res => {
+        if (res.success) {
+          const contacts = res.data.contacts || [];
+          setContactOptions(contacts.map(c => ({
+            value: c.id,
+            label: `${getContactName(c)}${c.email ? ` — ${c.email}` : c.phone ? ` — ${c.phone}` : ''}`,
+            contact: c
+          })));
+        }
+      })
+      .catch(() => { /* silent — dropdown stays empty, user can search */ })
+      .finally(() => setContactsLoading(false));
+  }, [location?.id]);
+
+  // Debounced server-side search — Select's onSearch callback. Fires while the user types.
+  const handleContactSearch = (query) => {
+    clearTimeout(searchTimeoutRef.current);
+    if (!query || !query.trim()) return;
+    searchTimeoutRef.current = setTimeout(async () => {
+      setContactsLoading(true);
+      try {
+        const res = await contactsAPI.search(location.id, query, 20);
+        if (res.success) {
+          const apiResults = res.data.contacts || [];
+          // Merge into options, deduping by id. Keeps already-selected entries visible even when
+          // the new search results don't include them.
+          setContactOptions(prev => {
+            const seen = new Set(prev.map(o => o.value));
+            const merged = [...prev];
+            for (const c of apiResults) {
+              if (!seen.has(c.id)) {
+                merged.push({
+                  value: c.id,
+                  label: `${getContactName(c)}${c.email ? ` — ${c.email}` : c.phone ? ` — ${c.phone}` : ''}`,
+                  contact: c
+                });
+              }
+            }
+            return merged;
+          });
+        }
+      } catch { /* silent */ }
+      finally { setContactsLoading(false); }
+    }, 400);
+  };
 
   // Poll active job status
   useEffect(() => {
@@ -35,7 +97,9 @@ export default function CallTranscriptionsTab() {
     return () => clearInterval(pollInterval);
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
-  const buildExportFilters = () => ({});
+  const buildExportFilters = () => (
+    selectedContactIds.length > 0 ? { contactIds: selectedContactIds } : {}
+  );
 
   const handleGetEstimate = async () => {
     setExportModalVisible(true);
@@ -130,6 +194,34 @@ export default function CallTranscriptionsTab() {
 
       {/* Action card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        {/* Optional contact filter — leave empty to walk the whole sub-account (the original
+            behavior); pick one or more contacts to scope the walk and shrink the bill. */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Filter by contacts <span className="text-gray-400 font-normal">(optional — leave empty for all)</span>
+          </label>
+          <Select
+            mode="multiple"
+            allowClear
+            showSearch
+            value={selectedContactIds}
+            onChange={setSelectedContactIds}
+            onSearch={handleContactSearch}
+            filterOption={false}
+            loading={contactsLoading}
+            placeholder="Search and select contacts..."
+            options={contactOptions}
+            style={{ width: '100%' }}
+            maxTagCount="responsive"
+            notFoundContent={contactsLoading ? 'Searching…' : 'No contacts found — try typing a name or email'}
+          />
+          {selectedContactIds.length > 0 && (
+            <p className="text-xs text-gray-500 mt-2">
+              Walk will be scoped to <strong>{selectedContactIds.length}</strong> contact{selectedContactIds.length === 1 ? '' : 's'}.
+            </p>
+          )}
+        </div>
+
         <Button
           type="primary"
           size="large"
@@ -143,7 +235,9 @@ export default function CallTranscriptionsTab() {
 
         <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="text-sm text-amber-800">
-            <strong>Heavy task:</strong> we walk every conversation in this sub-account, find call &amp; voicemail
+            <strong>Heavy task:</strong> {selectedContactIds.length > 0
+              ? <>we walk conversations for the <strong>{selectedContactIds.length}</strong> selected contact{selectedContactIds.length === 1 ? '' : 's'},</>
+              : <>we walk every conversation in this sub-account,</>} find call &amp; voicemail
             messages, and fetch a transcription for each one that has a recording. Depending on volume this can take a while.
             Pricing: <strong>$0.05 per transcription</strong> (no volume discount).
           </p>
