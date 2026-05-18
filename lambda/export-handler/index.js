@@ -790,27 +790,37 @@ function callTranscriptionsToCSV(records, includeHeader = true) {
 /**
  * Contact Bundle — one CSV row per message, already sorted by dateAdded ASC in the walker.
  * Categories: sms / email / call (used for billing; surfaced as the `Category` column for QA).
+ *
+ * The `Body` column holds the human-readable text for every category — for calls we prefer the
+ * transcription text (the real value the customer asked for) over GHL's placeholder body. The
+ * separate `Transcription` column was redundant and has been dropped.
  */
 function contactBundleToCSV(records, includeHeader = true) {
   const header = includeHeader
-    ? 'ContactID,ConversationID,MessageID,Category,Channel,Direction,DateAdded,From,To,Subject,Body,Transcription,Status,DurationSeconds\n'
+    ? 'ContactID,ConversationID,MessageID,Category,Channel,Direction,DateAdded,From,To,Subject,Body,Status,DurationSeconds\n'
     : '';
-  const rows = records.map(r => [
-    escapeCsv(r.contactId || ''),
-    escapeCsv(r.conversationId || ''),
-    escapeCsv(r.messageId || ''),
-    escapeCsv(r.category || ''),
-    escapeCsv(r.channel || ''),
-    escapeCsv(r.direction || ''),
-    escapeCsv(r.dateAdded || ''),
-    escapeCsv(r.from || ''),
-    escapeCsv(r.to || ''),
-    escapeCsv(r.subject || ''),
-    escapeCsv(r.body || ''),
-    escapeCsv(r.transcription || ''),
-    escapeCsv(r.status || ''),
-    escapeCsv(r.durationSeconds != null ? String(r.durationSeconds) : '')
-  ].join(',')).join('\n');
+  const rows = records.map(r => {
+    // For call rows: prefer transcription text (what the customer is paying $0.05/each for).
+    // Fall back to the call's body field only if transcription is empty.
+    const bodyOrTranscript = r.category === 'call'
+      ? (r.transcription || r.body || '')
+      : (r.body || '');
+    return [
+      escapeCsv(r.contactId || ''),
+      escapeCsv(r.conversationId || ''),
+      escapeCsv(r.messageId || ''),
+      escapeCsv(r.category || ''),
+      escapeCsv(r.channel || ''),
+      escapeCsv(r.direction || ''),
+      escapeCsv(r.dateAdded || ''),
+      escapeCsv(r.from || ''),
+      escapeCsv(r.to || ''),
+      escapeCsv(r.subject || ''),
+      escapeCsv(bodyOrTranscript),
+      escapeCsv(r.status || ''),
+      escapeCsv(r.durationSeconds != null ? String(r.durationSeconds) : '')
+    ].join(',');
+  }).join('\n');
   return header + rows + (rows.length > 0 ? '\n' : '');
 }
 

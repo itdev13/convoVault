@@ -1660,7 +1660,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       // getMessages, all emails via the ES bulk exportMessages endpoint, and call transcriptions
       // for eligible calls. One CSV row per message, sorted by dateAdded ASC.
       //
-      // Three-rate flat pricing: SMS-like $0.02 / Email $0.04 / Call $0.05 — no volume discount.
+      // Three-rate flat pricing: SMS-like $0.20 / Email $0.40 / Call $0.05 — no volume discount.
       const requestedContactIds = Array.isArray(filters?.contactIds)
         ? filters.contactIds.filter(Boolean)
         : [];
@@ -1857,8 +1857,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const smsCount = allRows.filter(r => r.category === 'sms').length;
       const emailCount = allRows.filter(r => r.category === 'email').length;
       const callCount = allRows.filter(r => r.category === 'call').length;
-      const SMS_PRICE = 0.02;
-      const EMAIL_PRICE = 0.04;
+      const SMS_PRICE = 0.20;
+      const EMAIL_PRICE = 0.40;
       const CALL_PRICE = 0.05;
       const finalAmount = smsCount * SMS_PRICE + emailCount * EMAIL_PRICE + callCount * CALL_PRICE;
 
@@ -2312,13 +2312,13 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: desc }];
     } else if (exportType === 'contactBundle') {
       // Contact Bundle: three flat rates, no discount.
-      //   SMS-like messages : $0.02 each
-      //   Email messages    : $0.04 each
+      //   SMS-like messages : $0.20 each
+      //   Email messages    : $0.40 each
       //   Call transcripts  : $0.05 each
       const smsC = counts.contactBundleSmsCount || 0;
       const emailC = counts.contactBundleEmailCount || 0;
       const callC = counts.contactBundleCallCount || 0;
-      const finalAmount = smsC * 0.02 + emailC * 0.04 + callC * 0.05;
+      const finalAmount = smsC * 0.20 + emailC * 0.40 + callC * 0.05;
       estimate = {
         baseAmount: finalAmount,
         discountPercent: 0,
