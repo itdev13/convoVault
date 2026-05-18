@@ -675,7 +675,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       };
 
       const allRows = [];
-      let firstActivityRowLogged = false;
 
       // Step 4: per-contact walk. Two separate endpoint paths because GHL splits message types:
       //   • Activity messages (TYPE_ACTIVITY_OPPORTUNITY) → ONLY come from per-conversation
@@ -690,11 +689,19 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       //   c) one export call per contact for all channel messages
       //   d) merge into one timeline, split into activities + channel rows for processing
 
-      let contactIndex = 0;
-      const contactsTotal = Object.keys(oppsByContact).length;
-      for (const [contactId, opps] of Object.entries(oppsByContact)) {
-        contactIndex++;
-        const contactStart = Date.now();
+      // Walk contacts in parallel with a small concurrency cap. The cap matters because each
+      // contact runs ~4 GHL API calls (conversations search + activity messages + channel
+      // messages + contact snapshot); GHL throttles aggressively, and going wide here is the
+      // fastest path to 429s. Two-at-a-time roughly halves wall-clock time without surfacing
+      // rate limits in our test runs.
+      const contactEntries = Object.entries(oppsByContact);
+      const contactsTotal = contactEntries.length;
+      const OSH_CONCURRENCY = 2;
+      for (let batchStart = 0; batchStart < contactEntries.length; batchStart += OSH_CONCURRENCY) {
+        const batch = contactEntries.slice(batchStart, batchStart + OSH_CONCURRENCY);
+        await Promise.all(batch.map(async ([contactId, opps], batchOffset) => {
+          const contactIndex = batchStart + batchOffset + 1;
+          const contactStart = Date.now();
         oshLog('step4.contact: start', {
           contactIndex,
           contactsTotal,
@@ -771,62 +778,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           await sleep(THROTTLE_MS);
         }
         oshLog('step4b.activityMessages: walk complete', { contactId, totalActivityMessages: activityMsgs.length });
-
-        // Diagnostic: dump the FULL first raw activity row we encounter across the entire run.
-        // We log both the parsed object AND the JSON.stringify version with no winston meta-handling,
-        // so we can be certain whether the GHL API actually includes the nested `activity` field
-        // or strips it on the wire. Fires at most once per run.
-        if (!firstActivityRowLogged && activityMsgs.length > 0) {
-          const sample = activityMsgs[0];
-          const topLevelKeys = Object.keys(sample);
-          const hasActivityField = Object.prototype.hasOwnProperty.call(sample, 'activity');
-          oshLog('step4b.activityMessages: RAW first row (one-time diagnostic)', {
-            contactId,
-            topLevelKeys,
-            hasActivityField,
-            activityTypeIfPresent: hasActivityField ? (sample.activity?.type ?? null) : null,
-            activityOppIdIfPresent: hasActivityField ? (sample.activity?.data?.id ?? null) : null,
-            // Full JSON dump bypasses winston's util.inspect depth limits and any meta merging.
-            // If `activity` is in this string, it's coming back from GHL; if not, we know the API
-            // doesn't return it and we need a different endpoint (e.g. GET /conversations/messages/{id}).
-            rawJson: JSON.stringify(sample),
-            isActivityOpportunityResult: isActivityOpportunity(sample),
-            extractedPreview: extractStageEvent(sample)
-          });
-
-          // Experiment: try fetching the SAME message via GET /conversations/messages/{id}
-          // (single-message endpoint) to see if it returns the enriched record with the
-          // `activity` field that the list endpoint strips. If yes, we'll switch step 4b to
-          // do a list-then-fetch-by-id pattern for activity rows.
-          try {
-            oshLog('step4b.activityMessages: SINGLE-MESSAGE probe request', {
-              messageId: sample.id,
-              endpoint: 'GET /conversations/messages/{messageId}'
-            });
-            const single = await ghlService.getMessageById(locationId, sample.id);
-            // GHL wrapper may nest under .message or return the row directly
-            const singleRow = single?.message || single;
-            const singleHasActivity = singleRow && Object.prototype.hasOwnProperty.call(singleRow, 'activity');
-            oshLog('step4b.activityMessages: SINGLE-MESSAGE probe response', {
-              messageId: sample.id,
-              singleTopLevelKeys: singleRow ? Object.keys(singleRow) : null,
-              singleHasActivityField: singleHasActivity,
-              singleActivityType: singleHasActivity ? (singleRow.activity?.type ?? null) : null,
-              singleActivityOppId: singleHasActivity ? (singleRow.activity?.data?.id ?? null) : null,
-              singleActivityOldStage: singleHasActivity ? (singleRow.activity?.data?.stage?.oldStageName ?? null) : null,
-              singleActivityNewStage: singleHasActivity ? (singleRow.activity?.data?.stage?.newStageName ?? null) : null,
-              singleRawJson: JSON.stringify(singleRow)
-            });
-          } catch (e) {
-            oshWarn('step4b.activityMessages: SINGLE-MESSAGE probe failed', {
-              messageId: sample.id,
-              status: e.response?.status,
-              error: e.message
-            });
-          }
-
-          firstActivityRowLogged = true;
-        }
 
         // c) One export call per contact for all channel messages (SMS/Email/WhatsApp/FB/IG)
         oshLog('step4c.channelMessages: walk start', {
@@ -1168,6 +1119,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           runningTotalRows: allRows.length,
           contactDurationMs: Date.now() - contactStart
         });
+        }));
       }
 
       // Billing inputs: charge by (opportunities + channel messages), NOT by stage-rows.
