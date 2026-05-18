@@ -317,7 +317,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl shadow-lg flex overflow-hidden border-t border-gray-200">
           {/* Sidebar */}
           {!['exports', 'support'].includes(activeTab) && (
-          <aside className="w-52 flex-shrink-0 border-r border-gray-100 py-4 bg-gray-50/60">
+          <aside className="w-60 flex-shrink-0 border-r border-gray-100 py-4 bg-gray-50/60">
             {(dataMode === 'export' ? exportGroups : importGroups).map((group, gi) => (
               <div key={group.label || `g-${gi}`} className="mb-1">
                 {group.label && (
@@ -334,6 +334,7 @@ export default function Dashboard() {
                         setActiveTab(tab.id);
                         setShowConversationView(false);
                       }}
+                      title={tab.label}
                       className={`
                         w-full flex items-center gap-2.5 px-4 py-2 text-sm font-medium transition-all text-left
                         ${isActive
