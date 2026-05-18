@@ -625,6 +625,42 @@ export default function ExportEstimateModal({
                 </>
               )}
 
+              {exportType === 'contactBundle' && (
+                <>
+                  {/* Per-category breakdown — counts × unit prices for the three billed categories.
+                      Falls back to the estimate.itemCounts shape that the /estimate endpoint returns. */}
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Messages (SMS / WhatsApp / Webchat / FB / IG)</span>
+                    <span className="font-medium">
+                      {formatNumber(estimate.itemCounts?.contactBundleSms ?? estimate.breakdown?.sms?.count ?? 0)}
+                      <span className="text-gray-400 ml-2">× $0.02</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Emails</span>
+                    <span className="font-medium">
+                      {formatNumber(estimate.itemCounts?.contactBundleEmail ?? estimate.breakdown?.email?.count ?? 0)}
+                      <span className="text-gray-400 ml-2">× $0.04</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700">Call transcriptions</span>
+                    <span className="font-medium">
+                      {formatNumber(estimate.itemCounts?.contactBundleCall ?? estimate.breakdown?.call?.count ?? 0)}
+                      <span className="text-gray-400 ml-2">× $0.05</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-blue-100">
+                    <span className="text-gray-700">Total rows</span>
+                    <span className="font-medium">{formatNumber(estimate.itemCounts?.total ?? 0)}</span>
+                  </div>
+                  <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
+                    Heavy task — we walk every selected contact's conversations, fetch emails in bulk,
+                    and pull a transcript for each eligible call. No volume discounts apply.
+                  </div>
+                </>
+              )}
+
               {estimate.discountPercent > 0 && (
                 <div className="flex justify-between items-center text-green-600">
                   <span className="flex items-center gap-1">
