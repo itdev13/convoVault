@@ -97,11 +97,13 @@ export default function CallTranscriptionsTab() {
     return () => clearInterval(pollInterval);
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
-  const buildExportFilters = () => (
-    selectedContactIds.length > 0 ? { contactIds: selectedContactIds } : {}
-  );
+  const buildExportFilters = () => ({ contactIds: selectedContactIds });
 
   const handleGetEstimate = async () => {
+    if (selectedContactIds.length === 0) {
+      antMessage.warning('Please select at least one contact to export.');
+      return;
+    }
     setExportModalVisible(true);
     setEstimating(true);
     setEstimate(null);
@@ -194,11 +196,11 @@ export default function CallTranscriptionsTab() {
 
       {/* Action card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        {/* Optional contact filter — leave empty to walk the whole sub-account (the original
-            behavior); pick one or more contacts to scope the walk and shrink the bill. */}
+        {/* Required contact picker — at least one selection. Multi-select is supported so the
+            customer can batch transcripts across several contacts in a single export. */}
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Filter by contacts <span className="text-gray-400 font-normal">(optional — leave empty for all)</span>
+            Contacts <span className="text-red-500">*</span>
           </label>
           <Select
             mode="multiple"
@@ -212,17 +214,17 @@ export default function CallTranscriptionsTab() {
             // dropdown shows every contact loaded so far and the search appears to do nothing.
             optionFilterProp="label"
             loading={contactsLoading}
-            placeholder="Search and select contacts..."
+            placeholder="Search and select one or more contacts..."
             options={contactOptions}
             style={{ width: '100%' }}
             maxTagCount="responsive"
             notFoundContent={contactsLoading ? 'Searching…' : 'No contacts found — try typing a name or email'}
           />
-          {selectedContactIds.length > 0 && (
-            <p className="text-xs text-gray-500 mt-2">
-              Walk will be scoped to <strong>{selectedContactIds.length}</strong> contact{selectedContactIds.length === 1 ? '' : 's'}.
-            </p>
-          )}
+          <p className="text-xs text-gray-500 mt-2">
+            {selectedContactIds.length > 0
+              ? <><strong>{selectedContactIds.length}</strong> contact{selectedContactIds.length === 1 ? '' : 's'} selected.</>
+              : 'Required: pick at least one contact.'}
+          </p>
         </div>
 
         <Button
@@ -230,7 +232,7 @@ export default function CallTranscriptionsTab() {
           size="large"
           onClick={handleGetEstimate}
           loading={estimating}
-          disabled={!location?.id}
+          disabled={!location?.id || selectedContactIds.length === 0}
           className="bg-green-600 hover:bg-green-700 border-green-600"
         >
           Get Estimate & Export
@@ -238,9 +240,7 @@ export default function CallTranscriptionsTab() {
 
         <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="text-sm text-amber-800">
-            <strong>Heavy task:</strong> {selectedContactIds.length > 0
-              ? <>we walk conversations for the <strong>{selectedContactIds.length}</strong> selected contact{selectedContactIds.length === 1 ? '' : 's'},</>
-              : <>we walk every conversation in this sub-account,</>} find call &amp; voicemail
+            <strong>Heavy task:</strong> we walk conversations for the selected contacts, find call &amp; voicemail
             messages, and fetch a transcription for each one that has a recording. Depending on volume this can take a while.
             Pricing: <strong>$0.05 per transcription</strong> (no volume discount).
           </p>

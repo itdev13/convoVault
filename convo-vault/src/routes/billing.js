@@ -1426,46 +1426,35 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
       };
 
-      // Conversation discovery. Two modes:
-      //   • filters.contactIds present → fetch conversations for just those contacts (GHL has a
-      //     near-1:1 contact↔conversation mapping, so 1 call per contact with limit=100 covers it).
-      //   • Otherwise → paginate the entire sub-account, the original behavior.
-      const contactIdsFilter = Array.isArray(filters?.contactIds) ? filters.contactIds.filter(Boolean) : null;
+      // Conversation discovery — contactIds is now REQUIRED. The whole-sub-account walk has been
+      // removed: it was untargeted and could blow up bills on big accounts. Caller must select at
+      // least one contact in the UI (we still allow multiple).
+      const contactIdsFilter = Array.isArray(filters?.contactIds) ? filters.contactIds.filter(Boolean) : [];
+      if (contactIdsFilter.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Call Transcriptions export requires at least one contactId in filters.contactIds.'
+        });
+      }
       const allConversationIds = [];
-      if (contactIdsFilter && contactIdsFilter.length > 0) {
-        // Walk per-contact, concurrency 3 (same as the message walk below).
-        const CONTACT_PARALLEL = 3;
-        for (let i = 0; i < contactIdsFilter.length; i += CONTACT_PARALLEL) {
-          const batch = contactIdsFilter.slice(i, i + CONTACT_PARALLEL);
-          const results = await Promise.allSettled(
-            batch.map(cid => withRetry(() => ghlService.searchConversations(locationId, { contactId: cid, limit: 100 })))
-          );
-          for (const r of results) {
-            if (r.status === 'fulfilled') {
-              const convos = r.value.conversations || [];
-              allConversationIds.push(...convos.map(c => c.id));
-            }
+      // Walk per-contact, concurrency 3 (same as the message walk below).
+      const CONTACT_PARALLEL = 3;
+      for (let i = 0; i < contactIdsFilter.length; i += CONTACT_PARALLEL) {
+        const batch = contactIdsFilter.slice(i, i + CONTACT_PARALLEL);
+        const results = await Promise.allSettled(
+          batch.map(cid => withRetry(() => ghlService.searchConversations(locationId, { contactId: cid, limit: 100 })))
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            const convos = r.value.conversations || [];
+            allConversationIds.push(...convos.map(c => c.id));
           }
         }
-        logger.info('Call Transcriptions: per-contact conversations fetched', {
-          contactCount: contactIdsFilter.length,
-          conversationCount: allConversationIds.length
-        });
-      } else {
-        let startAfterDate = undefined;
-        while (true) {
-          const searchParams = { locationId, limit: 100 };
-          if (startAfterDate) searchParams.startAfterDate = startAfterDate;
-          const result = await withRetry(() => ghlService.searchConversations(locationId, searchParams));
-          const convos = result.conversations || [];
-          if (convos.length === 0) break;
-          allConversationIds.push(...convos.map(c => c.id));
-          if (convos.length < 100) break;
-          const lastConvo = convos[convos.length - 1];
-          startAfterDate = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
-        }
-        logger.info('Call Transcriptions: conversations fetched (whole sub-account)', { count: allConversationIds.length });
       }
+      logger.info('Call Transcriptions: per-contact conversations fetched', {
+        contactCount: contactIdsFilter.length,
+        conversationCount: allConversationIds.length
+      });
 
       // Step A — collect transcribable call messages.
       // Lower concurrency (3) to reduce 429 pressure on GHL; the tradeoff is wall-clock time.
@@ -1747,7 +1736,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               const wrapper = r.messages || {};
               const pageMsgs = wrapper.messages || [];
               for (const m of pageMsgs) {
-                if (isActivity(m)) continue;       // skip TYPE_ACTIVITY_* rows
                 if (isEmailMsg(m)) continue;       // emails come from ES below
                 out.push({ ...m, conversationId: cId });
               }

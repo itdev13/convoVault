@@ -63,6 +63,8 @@ export default function Dashboard() {
       items: [
         { id: 'messages', label: 'Messages', icon: '📊' },
         { id: 'specialTabMessages', label: 'Activity Messages', icon: '💎' },
+        { id: 'contactBundle', label: 'All Contact Communication', icon: '📦' },
+        ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
       ]
     },
     {
@@ -85,8 +87,6 @@ export default function Dashboard() {
         { id: 'customFields', label: 'Custom Fields', icon: '🧩' },
         { id: 'customValues', label: 'Custom Values', icon: '🔖' },
         { id: 'tags', label: 'Tags', icon: '🏷️' },
-        ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
-        { id: 'contactBundle', label: 'Contact Bundle', icon: '📦' },
       ]
     },
     ...(customChargeEnabled ? [{ label: 'Billing', items: [{ id: 'customCharge', label: 'Charge', icon: '💳' }] }] : []),
