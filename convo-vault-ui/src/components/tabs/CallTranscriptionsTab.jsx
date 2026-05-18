@@ -207,7 +207,10 @@ export default function CallTranscriptionsTab() {
             value={selectedContactIds}
             onChange={setSelectedContactIds}
             onSearch={handleContactSearch}
-            filterOption={false}
+            // Filter visible options by their human-readable `label` so typing in the search bar
+            // narrows the list instantly. Without this (or with `filterOption={false}`) the
+            // dropdown shows every contact loaded so far and the search appears to do nothing.
+            optionFilterProp="label"
             loading={contactsLoading}
             placeholder="Search and select contacts..."
             options={contactOptions}
