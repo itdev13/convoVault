@@ -733,7 +733,9 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           oshWarn('step4a.conversations: returned 100 — 1:1 contact↔conversation assumption may no longer hold; check this contact for hidden pagination', { contactId });
         }
 
-        // b) Per-conversation: pull ONLY activity-opportunity rows (server-side type filter)
+        // b) Per-conversation: pull ONLY activity-opportunity rows (server-side type filter).
+        //    These rows drive stage-transition derivation. Channel messages (incl. emails) are
+        //    fetched in step 4c via the bulk ES endpoint.
         oshLog('step4b.activityMessages: walk start', {
           contactId,
           endpoint: 'GET /conversations/{convId}/messages?type=TYPE_ACTIVITY_OPPORTUNITY',
@@ -779,51 +781,86 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
         oshLog('step4b.activityMessages: walk complete', { contactId, totalActivityMessages: activityMsgs.length });
 
-        // c) One export call per contact for all channel messages (SMS/Email/WhatsApp/FB/IG)
+        // c) TWO bulk exportMessages passes per contact (channels are pulled twice on purpose):
+        //      • Pass A — no channel filter: returns SMS / WhatsApp / Calls / Webchat / FB / IG.
+        //        In practice this endpoint OMITS emails when no channel is specified.
+        //      • Pass B — channel='Email': the only reliable way to get emails out of GHL's bulk
+        //        export endpoint.
+        //    Both passes are merged; we dedupe by messageId in case any row overlaps.
         oshLog('step4c.channelMessages: walk start', {
           contactId,
           endpoint: 'GET /conversations/messages/export?contactId',
+          passes: ['no-channel (non-email channels)', "channel='Email' (emails)"],
           pageSize: 100,
           maxPages: 50
         });
-        const channelMsgs = [];
-        let exportCursor = null;
-        let exportPages = 0;
-        while (true) {
-          exportPages++;
-          oshLog('step4c.channelMessages: page request', { contactId, page: exportPages, cursor: exportCursor });
-          const r = await withRetry(() => ghlService.exportMessages(locationId, {
-            contactId,
-            startDate: new Date(0).toISOString(),
-            endDate: new Date().toISOString(),
-            limit: 100,
-            cursor: exportCursor || undefined
-          }));
-          const msgs = r.messages || [];
-          channelMsgs.push(...msgs);
-          oshLog('step4c.channelMessages: page response', {
-            contactId,
-            page: exportPages,
-            returned: msgs.length,
-            runningTotal: channelMsgs.length,
-            hasNextPage: !!r.nextPage,
-            nextCursor: r.lastMessageId || null,
-            sampleMessage: oshSample(msgs.map(m => ({
-              id: m.id,
-              type: m.type || m.messageType,
-              direction: m.direction,
-              dateAdded: m.dateAdded
-            })), 1)
-          });
-          if (msgs.length < 100 || !r.nextPage) break;
-          exportCursor = r.lastMessageId;
-          if (exportPages > 50) {
-            oshWarn('step4c.channelMessages: hit hard page cap (50)', { contactId, collected: channelMsgs.length });
-            break;
+
+        // Reusable paginated walker for one exportMessages pass.
+        const fetchExportPass = async (channelFilter) => {
+          const collected = [];
+          let cursor = null;
+          let pages = 0;
+          const passLabel = channelFilter ? `channel=${channelFilter}` : 'no-channel';
+          while (true) {
+            pages++;
+            const opts = {
+              contactId,
+              startDate: new Date(0).toISOString(),
+              endDate: new Date().toISOString(),
+              limit: 100,
+              cursor: cursor || undefined
+            };
+            if (channelFilter) opts.channel = channelFilter;
+            oshLog('step4c.channelMessages: page request', { contactId, pass: passLabel, page: pages, cursor });
+            const r = await withRetry(() => ghlService.exportMessages(locationId, opts));
+            const msgs = r.messages || [];
+            collected.push(...msgs);
+            oshLog('step4c.channelMessages: page response', {
+              contactId,
+              pass: passLabel,
+              page: pages,
+              returned: msgs.length,
+              runningTotal: collected.length,
+              hasNextPage: !!r.nextPage,
+              nextCursor: r.lastMessageId || null,
+              sampleMessage: oshSample(msgs.map(m => ({
+                id: m.id,
+                type: m.type || m.messageType,
+                direction: m.direction,
+                dateAdded: m.dateAdded
+              })), 1)
+            });
+            if (msgs.length < 100 || !r.nextPage) break;
+            cursor = r.lastMessageId;
+            if (pages > 50) {
+              oshWarn('step4c.channelMessages: hit hard page cap (50)', { contactId, pass: passLabel, collected: collected.length });
+              break;
+            }
+            await sleep(THROTTLE_MS);
           }
-          await sleep(THROTTLE_MS);
+          return collected;
+        };
+
+        // Run both passes serially to keep rate-limit pressure manageable on bigger accounts.
+        const nonEmailMsgs = await fetchExportPass(null);
+        const emailMsgs = await fetchExportPass('Email');
+
+        // Dedupe by messageId — pass A *should* not include emails, but if GHL ever returns them
+        // both passes would overlap. Keep the first occurrence (typically pass A's non-email rows).
+        const channelMsgs = [];
+        const seenIds = new Set();
+        for (const m of [...nonEmailMsgs, ...emailMsgs]) {
+          if (m.id && seenIds.has(m.id)) continue;
+          if (m.id) seenIds.add(m.id);
+          channelMsgs.push(m);
         }
-        oshLog('step4c.channelMessages: walk complete', { contactId, totalChannelMessages: channelMsgs.length, pages: exportPages });
+        oshLog('step4c.channelMessages: walk complete', {
+          contactId,
+          totalChannelMessages: channelMsgs.length,
+          nonEmailFromPassA: nonEmailMsgs.length,
+          emailsFromPassB: emailMsgs.length,
+          dedupedOverlap: (nonEmailMsgs.length + emailMsgs.length) - channelMsgs.length
+        });
 
         // d) Merge for downstream code that treats `contactMsgs` as the unified timeline
         const contactMsgs = [...activityMsgs, ...channelMsgs];

@@ -1183,6 +1183,40 @@ function callLogsToCSV(callLogs, includeHeader = true) {
  * row in any chunk is seen), so the canonical name lists are persisted on the SpecialExport doc
  * during /estimate and passed in here as `contactCfNames` + `opportunityCfNames`.
  */
+// Numeric → human-readable channel mapping. Used by the OSH CSV writer to surface a readable
+// value in the MessageChannel column when GHL returns only the numeric `type` (e.g. 20 → CUSTOM_SMS).
+// Source: GHL's MessageType enum (kept here to avoid an extra import in the Lambda).
+const GHL_MESSAGE_TYPE_NAMES = {
+  1: 'CALL', 2: 'SMS', 3: 'EMAIL',
+  4: 'SMS_REVIEW_REQUEST', 5: 'WEBCHAT', 6: 'SMS_NO_SHOW_REQUEST',
+  7: 'CAMPAIGN_SMS', 8: 'CAMPAIGN_CALL', 9: 'CAMPAIGN_EMAIL',
+  10: 'CAMPAIGN_VOICEMAIL', 11: 'FACEBOOK', 12: 'CAMPAIGN_FACEBOOK',
+  13: 'CAMPAIGN_MANUAL_CALL', 14: 'CAMPAIGN_MANUAL_SMS', 15: 'GMB',
+  16: 'CAMPAIGN_GMB', 17: 'REVIEW', 18: 'INSTAGRAM', 19: 'WHATSAPP',
+  20: 'CUSTOM_SMS', 21: 'CUSTOM_EMAIL', 22: 'CUSTOM_PROVIDER_SMS',
+  23: 'CUSTOM_PROVIDER_EMAIL', 24: 'IVR_CALL',
+  25: 'ACTIVITY_CONTACT', 26: 'ACTIVITY_INVOICE', 27: 'ACTIVITY_PAYMENT',
+  28: 'ACTIVITY_OPPORTUNITY', 29: 'LIVE_CHAT', 30: 'LIVE_CHAT_INFO_MESSAGE',
+  31: 'ACTIVITY_APPOINTMENT', 32: 'FACEBOOK_COMMENT', 33: 'INSTAGRAM_COMMENT',
+  34: 'CUSTOM_CALL', 35: 'GROUP_SMS', 36: 'INTERNAL_CHAT',
+  37: 'INTERNAL_COMMENT', 38: 'ACTIVITY_EMPLOYEE_ACTION_LOG',
+  40: 'EXTERNAL_HUBSPOT', 41: 'TIKTOK', 42: 'TIKTOK_COMMENT',
+  43: 'RCS', 44: 'ACTIVITY_WHATSAPP', 45: 'SMS_REACTION',
+  50: 'FORM_SUBMISSION', 60: 'FACEBOOK_MARKETING_MESSAGE', 100: 'NO_SHOW'
+};
+// Resolve any of {numeric type, string messageType, channel} to a friendly label. Falls back
+// to the raw value when we don't recognise it (better to surface "99" than swallow it).
+const friendlyMessageChannel = (m) => {
+  if (m.channel) return String(m.channel);
+  const mt = m.messageType;
+  if (typeof mt === 'string' && mt.startsWith('TYPE_')) return mt.replace(/^TYPE_/, '');
+  if (typeof mt === 'string' && mt) return mt;
+  const t = m.type;
+  if (typeof t === 'number' && GHL_MESSAGE_TYPE_NAMES[t]) return GHL_MESSAGE_TYPE_NAMES[t];
+  if (t != null) return String(t);
+  return '';
+};
+
 function opportunityStageHistoryToCSV(rows, includeHeader = true, contactCfNames = [], opportunityCfNames = []) {
   const baseColumns = [
     'ContactID', 'OpportunityID', 'PipelineName', 'StageName',
@@ -1237,7 +1271,7 @@ function opportunityStageHistoryToCSV(rows, includeHeader = true, contactCfNames
         escapeCsv(m.direction || ''),
         // Prefer the string type when present (TYPE_SMS / TYPE_EMAIL / …); fall back to the
         // numeric type code from /conversations/messages/export (e.g. 20).
-        escapeCsv(m.channel || m.messageType || (m.type != null ? String(m.type) : '')),
+        escapeCsv(friendlyMessageChannel(m)),
         escapeCsv(m.messageId || ''),
         escapeCsv(m.conversationId || ''),
         escapeCsv(m.isCall ? 'true' : 'false')
