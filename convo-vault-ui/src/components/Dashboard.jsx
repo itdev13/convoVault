@@ -165,9 +165,9 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 min-w-[200px]">
               <p className="text-sm text-gray-800">
-                <span className="font-semibold text-emerald-900">High-volume tier just landed.</span>
+                <span className="font-semibold text-emerald-900">Volume pricing tiers.</span>
                 <span className="hidden sm:inline text-gray-700 ml-1.5">
-                  Above <strong className="text-emerald-700">100k messages</strong>: SMS drops to <strong className="text-emerald-700">$0.001</strong> and email to <strong className="text-emerald-700">$0.002</strong> — up to <strong className="text-emerald-700">~94% off</strong>, auto-applied at estimate time.
+                  Above <strong className="text-emerald-700">50k</strong>: SMS <strong className="text-emerald-700">$0.010</strong> / email <strong className="text-emerald-700">$0.020</strong>. Above <strong className="text-emerald-700">100k</strong>: SMS <strong className="text-emerald-700">$0.001</strong> / email <strong className="text-emerald-700">$0.002</strong> — auto-applied at estimate time.
                 </span>
               </p>
             </div>
