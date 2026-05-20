@@ -681,7 +681,14 @@ export default function ExportEstimateModal({
           </div>
 
           {/* Custom-rate request link: surface when bill is meaningful ($30+) OR for the test location, and we have a location to scope the override to. */}
-          {currentLocationId && (Number(estimate.finalAmount) > PRICING_REQUEST_THRESHOLD || currentLocationId === PRICING_REQUEST_TEST_LOCATION_ID) && (
+          {/* Hide the "Request a custom rate" prompt once the run is already on the
+              high-volume tier (> 100k items). At that point we're already at the floor price
+              ($0.001/SMS, $0.002/email, no further discount) — asking for a lower rate
+              doesn't make sense and would be misleading. */}
+          {currentLocationId
+            && (Number(estimate.finalAmount) > PRICING_REQUEST_THRESHOLD || currentLocationId === PRICING_REQUEST_TEST_LOCATION_ID)
+            && (Number(estimate.itemCounts?.total) || 0) <= 100000
+            && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
               <span className="text-sm text-amber-900">💬 Think the price is too high?</span>
               <button

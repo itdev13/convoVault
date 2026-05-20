@@ -165,9 +165,9 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 min-w-[200px]">
               <p className="text-sm text-gray-800">
-                <span className="font-semibold text-emerald-900">Volume tiers just got cheaper.</span>
+                <span className="font-semibold text-emerald-900">High-volume tier just landed.</span>
                 <span className="hidden sm:inline text-gray-700 ml-1.5">
-                  Up to <strong className="text-emerald-700">63% off</strong> on emails over 50k and <strong className="text-emerald-700">44% off</strong> on messages over 50k — credit rate drops to <strong className="text-emerald-700">$0.01</strong> automatically.
+                  Above <strong className="text-emerald-700">100k messages</strong>: SMS drops to <strong className="text-emerald-700">$0.001</strong> and email to <strong className="text-emerald-700">$0.002</strong> — up to <strong className="text-emerald-700">~94% off</strong>, auto-applied at estimate time.
                 </span>
               </p>
             </div>
@@ -177,7 +177,7 @@ export default function Dashboard() {
                 Auto-applied
               </span>
               <span className="inline-flex items-center text-[10px] font-semibold text-emerald-700 bg-white px-2 py-1 rounded-md border border-emerald-200">
-                Stacks with vol. discounts
+                Floor price — no further discount
               </span>
             </div>
           </div>
