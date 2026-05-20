@@ -38,21 +38,29 @@ const BASE_CREDIT_PRICE = 0.018;
 // When `customCreditPrice` is set (per-location override from AppConfig), it REPLACES the credit
 // price entirely — the volume tier still picks credits-per-email, but the credit rate is fixed
 // to the negotiated value (no further auto-discount at >50k).
+// Email pricing tiers:
+//   ≤ 50,000  emails → 2 credits × $0.018 = $0.036/email
+//   > 50,000  emails → 2 credits × $0.010 = $0.020/email
+//   > 100,000 emails → 1 credit  × $0.002 = $0.002/email   (high-volume tier; no volume discount on top)
 function getEmailPricing(emailCount, customCreditPrice = null) {
   let creditsPerEmail, creditPrice;
-  if (emailCount > 50000)      { creditsPerEmail = 2; creditPrice = 0.01;  }
-  else if (emailCount > 10000) { creditsPerEmail = 2; creditPrice = 0.018; }
-  else                         { creditsPerEmail = 3; creditPrice = 0.018; }
+  if (emailCount > 100000)     { creditsPerEmail = 1; creditPrice = 0.002; }
+  else if (emailCount > 50000) { creditsPerEmail = 2; creditPrice = 0.01;  }
+  else                         { creditsPerEmail = 2; creditPrice = 0.018; }
   if (customCreditPrice) creditPrice = customCreditPrice;
   return { creditsPerEmail, creditPrice, unitPrice: creditsPerEmail * creditPrice };
 }
 
 // Non-email message pricing tiers (SMS / WhatsApp / etc.):
-//   ≤ 50,000 messages → 1 credit × $0.018 = $0.018/message
-//   > 50,000 messages → 1 credit × $0.010 = $0.010/message
+//   ≤ 50,000  messages → 1 credit × $0.018  = $0.018/message
+//   > 50,000  messages → 1 credit × $0.010  = $0.010/message
+//   > 100,000 messages → 1 credit × $0.001  = $0.001/message   (90% off — high-volume tier)
 function getSmsPricing(smsCount, customCreditPrice = null) {
   const creditsPerItem = 1;
-  let creditPrice = smsCount > 50000 ? 0.01 : 0.018;
+  let creditPrice;
+  if (smsCount > 100000)      creditPrice = 0.001;
+  else if (smsCount > 50000)  creditPrice = 0.01;
+  else                        creditPrice = 0.018;
   if (customCreditPrice) creditPrice = customCreditPrice;
   return { creditsPerItem, creditPrice, unitPrice: creditsPerItem * creditPrice };
 }
@@ -246,7 +254,11 @@ class BillingService {
     const totalItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs + templates + contacts + customFields + customValues + tags + notes + tasks;
     const baseAmount = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost + templatesCost + contactsCost + customFieldsCost + customValuesCost + tagsCost + notesCost + tasksCost;
 
-    const discountPercent = totalItems > 0 ? this.getDiscountPercent(totalItems) : 0;
+    // High-volume tiers ($0.001/SMS, $0.004/email above 100k) already represent the floor price;
+    // stacking the volume discount on top would compound past intended pricing. When either
+    // category crosses 100k, the run's volume discount is disabled entirely.
+    const onHighVolumeTier = smsMessages > 100000 || emailMessages > 100000;
+    const discountPercent = (totalItems > 0 && !onHighVolumeTier) ? this.getDiscountPercent(totalItems) : 0;
     const discountAmount = baseAmount * (discountPercent / 100);
     // Add opportunityStageHistory flat cost AFTER discount — custom build doesn't get volume tiers.
     const finalAmount = (baseAmount - discountAmount) + opportunityStageCost;
