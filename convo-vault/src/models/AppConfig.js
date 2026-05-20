@@ -9,6 +9,10 @@ const mongoose = require('mongoose');
  *
  *   // In code:
  *   const ids = await AppConfig.getValues('internalTestingCompanyIds');
+ *
+ * Note: there is no in-memory cache — every read goes straight to MongoDB. This gives instant
+ * propagation when a value is changed (no 5-minute lag) at the cost of one query per read.
+ * AppConfig reads are infrequent (a handful per export run) so the extra query cost is negligible.
  */
 const appConfigSchema = new mongoose.Schema({
   key: {
@@ -27,28 +31,16 @@ const appConfigSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// In-memory cache: { key: { values, expiresAt } }
-const cache = {};
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
 /**
- * Get values for a config key (cached for 5 minutes)
+ * Get values for a config key. Falls back to `fallback` when the doc doesn't exist.
  */
 appConfigSchema.statics.getValues = async function (key, fallback = []) {
-  const now = Date.now();
-  if (cache[key] && cache[key].expiresAt > now) {
-    return cache[key].values;
-  }
-
   const doc = await this.findOne({ key }).lean();
-  const values = doc?.values || fallback;
-
-  cache[key] = { values, expiresAt: now + CACHE_TTL_MS };
-  return values;
+  return doc?.values || fallback;
 };
 
 /**
- * Check if a value exists in a config key's list
+ * Check if a value exists in a config key's list.
  */
 appConfigSchema.statics.hasValue = async function (key, value) {
   const values = await this.getValues(key);
@@ -68,7 +60,7 @@ appConfigSchema.statics.getLocationCreditPrice = async function (locationId) {
 };
 
 /**
- * Set (or update) the custom credit price for a location. Clears the cache so the next read sees it.
+ * Set (or update) the custom credit price for a location.
  */
 appConfigSchema.statics.setLocationCreditPrice = async function (locationId, price) {
   if (!locationId) throw new Error('locationId required');
@@ -80,18 +72,6 @@ appConfigSchema.statics.setLocationCreditPrice = async function (locationId, pri
     { key, values: [String(numeric)], description: `Custom credit price for location ${locationId}` },
     { upsert: true, new: true }
   );
-  delete cache[key];
-};
-
-/**
- * Clear cache for a key (or all keys)
- */
-appConfigSchema.statics.clearCache = function (key) {
-  if (key) {
-    delete cache[key];
-  } else {
-    Object.keys(cache).forEach(k => delete cache[k]);
-  }
 };
 
 module.exports = mongoose.model('AppConfig', appConfigSchema);
