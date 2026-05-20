@@ -252,14 +252,21 @@ export default function ExportEstimateModal({
       {/* Estimate Content */}
       {!postExportBilling && estimate && !estimating && estimate.itemCounts?.total > 0 && (
         <div className="space-y-2">
-          {/* Dynamic Volume Pricing Callout — celebrates the discount tier the user just unlocked */}
-          {(() => {
+          {/* Dynamic Volume Pricing Callout — celebrates the volume tier the user just unlocked.
+              Tier ladder (mirrors getSmsPricing / getEmailPricing in billingService):
+                Email  ≤50k → $0.036/email (base)   >50k → $0.020 (44% off)   >100k → $0.002 (94% off, floor)
+                SMS    ≤50k → $0.018/msg   (base)   >50k → $0.010 (44% off)   >100k → $0.001 (94% off, floor)
+              The >100k tier is the floor price — no further volume discount stacks on top of it.
+              Hidden for export types that don't use the volume-discount ladder at all (matches
+              the "View Volume Discount Tiers" section's visibility rule). */}
+          {!['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle'].includes(exportType) && (() => {
             const emailCount = Number(estimate.breakdown?.email?.count) || 0;
             const smsCount = Number(estimate.breakdown?.smsWhatsapp?.count) || 0;
             const tiers = [];
-            if (emailCount > 50000) tiers.push({ pct: 63, label: `${formatNumber(emailCount)} emails`, detail: 'credit rate dropped to $0.01' });
-            else if (emailCount > 10000) tiers.push({ pct: 33, label: `${formatNumber(emailCount)} emails`, detail: '2 credits each instead of 3' });
-            if (smsCount > 50000) tiers.push({ pct: 44, label: `${formatNumber(smsCount)} messages`, detail: 'credit rate dropped to $0.01' });
+            if (emailCount > 100000)     tiers.push({ pct: 94, label: `${formatNumber(emailCount)} emails`,   detail: 'rate dropped to $0.002/email (floor price)' });
+            else if (emailCount > 50000) tiers.push({ pct: 44, label: `${formatNumber(emailCount)} emails`,   detail: 'rate dropped to $0.020/email' });
+            if (smsCount > 100000)       tiers.push({ pct: 94, label: `${formatNumber(smsCount)} messages`,   detail: 'rate dropped to $0.001/message (floor price)' });
+            else if (smsCount > 50000)   tiers.push({ pct: 44, label: `${formatNumber(smsCount)} messages`,   detail: 'rate dropped to $0.010/message' });
             if (tiers.length === 0) return null;
             const topPct = Math.max(...tiers.map(t => t.pct));
             return (
