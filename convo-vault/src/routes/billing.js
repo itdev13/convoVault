@@ -807,7 +807,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               contactId,
               startDate: new Date(0).toISOString(),
               endDate: new Date().toISOString(),
-              limit: 100,
+              limit: 1000,
               cursor: cursor || undefined
             };
             if (channelFilter) opts.channel = channelFilter;
@@ -850,8 +850,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         const channelMsgs = [];
         const seenIds = new Set();
         for (const m of [...nonEmailMsgs, ...emailMsgs]) {
-          if (m.id && seenIds.has(m.id)) continue;
-          if (m.id) seenIds.add(m.id);
           channelMsgs.push(m);
         }
         oshLog('step4c.channelMessages: walk complete', {
@@ -1050,6 +1048,9 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               callMessageIds: sliceWindow(fromMs, null).filter(m => m.isCall).map(m => m.messageId),
               contactCustomFields: contactCfResolved,
               opportunityCustomFields: oppById[opp.id]?.customFieldsResolved || {},
+              // Snapshot of opportunity.monetaryValue at export time. Ghost opps don't have this
+              // (activity events don't carry it) — left null in that case.
+              monetaryValue: oppById[opp.id]?.monetaryValue ?? null,
               currentStage: true
             });
             continue;
@@ -1106,6 +1107,9 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               callMessageIds: sliceWindow(entryMs, leftMs).filter(m => m.isCall).map(m => m.messageId),
               contactCustomFields: contactCfResolved,
               opportunityCustomFields: oppById[opp.id]?.customFieldsResolved || {},
+              // Snapshot of opportunity.monetaryValue at export time. Ghost opps don't have this
+              // (activity events don't carry it) — left null in that case.
+              monetaryValue: oppById[opp.id]?.monetaryValue ?? null,
               currentStage: false,
               // Mark the row that closes a deletion so the customer can distinguish a
               // "moved to next stage" close from a "removed from pipeline" close.
@@ -1141,6 +1145,9 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               callMessageIds: sliceWindow(entryMs, null).filter(m => m.isCall).map(m => m.messageId),
               contactCustomFields: contactCfResolved,
               opportunityCustomFields: oppById[opp.id]?.customFieldsResolved || {},
+              // Snapshot of opportunity.monetaryValue at export time. Ghost opps don't have this
+              // (activity events don't carry it) — left null in that case.
+              monetaryValue: oppById[opp.id]?.monetaryValue ?? null,
               currentStage: true,
               // Flag synthesized rows so downstream consumers can distinguish "real" opps
               // from those reconstructed from activity events alone.
