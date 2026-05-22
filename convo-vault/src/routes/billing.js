@@ -3205,7 +3205,7 @@ router.post('/custom-charge', authenticateSession, async (req, res) => {
       return res.status(402).json({ success: false, error: 'Insufficient wallet balance' });
     }
 
-    const meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: 1, description: `Custom charge $${parsedAmount}` }];
+    const meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: 1, description: `Custom charge for the work $${parsedAmount}` }];
 
     const transaction = await BillingTransaction.create({
       locationId,
