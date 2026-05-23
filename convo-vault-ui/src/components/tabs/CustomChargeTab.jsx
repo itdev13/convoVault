@@ -25,7 +25,10 @@ export default function CustomChargeTab() {
       setResult({ chargeId: res.data?.chargeId, amount: res.data?.amount });
       setAmount('');
     } catch (err) {
-      setError(err.response?.data?.error || 'Charge failed. Please try again.');
+      // The shared axios response interceptor (api/client.js) already extracts the backend
+      // error message and exposes it on `err.message`. The interceptor rejects with a plain
+      // Error, so `err.response` is undefined here — read from `.message` instead.
+      setError(err.message || err.response?.data?.error || 'Charge failed. Please try again.');
     } finally {
       setLoading(false);
     }
