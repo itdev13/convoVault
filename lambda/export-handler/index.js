@@ -1172,8 +1172,8 @@ function callLogsToCSV(callLogs, includeHeader = true) {
  * Each input record is one (opportunity × stage_session) emitted by the billing-route walker.
  * Output shape:
  *   - One CSV row per *message*, with stage metadata (ContactID, OpportunityID, PipelineName,
- *     StageName, EnteredAt, LeftAt, TimeInStageSeconds, CurrentStage, Deleted) repeated on
- *     every row.
+ *     StageName, EnteredAt, LeftAt, TimeInStageSeconds, CurrentStage, Deleted, GhostOpportunity)
+ *     repeated on every row.
  *   - Stages with no messages still emit one CSV row with empty message columns, so stage
  *     history isn't lost when a stage had no conversation activity.
  *   - Each contact custom field becomes a column named `Contact CF: <fieldName>`.
@@ -1218,12 +1218,9 @@ const friendlyMessageChannel = (m) => {
 };
 
 function opportunityStageHistoryToCSV(rows, includeHeader = true, contactCfNames = [], opportunityCfNames = []) {
-  // Note: the `GhostOpportunity` flag is intentionally NOT exposed in the CSV — it's an internal
-  // distinction between rows from /opportunities/search vs. rows synthesized from activity-only
-  // history (deleted/merged opps). Customers don't need to see the difference; the data is the same.
   const baseColumns = [
     'ContactID', 'OpportunityID', 'MonetaryValue', 'PipelineName', 'StageName',
-    'EnteredAt', 'LeftAt', 'TimeInStageSeconds', 'CurrentStage', 'Deleted',
+    'EnteredAt', 'LeftAt', 'TimeInStageSeconds', 'CurrentStage', 'Deleted', 'GhostOpportunity',
     'MessageTimestamp', 'MessageBody', 'MessageDirection', 'MessageChannel',
     'MessageID', 'ConversationID', 'IsCall'
   ];
@@ -1251,7 +1248,8 @@ function opportunityStageHistoryToCSV(rows, includeHeader = true, contactCfNames
       escapeCsv(r.leftAt || ''),
       escapeCsv(r.durationSeconds != null ? String(r.durationSeconds) : ''),
       escapeCsv(r.currentStage ? 'true' : 'false'),
-      escapeCsv(r.deleted ? 'true' : 'false')
+      escapeCsv(r.deleted ? 'true' : 'false'),
+      escapeCsv(r.ghostOpportunity ? 'true' : 'false')
     ];
 
     // Custom-field cells (look up by field name, blank when missing).
