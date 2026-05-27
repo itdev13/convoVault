@@ -85,7 +85,7 @@ const FIXED_PRICE_EXPORTS = [
     exportType: 'messages',
     // Epoch ms — must match exactly what the date picker sends (verified from /estimate logs).
     startDate: 1747679400000, // 2025-05-19T18:30:00.000Z
-    endDate: 1779388199999,   // 2026-05-21T18:29:59.999Z
+    endDate: 1779433199999,   // 2026-05-21T18:29:59.999Z
     amount: 45
   }
 ];
