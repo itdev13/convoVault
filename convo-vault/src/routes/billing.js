@@ -75,6 +75,38 @@ function validateDateRange(startDate, endDate, maxRange = MAX_DATE_RANGE_MS) {
   return { valid: true };
 }
 
+// Hardcoded flat-fee re-downloads. When a sub-account re-requests an export whose
+// locationId + exportType + exact date range match an entry here, we bill this flat fee
+// (instead of per-record pricing) and run the normal export + email flow again. Used for
+// re-downloads of data the customer already paid full price for once.
+const FIXED_PRICE_EXPORTS = [
+  {
+    locationId: 'QufTHN7dRygscPmKguNZ',
+    exportType: 'messages',
+    startDate: '2025-05-19T18:30:00.000Z',
+    endDate: '2026-05-21T18:29:59.999Z',
+    amount: 45
+  }
+];
+
+// Returns the flat fee (number) when the request matches a FIXED_PRICE_EXPORTS entry, else null.
+// Matches on locationId + exportType + exact start/end timestamps.
+function matchFixedPriceExport(locationId, exportType, filters) {
+  if (!filters?.startDate || !filters?.endDate) return null;
+  const start = new Date(filters.startDate).getTime();
+  const end = new Date(filters.endDate).getTime();
+  if (isNaN(start) || isNaN(end)) return null;
+  for (const e of FIXED_PRICE_EXPORTS) {
+    if (e.locationId === locationId &&
+        e.exportType === exportType &&
+        new Date(e.startDate).getTime() === start &&
+        new Date(e.endDate).getTime() === end) {
+      return e.amount;
+    }
+  }
+  return null;
+}
+
 /**
  * @route POST /api/billing/estimate
  * @desc Get cost estimate for export
@@ -1985,6 +2017,20 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       discountTiers: billingService.getDiscountTiers(),
       unitPrices: billingService.getUnitPrices(locationId)
     }
+
+    // Flat-fee re-download override: a hardcoded locationId + exportType + date range bills a
+    // fixed fee instead of per-record pricing. Keeps the normal export/download flow afterward.
+    const fixedFee = matchFixedPriceExport(locationId, exportType, filters);
+    if (fixedFee != null) {
+      estimate.baseAmount = fixedFee;
+      estimate.discountPercent = 0;
+      estimate.discountAmount = 0;
+      estimate.finalAmount = fixedFee;
+      estimate.finalAmountDollars = fixedFee;
+      estimate.fixedPriceRedownload = true;
+      logger.info('Estimate: fixed-price re-download matched', { locationId, exportType, amount: fixedFee });
+    }
+
     const responseData = {
       estimate,
       filters,
@@ -2370,6 +2416,16 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       estimate = await billingService.calculateEstimateWithPrices(counts, accessToken, locationId);
       // Step 5: Build meter charges
       meterCharges = billingService.buildMeterCharges(counts);
+    }
+
+    // Flat-fee re-download override: must mirror the /estimate override so the customer is
+    // charged exactly the flat fee shown in the modal. Replaces per-record meter charges with
+    // a single flat charge; the export then runs through the normal flow below.
+    const fixedFee = matchFixedPriceExport(locationId, exportType, filters);
+    if (fixedFee != null) {
+      estimate = { ...estimate, baseAmount: fixedFee, discountPercent: 0, discountAmount: 0, finalAmount: fixedFee, finalAmountDollars: fixedFee };
+      meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: 1, description: `Re-download flat fee (${exportType}) $${fixedFee}` }];
+      logger.info('Charge-and-export: fixed-price re-download matched', { locationId, exportType, amount: fixedFee });
     }
 
     // Safety net: if billing resolved to $0 despite totalItems>0, the counts used for

@@ -693,6 +693,7 @@ export default function ExportEstimateModal({
               ($0.001/SMS, $0.002/email, no further discount) — asking for a lower rate
               doesn't make sense and would be misleading. */}
           {currentLocationId
+            && !estimate.fixedPriceRedownload
             && (Number(estimate.finalAmount) > PRICING_REQUEST_THRESHOLD || currentLocationId === PRICING_REQUEST_TEST_LOCATION_ID)
             && (Number(estimate.itemCounts?.total) || 0) <= 100000
             && (
