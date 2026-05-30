@@ -1399,11 +1399,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             const msgs = [];
             let cursor = undefined;
             const PAGE_SIZE = 300;
-            // Email is priced separately on the standard Messages tab; never include it here regardless of type filter.
-            const isEmail = (m) => {
-              const t = String(m?.type || '').toLowerCase();
-              return t === 'type_email' || t === '3' || t.includes('email');
-            };
             while (true) {
               const msgOptions = { limit: PAGE_SIZE };
               if (cursor) msgOptions.lastMessageId = cursor;

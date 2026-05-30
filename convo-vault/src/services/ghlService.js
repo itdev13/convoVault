@@ -673,7 +673,7 @@ class GHLService {
     if (options.type) {
       params.type = options.type?.join(',');
     }
-
+    logger.info("payload", options, params)
     const result = await this.apiRequest(
       'GET',
       `/conversations/${conversationId}/messages`,
