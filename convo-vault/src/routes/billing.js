@@ -1326,9 +1326,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       // Single string → passed to GHL API directly. Array → fetch unfiltered, filter client-side.
       const typeFilter = filters?.type;
       const isTypeArray = Array.isArray(typeFilter);
-      const allowedTypesSet = isTypeArray
-        ? new Set(typeFilter.map(t => String(t)))
-        : null;
 
       const conversationIdFilter = typeof filters?.conversationId === 'string' ? filters.conversationId.trim() : '';
       const contactIdsFilter = Array.isArray(filters?.contactIds) ? filters.contactIds.filter(Boolean) : [];
@@ -1401,6 +1398,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             const PAGE_SIZE = 300;
             while (true) {
               const msgOptions = { limit: PAGE_SIZE, type: typeFilter?.join(',') };
+              console.log("msg", msgOptions)
               if (cursor) msgOptions.lastMessageId = cursor;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               // GHL response: { messages: { lastMessageId, nextPage, messages: [...] } }
