@@ -223,7 +223,7 @@ export default function SpecialMessagesTab() {
         {/* Scope — at least one of conversationId / contacts is required. The whole-sub-account
             walk was removed because it routinely hit GHL rate limits on large accounts. */}
         <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
-          <strong>Required:</strong> enter a Conversation ID <em>or</em> select one or more Contacts. (If both are provided, Conversation ID wins.)
+          <strong>Required:</strong> Enter a Conversation ID <em>or</em> select one or more Contacts. (If both are provided, Conversation ID wins.)
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
