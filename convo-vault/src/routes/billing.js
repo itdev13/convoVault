@@ -1329,6 +1329,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const allowedTypesSet = isTypeArray
         ? new Set(typeFilter.map(t => String(t).toLowerCase()))
         : null;
+      logger.info("request", allowedTypesSet, typeFilter)
 
       const conversationIdFilter = typeof filters?.conversationId === 'string' ? filters.conversationId.trim() : '';
       const contactIdsFilter = Array.isArray(filters?.contactIds) ? filters.contactIds.filter(Boolean) : [];
@@ -1400,17 +1401,13 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             let cursor = undefined;
             const PAGE_SIZE = 300;
             while (true) {
-              const msgOptions = { limit: PAGE_SIZE };
+              const msgOptions = { limit: PAGE_SIZE, type: typeFilter?.join(',') };
               if (cursor) msgOptions.lastMessageId = cursor;
-              // Only pass `type` to GHL API when a single type is selected;
-              // for arrays we fetch unfiltered and filter client-side below.
-              if (typeFilter && !isTypeArray) msgOptions.type = typeFilter;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               // GHL response: { messages: { lastMessageId, nextPage, messages: [...] } }
               const wrapper = result.messages || {};
               const pageMsgs = wrapper.messages || [];
               const filtered = pageMsgs
-                .filter(m => !isEmail(m))
                 .filter(m => !allowedTypesSet || allowedTypesSet.has(String(m.type || '').toLowerCase()))
                 .map(m => ({ ...m, conversationId: cId }));
               msgs.push(...filtered);
