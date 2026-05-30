@@ -2542,8 +2542,15 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       contactName: filters?.contactName || null,
       // Form submission-specific filters
       formId: filters?.formId || null,
-      // Template-specific filters
-      templateType: filters?.type || null,
+      // Template-specific filters.
+      // - Array (specialTabMessages "All" → 7 activity types) → comma-joined string
+      // - String (single template type, or single activity type) → stored as-is
+      // - Anything else → null
+      templateType: Array.isArray(filters?.type)
+        ? filters.type.join(',')
+        : typeof filters?.type === 'string'
+          ? filters.type
+          : null,
       // Call log-specific filters
       agentId: filters?.agentId || null,
       callType: filters?.callType || null,
@@ -2563,8 +2570,12 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       unAssigned: filters?.unAssigned != null ? filters?.unAssigned : null,
       // Tag filter for notes export
       tags: filters?.tags || null,
-      // LiveChat-specific filters
-      specialTabType: filters?.type || null,
+      // LiveChat-specific filters. Same array / string / null handling as `templateType` above.
+      specialTabType: Array.isArray(filters?.type)
+        ? filters.type.join(',')
+        : typeof filters?.type === 'string'
+          ? filters.type
+          : null,
     };
 
     const exportJob = await ExportJob.create({
