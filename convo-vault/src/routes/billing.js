@@ -1329,7 +1329,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const allowedTypesSet = isTypeArray
         ? new Set(typeFilter.map(t => String(t).toLowerCase()))
         : null;
-      logger.info("request", allowedTypesSet, typeFilter)
+      console.log("request", allowedTypesSet, typeFilter)
 
       const conversationIdFilter = typeof filters?.conversationId === 'string' ? filters.conversationId.trim() : '';
       const contactIdsFilter = Array.isArray(filters?.contactIds) ? filters.contactIds.filter(Boolean) : [];
@@ -1401,7 +1401,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             let cursor = undefined;
             const PAGE_SIZE = 300;
             while (true) {
-              logger.info("typeFilter", typeFilter);
+              console.log("type", typeFilter)
               const msgOptions = { limit: PAGE_SIZE, type: typeFilter?.join(',') };
               if (cursor) msgOptions.lastMessageId = cursor;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
