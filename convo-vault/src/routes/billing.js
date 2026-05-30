@@ -1402,6 +1402,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               if (cursor) msgOptions.lastMessageId = cursor;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               // GHL response: { messages: { lastMessageId, nextPage, messages: [...] } }
+              console.log("response", JSON.stringify(result, null, 2))
               const wrapper = result.messages || {};
               const pageMsgs = wrapper.messages || [];
               const filtered = pageMsgs
