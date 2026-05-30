@@ -1401,6 +1401,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             let cursor = undefined;
             const PAGE_SIZE = 300;
             while (true) {
+              logger.info("typeFilter", typeFilter);
               const msgOptions = { limit: PAGE_SIZE, type: typeFilter?.join(',') };
               if (cursor) msgOptions.lastMessageId = cursor;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
