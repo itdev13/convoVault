@@ -1327,9 +1327,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const typeFilter = filters?.type;
       const isTypeArray = Array.isArray(typeFilter);
       const allowedTypesSet = isTypeArray
-        ? new Set(typeFilter.map(t => String(t).toLowerCase()))
+        ? new Set(typeFilter.map(t => String(t)))
         : null;
-      console.log("request", allowedTypesSet, typeFilter)
 
       const conversationIdFilter = typeof filters?.conversationId === 'string' ? filters.conversationId.trim() : '';
       const contactIdsFilter = Array.isArray(filters?.contactIds) ? filters.contactIds.filter(Boolean) : [];
@@ -1401,7 +1400,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             let cursor = undefined;
             const PAGE_SIZE = 300;
             while (true) {
-              console.log("type", typeFilter)
               const msgOptions = { limit: PAGE_SIZE, type: typeFilter?.join(',') };
               if (cursor) msgOptions.lastMessageId = cursor;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
@@ -1409,7 +1407,6 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               const wrapper = result.messages || {};
               const pageMsgs = wrapper.messages || [];
               const filtered = pageMsgs
-                .filter(m => !allowedTypesSet || allowedTypesSet.has(String(m.type || '').toLowerCase()))
                 .map(m => ({ ...m, conversationId: cId }));
               msgs.push(...filtered);
               if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
