@@ -670,7 +670,7 @@ class GHLService {
 
     // Add type filter
     if (options.type) {
-      params.type = options.type?.join(',');
+      params.type = options.type;
     }
     const result = await this.apiRequest(
       'GET',
