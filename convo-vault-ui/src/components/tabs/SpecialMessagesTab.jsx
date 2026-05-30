@@ -2,10 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
 import { contactsAPI } from '../../api/contacts';
-import { Button, Select, DatePicker, Input, message as antMessage } from 'antd';
+import { Button, Select, Input, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
-import dayjs from 'dayjs';
 
 // Activity messages — these aren't available on the standard Messages tab,
 // so the Activity Messages tab is dedicated to them.
@@ -35,8 +34,6 @@ export default function SpecialMessagesTab() {
 
   // Filters
   const [chatType, setChatType] = useState('');
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
   const [conversationId, setConversationId] = useState('');
 
   // Contact picker — at least one of {conversationId, selectedContactIds} is required;
@@ -117,8 +114,6 @@ export default function SpecialMessagesTab() {
     const f = {};
     // Single type → string; "All" (none selected) → array of every activity type
     f.type = chatType ? chatType : ALL_ACTIVITY_TYPES;
-    if (startDate) f.startDate = dayjs(startDate).startOf('day').valueOf();
-    if (endDate) f.endDate = dayjs(endDate).endOf('day').valueOf();
     const trimmedConvoId = conversationId.trim();
     if (trimmedConvoId) f.conversationId = trimmedConvoId;
     if (selectedContactIds.length > 0) f.contactIds = selectedContactIds;
@@ -225,27 +220,28 @@ export default function SpecialMessagesTab() {
           <span className="text-lg font-semibold text-gray-900">Filters</span>
         </div>
 
-        {/* Scope — at least one required. Direct conversationId is fastest; contact picker walks
-            only the selected contacts' conversations. The whole-sub-account walk was removed because
-            it routinely hit GHL rate limits on large accounts. */}
+        {/* Scope — at least one of conversationId / contacts is required. The whole-sub-account
+            walk was removed because it routinely hit GHL rate limits on large accounts. */}
+        <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+          <strong>Required:</strong> enter a Conversation ID <em>or</em> select one or more Contacts. (If both are provided, Conversation ID wins.)
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Conversation ID <span className="text-gray-400 font-normal">(optional)</span>
+              Conversation ID <span className="text-red-500">*</span>
             </label>
             <Input
               value={conversationId}
               onChange={(e) => setConversationId(e.target.value)}
               placeholder="Paste a single conversation ID"
               size="large"
-              allowClear
             />
             <p className="text-xs text-gray-500 mt-1">Fastest path — skips conversation discovery entirely.</p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Contacts <span className="text-gray-400 font-normal">(optional)</span>
+              Contacts <span className="text-red-500">*</span>
             </label>
             <Select
               mode="multiple"
@@ -271,7 +267,7 @@ export default function SpecialMessagesTab() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Message Type</label>
             <Select
@@ -284,28 +280,6 @@ export default function SpecialMessagesTab() {
               optionFilterProp="label"
               placeholder="Select message type"
               allowClear
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-            <DatePicker
-              value={startDate ? dayjs(startDate) : null}
-              onChange={(date) => setStartDate(date ? date.toDate() : null)}
-              className="w-full"
-              size="large"
-              placeholder="Select start date"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-            <DatePicker
-              value={endDate ? dayjs(endDate) : null}
-              onChange={(date) => setEndDate(date ? date.toDate() : null)}
-              className="w-full"
-              size="large"
-              placeholder="Select end date"
             />
           </div>
 
