@@ -1398,11 +1398,9 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             const PAGE_SIZE = 300;
             while (true) {
               const msgOptions = { limit: PAGE_SIZE, type: typeFilter?.join(',') };
-              console.log("msg", msgOptions)
               if (cursor) msgOptions.lastMessageId = cursor;
               const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               // GHL response: { messages: { lastMessageId, nextPage, messages: [...] } }
-              console.log("response", JSON.stringify(result, null, 2))
               const wrapper = result.messages || {};
               const pageMsgs = wrapper.messages || [];
               const filtered = pageMsgs
