@@ -2571,11 +2571,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       // Tag filter for notes export
       tags: filters?.tags || null,
       // LiveChat-specific filters. Same array / string / null handling as `templateType` above.
-      specialTabType: Array.isArray(filters?.type)
-        ? filters.type.join(',')
-        : typeof filters?.type === 'string'
-          ? filters.type
-          : null,
+      specialTabType: exportType
     };
 
     const exportJob = await ExportJob.create({
