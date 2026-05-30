@@ -434,7 +434,7 @@ class GHLService {
 
     if (data) config.data = data;
     if (params) config.params = params;
-      
+    logger.info("config", config)
     const response = await axios(config);
     return response.data;
 
