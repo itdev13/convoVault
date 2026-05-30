@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
-import { Button, Select, DatePicker, message as antMessage } from 'antd';
+import { contactsAPI } from '../../api/contacts';
+import { Button, Select, DatePicker, Input, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 import dayjs from 'dayjs';
@@ -36,6 +37,62 @@ export default function SpecialMessagesTab() {
   const [chatType, setChatType] = useState('');
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
+  const [conversationId, setConversationId] = useState('');
+
+  // Contact picker — at least one of {conversationId, selectedContactIds} is required;
+  // walking every conversation in the sub-account was hitting GHL rate limits.
+  const [selectedContactIds, setSelectedContactIds] = useState([]);
+  const [contactOptions, setContactOptions] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const searchTimeoutRef = useRef(null);
+
+  const getContactName = (c) =>
+    c?.contactName || `${c?.firstName || ''} ${c?.lastName || ''}`.trim() || c?.email || c?.phone || 'Unknown';
+
+  useEffect(() => {
+    if (!location?.id) return;
+    setContactsLoading(true);
+    contactsAPI.search(location.id, '', 100)
+      .then(res => {
+        if (res.success) {
+          const contacts = res.data.contacts || [];
+          setContactOptions(contacts.map(c => ({
+            value: c.id,
+            label: `${getContactName(c)}${c.email ? ` — ${c.email}` : c.phone ? ` — ${c.phone}` : ''}`,
+          })));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setContactsLoading(false));
+  }, [location?.id]);
+
+  const handleContactSearch = (query) => {
+    clearTimeout(searchTimeoutRef.current);
+    if (!query || !query.trim()) return;
+    searchTimeoutRef.current = setTimeout(async () => {
+      setContactsLoading(true);
+      try {
+        const res = await contactsAPI.search(location.id, query, 20);
+        if (res.success) {
+          const apiResults = res.data.contacts || [];
+          setContactOptions(prev => {
+            const seen = new Set(prev.map(o => o.value));
+            const merged = [...prev];
+            for (const c of apiResults) {
+              if (!seen.has(c.id)) {
+                merged.push({
+                  value: c.id,
+                  label: `${getContactName(c)}${c.email ? ` — ${c.email}` : c.phone ? ` — ${c.phone}` : ''}`,
+                });
+              }
+            }
+            return merged;
+          });
+        }
+      } catch {}
+      finally { setContactsLoading(false); }
+    }, 400);
+  };
 
   // Poll active job status
   useEffect(() => {
@@ -62,10 +119,18 @@ export default function SpecialMessagesTab() {
     f.type = chatType ? chatType : ALL_ACTIVITY_TYPES;
     if (startDate) f.startDate = dayjs(startDate).startOf('day').valueOf();
     if (endDate) f.endDate = dayjs(endDate).endOf('day').valueOf();
+    const trimmedConvoId = conversationId.trim();
+    if (trimmedConvoId) f.conversationId = trimmedConvoId;
+    if (selectedContactIds.length > 0) f.contactIds = selectedContactIds;
     return f;
   };
 
   const handleGetEstimate = async () => {
+    const trimmedConvoId = conversationId.trim();
+    if (!trimmedConvoId && selectedContactIds.length === 0) {
+      antMessage.warning('Enter a conversation ID or pick at least one contact to scope the export.');
+      return;
+    }
     setExportModalVisible(true);
     setEstimating(true);
     setEstimate(null);
@@ -136,7 +201,7 @@ export default function SpecialMessagesTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Activity Messages</h2>
-          <p className="text-sm text-gray-500 mt-1">Export appointment, contact, invoice, payment, opportunity, WhatsApp, and employee-action activity logs — types not available on the standard Messages tab. We walk every conversation so nothing is missed.</p>
+          <p className="text-sm text-gray-500 mt-1">Export appointment, contact, invoice, payment, opportunity, WhatsApp, and employee-action activity logs — types not available on the standard Messages tab. Scope by conversation ID or contact(s) to avoid hitting GHL rate limits.</p>
         </div>
       </div>
 
@@ -158,6 +223,52 @@ export default function SpecialMessagesTab() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-lg font-semibold text-gray-900">Filters</span>
+        </div>
+
+        {/* Scope — at least one required. Direct conversationId is fastest; contact picker walks
+            only the selected contacts' conversations. The whole-sub-account walk was removed because
+            it routinely hit GHL rate limits on large accounts. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Conversation ID <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <Input
+              value={conversationId}
+              onChange={(e) => setConversationId(e.target.value)}
+              placeholder="Paste a single conversation ID"
+              size="large"
+              allowClear
+            />
+            <p className="text-xs text-gray-500 mt-1">Fastest path — skips conversation discovery entirely.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Contacts <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <Select
+              mode="multiple"
+              allowClear
+              showSearch
+              value={selectedContactIds}
+              onChange={setSelectedContactIds}
+              onSearch={handleContactSearch}
+              optionFilterProp="label"
+              loading={contactsLoading}
+              placeholder="Search and select contact(s)"
+              options={contactOptions}
+              style={{ width: '100%' }}
+              size="large"
+              maxTagCount="responsive"
+              notFoundContent={contactsLoading ? 'Searching…' : 'No contacts found — try typing a name or email'}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              {selectedContactIds.length > 0
+                ? <><strong>{selectedContactIds.length}</strong> selected. We'll walk only these contacts' conversations.</>
+                : 'Walks only the selected contacts\' conversations.'}
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -204,7 +315,7 @@ export default function SpecialMessagesTab() {
               size="large"
               onClick={handleGetEstimate}
               loading={estimating}
-              disabled={!location?.id}
+              disabled={!location?.id || (!conversationId.trim() && selectedContactIds.length === 0)}
               className="bg-green-600 hover:bg-green-700 border-green-600"
             >
               Get Estimate & Export
@@ -214,11 +325,16 @@ export default function SpecialMessagesTab() {
 
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
-            This will search all conversations{chatType
-              ? <> for <strong>{MESSAGE_TYPES.find(t => t.value === chatType)?.label || chatType}</strong> activity messages</>
-              : <> and fetch <strong>all {ALL_ACTIVITY_TYPES.length} activity message types</strong></>
-            }, then export as CSV. Slower than the standard Messages export, but the most accurate —
-            we walk every conversation so nothing is missed. Pricing: <strong>$0.018 per message</strong> (no volume discount).
+            {conversationId.trim()
+              ? <>Fetching messages from <strong>1 conversation</strong></>
+              : selectedContactIds.length > 0
+                ? <>Walking conversations for <strong>{selectedContactIds.length}</strong> selected contact{selectedContactIds.length === 1 ? '' : 's'}</>
+                : <>Pick a conversation ID <em>or</em> at least one contact to begin</>
+            }
+            {chatType
+              ? <> · filtering to <strong>{MESSAGE_TYPES.find(t => t.value === chatType)?.label || chatType}</strong></>
+              : <> · fetching <strong>all {ALL_ACTIVITY_TYPES.length} activity types</strong></>
+            }. Export delivered as CSV. Pricing: <strong>$0.018 per message</strong> (no volume discount).
           </p>
         </div>
       </div>

@@ -1319,7 +1319,9 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
 
     } else if (exportType === 'specialTabMessages') {
-      // Special Messages: fetch ALL conversations, then fetch + store messages matching the type(s)
+      // Special Messages: fetch messages matching the type(s) from a SCOPED set of conversations.
+      // Caller must provide either filters.conversationId OR filters.contactIds — the previous
+      // whole-sub-account walk was removed because it routinely hit GHL rate limits on large accounts.
       // typeFilter may be a single string (one type selected) or an array (all activity types).
       // Single string → passed to GHL API directly. Array → fetch unfiltered, filter client-side.
       const typeFilter = filters?.type;
@@ -1327,8 +1329,16 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const allowedTypesSet = isTypeArray
         ? new Set(typeFilter.map(t => String(t).toLowerCase()))
         : null;
-      let allConversationIds = [];
-      let startAfterDate = undefined;
+
+      const conversationIdFilter = typeof filters?.conversationId === 'string' ? filters.conversationId.trim() : '';
+      const contactIdsFilter = Array.isArray(filters?.contactIds) ? filters.contactIds.filter(Boolean) : [];
+
+      if (!conversationIdFilter && contactIdsFilter.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Activity Messages export requires either filters.conversationId or filters.contactIds (at least one contact).'
+        });
+      }
 
       // Helper: retry on 429 with exponential backoff
       const withRetry = async (fn, maxRetries = 3) => {
@@ -1347,23 +1357,37 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
       };
 
-      // Paginate through ALL conversations with date filter
-      // GHL search uses startAfterDate (timestamp) for cursor pagination
-      while (true) {
-        const searchParams = { locationId, limit: 100 };
-        if (filters?.startDate) searchParams.startDate = filters.startDate;
-        if (filters?.endDate) searchParams.endDate = filters.endDate;
-        if (startAfterDate) searchParams.startAfterDate = startAfterDate;
-        const result = await withRetry(() => ghlService.searchConversations(locationId, searchParams));
-        const convos = result.conversations || [];
-        if (convos.length === 0) break;
-        allConversationIds.push(...convos.map(c => c.id));
-        if (convos.length < 100) break;
-        const lastConvo = convos[convos.length - 1];
-        startAfterDate = lastConvo.lastMessageDate || lastConvo.dateUpdated || lastConvo.dateAdded;
+      let allConversationIds = [];
+      if (conversationIdFilter) {
+        // Direct conversationId — skip discovery entirely.
+        allConversationIds = [conversationIdFilter];
+      } else {
+        // Per-contact discovery (mirrors callTranscriptions). Concurrency 3 to keep GHL happy.
+        const CONTACT_PARALLEL = 3;
+        const seen = new Set();
+        for (let i = 0; i < contactIdsFilter.length; i += CONTACT_PARALLEL) {
+          const batch = contactIdsFilter.slice(i, i + CONTACT_PARALLEL);
+          const results = await Promise.allSettled(
+            batch.map(cid => withRetry(() => ghlService.searchConversations(locationId, { contactId: cid, limit: 100 })))
+          );
+          for (const r of results) {
+            if (r.status === 'fulfilled') {
+              const convos = r.value?.conversations || [];
+              for (const c of convos) {
+                if (c?.id && !seen.has(c.id)) {
+                  seen.add(c.id);
+                  allConversationIds.push(c.id);
+                }
+              }
+            }
+          }
+        }
       }
 
-      logger.info('Special Messages: conversations fetched', { count: allConversationIds.length });
+      logger.info('Special Messages: conversations resolved', {
+        count: allConversationIds.length,
+        scope: conversationIdFilter ? 'conversationId' : `contactIds(${contactIdsFilter.length})`
+      });
 
       // Fetch messages for each conversation (5 parallel), pass type filter to API
       const allMessages = [];
