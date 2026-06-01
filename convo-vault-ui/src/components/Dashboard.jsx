@@ -183,6 +183,52 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* NotifyPro Cross-Promo Banner — sister app under the Vaultsuite umbrella.
+            Replace NOTIFYPRO_MARKETPLACE_URL below with the real GHL marketplace install URL
+            (https://marketplace.gohighlevel.com/integration/<APP_ID>) once published. */}
+        <div className="mb-4 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 rounded-xl px-5 py-3 flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+              {/* Bell icon */}
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-white font-semibold text-sm">Try NotifyPro — real-time alerts for GHL</p>
+                <span className="hidden sm:inline-flex items-center bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/30">
+                  Sister app · 3-day free trial
+                </span>
+              </div>
+              <p className="text-orange-50 text-xs mt-0.5">
+                Browser push + Slack notifications for new messages and tasks. User-specific, business-hours aware, priority keywords. From $29/month.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <a
+              href="https://notifypro.vaultsuite.store"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors border border-white/30"
+            >
+              Learn more
+            </a>
+            <a
+              href="https://marketplace.gohighlevel.com/integration/NOTIFYPRO_APP_ID"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 bg-white hover:bg-orange-50 text-orange-600 text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
+            >
+              Install now
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
+            </a>
+          </div>
+        </div>
+
         {/* Custom Work / AI Agents Promo Banner */}
         <div className="mb-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-xl px-5 py-3 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">
