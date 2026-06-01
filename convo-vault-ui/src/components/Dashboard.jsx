@@ -208,7 +208,7 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <a
-              href="https://notifypro.vaultsuite.store"
+              href="https://notify.vaultsuite.store"
               target="_blank"
               rel="noopener noreferrer"
               className="hidden sm:inline-flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors border border-white/30"
@@ -216,7 +216,7 @@ export default function Dashboard() {
               Learn more
             </a>
             <a
-              href="https://marketplace.gohighlevel.com/integration/NOTIFYPRO_APP_ID"
+              href="https://marketplace.gohighlevel.com/integration/6962592adbdd5106c52e257a"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 bg-white hover:bg-orange-50 text-orange-600 text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
