@@ -196,13 +196,13 @@ export default function Dashboard() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-white font-semibold text-sm">Try NotifyPro — real-time alerts for GHL</p>
+                <p className="text-white font-semibold text-sm">Try NotifyPro — real-time alerts for your sub-account</p>
                 <span className="hidden sm:inline-flex items-center bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/30">
-                  Sister app · 3-day free trial
+                  Pay only for what you use
                 </span>
               </div>
               <p className="text-orange-50 text-xs mt-0.5">
-                Browser push + Slack notifications for new messages and tasks. User-specific, business-hours aware, priority keywords. From $29/month.
+                Browser push + Slack notifications for new messages and tasks. User-specific, business-hours aware, priority keywords. Usage-based pricing — no monthly fee.
               </p>
             </div>
           </div>
@@ -229,7 +229,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Custom Work / AI Agents Promo Banner */}
+        {/* Custom Work / AI Agents Promo Banner — temporarily hidden */}
+        {/*
         <div className="mb-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-xl px-5 py-3 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
@@ -270,6 +271,7 @@ export default function Dashboard() {
             </a>
           </div>
         </div>
+        */}
 
         {/* Mode tabs (Export / Import) — connected to the sub-tab card below like browser tabs.
             No horizontal padding here so the leftmost mode tab lines up with the left edge of the
