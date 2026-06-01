@@ -183,9 +183,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* NotifyPro Cross-Promo Banner — sister app under the Vaultsuite umbrella.
-            Replace NOTIFYPRO_MARKETPLACE_URL below with the real GHL marketplace install URL
-            (https://marketplace.gohighlevel.com/integration/<APP_ID>) once published. */}
+        {/* NotifyPro Cross-Promo Banner — real-time GHL notifications.
+            Info: https://notify.vaultsuite.store · Marketplace app id: 6962592adbdd5106c52e257a */}
         <div className="mb-4 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 rounded-xl px-5 py-3 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
@@ -196,13 +195,13 @@ export default function Dashboard() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-white font-semibold text-sm">Try NotifyPro — real-time alerts for your sub-account</p>
+                <p className="text-white font-semibold text-sm">NotifyPro — respond to leads in seconds, not hours</p>
                 <span className="hidden sm:inline-flex items-center bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/30">
-                  Pay only for what you use
+                  Free to install
                 </span>
               </div>
               <p className="text-orange-50 text-xs mt-0.5">
-                Browser push + Slack notifications for new messages and tasks. User-specific, business-hours aware, priority keywords. Usage-based pricing — no monthly fee.
+                Get pinged on Slack &amp; desktop the moment a message, task, appointment, or opportunity hits the sub-account — even when no one is logged in. Assigned-only, business-hours aware.
               </p>
             </div>
           </div>
