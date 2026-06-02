@@ -176,9 +176,6 @@ export default function Dashboard() {
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                 Auto-applied
               </span>
-              <span className="inline-flex items-center text-[10px] font-semibold text-emerald-700 bg-white px-2 py-1 rounded-md border border-emerald-200">
-                Floor price — no further discount
-              </span>
             </div>
           </div>
         </div>

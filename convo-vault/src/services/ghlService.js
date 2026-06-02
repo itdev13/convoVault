@@ -41,11 +41,36 @@ class GHLService {
         refreshToken: response.data.refresh_token,
         expiresIn: response.data.expires_in,
         locationId: response.data.locationId,
-        companyId: response.data.companyId
+        companyId: response.data.companyId,
+        // GHL returns the OAuth-authorizing user's id on the token response. We use it later
+        // to fetch the installer's email/name (win-back email on uninstall).
+        userId: response.data.userId || null
       };
     } catch (error) {
       logger.error('Token exchange failed:', error.response?.data || error.message);
       throw error;
+    }
+  }
+
+  /**
+   * Fetch a single GHL user by id (the installer). Used at install time to capture
+   * `email` / `name` so we can send a win-back email if/when the app is uninstalled.
+   * GET /users/{userId} — requires the `users.readonly` scope.
+   * Returns null on any error so callers can fail open.
+   */
+  async getUser(locationId, userId) {
+    if (!userId) return null;
+    try {
+      const response = await this.apiRequest('GET', `/users/${userId}`, locationId, null, null);
+      const u = response?.user || response || {};
+      return {
+        id: u.id || userId,
+        email: u.email || null,
+        name: u.name || [u.firstName, u.lastName].filter(Boolean).join(' ') || null
+      };
+    } catch (error) {
+      logger.warn('getUser failed (non-blocking):', { userId, error: error.message });
+      return null;
     }
   }
 

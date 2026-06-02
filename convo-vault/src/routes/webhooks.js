@@ -8,6 +8,7 @@ const logger = require('../utils/logger');
 const { authenticateSession } = require('../middleware/auth');
 const GHLService = require('../services/ghlService');
 const ThrottleQueue = require('../utils/throttleQueue');
+const { sendUninstallWinBackEmail } = require('../services/winbackEmailer');
 
 const tokenGenQueue = new ThrottleQueue({ name: 'proactive-token-gen', delayMs: 350 });
 
@@ -252,24 +253,33 @@ async function handleInstall(data) {
  */
 async function handleUninstall(data) {
   const { appId, companyId, locationId } = data;
-  
+
   try {
+    // Snapshot installer contact info BEFORE token archive/delete so we can send the win-back
+    // email after cleanup. Done up front because the original OAuthToken doc is wiped by
+    // archiveAndDeleteTokens(); after that we'd have to read from DeletedOAuthToken which
+    // doesn't carry installer fields today.
+    const installerSnapshot = await captureInstallerSnapshot(locationId, companyId);
+
     // Find active installation
-    const query = locationId 
+    const query = locationId
       ? { appId, locationId, status: 'active' }
       : { appId, companyId, status: 'active' };
-    
+
     const installation = await Installation.findOne(query);
-    
+
     if (!installation) {
-      logger.warn('⚠️ No active installation found for uninstall', { 
-        appId, 
-        companyId, 
-        locationId 
+      logger.warn('⚠️ No active installation found for uninstall', {
+        appId,
+        companyId,
+        locationId
       });
-      
+
       // SECURITY: Still archive and delete OAuth tokens even if no installation record
       await archiveAndDeleteTokens(locationId, companyId, null, data);
+
+      // Fire win-back email async (don't block webhook response)
+      sendUninstallWinBackEmail(installerSnapshot);
       
       // Create uninstall record anyway for tracking
       const uninstallRecord = new Installation({
@@ -307,6 +317,9 @@ async function handleUninstall(data) {
     // Keeps audit trail while preventing access
     await archiveAndDeleteTokens(locationId, companyId, installation._id, data);
 
+    // Fire one-shot pricing-first win-back email (async — never blocks webhook response).
+    sendUninstallWinBackEmail(installerSnapshot);
+
     // Hard-delete referral record on uninstall so reinstalls don't inherit stale attribution
     try {
       const referralQuery = locationId ? { locationId } : { companyId, locationId: { $exists: false } };
@@ -321,6 +334,28 @@ async function handleUninstall(data) {
   } catch (error) {
     logger.error('❌ Uninstall handler error:', error);
     throw error;
+  }
+}
+
+/**
+ * Pull installer contact info off the active OAuthToken doc(s) so the uninstall handler can
+ * send a win-back email AFTER archiveAndDeleteTokens() wipes those rows. Returns the shape
+ * that sendUninstallWinBackEmail() expects; fields are null when we never captured them
+ * (e.g. older installs created before the installer-details capture was added).
+ */
+async function captureInstallerSnapshot(locationId, companyId) {
+  try {
+    const findQuery = locationId ? { locationId } : { companyId };
+    const token = await OAuthToken.findOne(findQuery).select('installerEmail installerName locationName locationId');
+    return {
+      to: token?.installerEmail || null,
+      name: token?.installerName || null,
+      locationName: token?.locationName || null,
+      locationId: token?.locationId || locationId || null
+    };
+  } catch (err) {
+    logger.warn('Failed to capture installer snapshot (non-blocking):', err.message);
+    return { to: null, name: null, locationName: null, locationId };
   }
 }
 

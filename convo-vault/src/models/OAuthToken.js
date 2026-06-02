@@ -73,7 +73,14 @@ const oauthTokenSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
-  }
+  },
+
+  // Installer (the GHL user who authorized OAuth). Captured once at install time so we can
+  // reach out on uninstall with a win-back email. Email is fetched via GET /users/{userId}
+  // shortly after the OAuth callback finishes; if the call fails these stay null.
+  installerUserId: { type: String, default: null },
+  installerEmail: { type: String, default: null },
+  installerName:  { type: String, default: null }
 }, {
   timestamps: true
 });

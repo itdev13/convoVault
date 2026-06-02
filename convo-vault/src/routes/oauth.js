@@ -132,6 +132,30 @@ router.get('/callback', async (req, res) => {
 
       logger.info('✅ OAuth successful for sub-account:', savedToken.locationName || tokenData.locationId);
 
+      // Fire-and-forget: capture installer's email/name for win-back outreach on uninstall.
+      // Don't block the success response — if this fails, the install still succeeds and the
+      // win-back email simply won't fire later. See routes/webhooks.js handleUninstall.
+      if (tokenData.userId) {
+        (async () => {
+          try {
+            const installer = await ghlService.getUser(tokenData.locationId, tokenData.userId);
+            if (installer?.email) {
+              await OAuthToken.findOneAndUpdate(
+                { locationId: tokenData.locationId },
+                {
+                  installerUserId: installer.id,
+                  installerEmail: installer.email,
+                  installerName: installer.name
+                }
+              );
+              logger.info('Installer details captured for win-back', { locationId: tokenData.locationId, email: installer.email });
+            }
+          } catch (err) {
+            logger.warn('Installer details capture failed (non-blocking):', err.message);
+          }
+        })();
+      }
+
       // Save referral tracking if referral code present
       if (referralCode) {
         try {
