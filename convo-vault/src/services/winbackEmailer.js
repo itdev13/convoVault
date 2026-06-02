@@ -28,7 +28,12 @@ function buildHtmlBody({ firstName, locationName }) {
           <p style="margin:0 0 12px;"><a href="${CALENDAR_URL}" style="color:#2563eb;">${CALENDAR_URL}</a></p>
           <p style="margin:0 0 12px;">Or just reply here — we'll come back with a number that makes sense for your volume.</p>
           <p style="margin:0 0 12px;">If it wasn't the pricing (missing feature, bug, something just didn't fit), we'd genuinely love to know. Your feedback shapes what gets built next.</p>
-          <p style="margin:0;">ExportKit Support</p>
+          <p style="margin:0 0 16px;">—<br>ExportKit Support</p>
+          <p style="margin:0;font-size:13px;color:#555;border-top:1px solid #e5e7eb;padding-top:12px;">
+            If you need any custom GHL work — integrations, automations, custom apps, or AI agents — we can help with that too.
+            With 6+ years in tech and 3+ years building on HighLevel, we've seen most use cases.
+            Just reply to this email if you'd like to talk.
+          </p>
         </td></tr>
       </table>
     </td></tr>
@@ -61,6 +66,11 @@ function buildTextBody({ firstName, locationName }) {
     "we'd genuinely love to know. Your feedback shapes what gets built next.",
     '',
     'ExportKit Support',
+    '',
+    '---',
+    'P.S. If you need any custom GHL work — integrations, automations, custom apps,',
+    'or AI agents — we can help with that too. 6+ years in tech, 3+ years building',
+    'on HighLevel. Just reply to this email.',
   ].join('\n');
 }
 
