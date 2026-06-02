@@ -30,9 +30,7 @@ function buildTextBody({ firstName, locationName }) {
     "If it wasn't the pricing (missing feature, bug, something just didn't fit),",
     "we'd genuinely love to know. Your feedback shapes what gets built next.",
     '',
-    'ExportKit Support',
-    'Vaultsuite',
-    EMAIL_FROM_ADDRESS,
+    'ExportKit Support'
   ].join('\n');
 }
 

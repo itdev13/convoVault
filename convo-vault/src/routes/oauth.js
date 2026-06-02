@@ -350,7 +350,7 @@ router.get('/callback', async (req, res) => {
       </head>
       <body>
         <div class="container">
-          <img src="https://msgsndr-private.storage.googleapis.com/marketplace/apps/694f93f8a6babf0c821b1356/326cf80a-003c-4366-b30c-a1c15ae554e5.png" alt="ExportKit" width="80" height="80" style="margin-bottom: 12px;">
+          <img src="/assets/icon.png" alt="ExportKit" width="80" height="80" style="margin-bottom: 12px;">
           <div style="margin-bottom: 16px;">
             <div style="font-size: 22px; font-weight: 700; color: #111827;">ExportKit</div>
             <div style="font-size: 11px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>
@@ -488,7 +488,7 @@ router.get('/callback', async (req, res) => {
         </head>
         <body>
           <div class="container">
-            <img src="https://msgsndr-private.storage.googleapis.com/marketplace/apps/694f93f8a6babf0c821b1356/326cf80a-003c-4366-b30c-a1c15ae554e5.png" alt="ExportKit" width="60" height="60" style="margin-bottom: 8px;">
+            <img src="/assets/icon.png" alt="ExportKit" width="60" height="60" style="margin-bottom: 8px;">
             <div style="margin-bottom: 12px;">
               <div style="font-size: 18px; font-weight: 700; color: #111827;">ExportKit</div>
               <div style="font-size: 10px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>
@@ -575,7 +575,7 @@ router.get('/callback', async (req, res) => {
       </head>
       <body>
         <div class="container">
-          <img src="https://msgsndr-private.storage.googleapis.com/marketplace/apps/694f93f8a6babf0c821b1356/326cf80a-003c-4366-b30c-a1c15ae554e5.png" alt="ExportKit" width="60" height="60" style="margin-bottom: 8px;">
+          <img src="/assets/icon.png" alt="ExportKit" width="60" height="60" style="margin-bottom: 8px;">
           <div style="margin-bottom: 12px;">
             <div style="font-size: 18px; font-weight: 700; color: #111827;">ExportKit</div>
             <div style="font-size: 10px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>
