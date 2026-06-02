@@ -133,12 +133,13 @@ router.get('/callback', async (req, res) => {
       logger.info('✅ OAuth successful for sub-account:', savedToken.locationName || tokenData.locationId);
 
       // Fire-and-forget: capture installer's email/name for win-back outreach on uninstall.
-      // Don't block the success response — if this fails, the install still succeeds and the
-      // win-back email simply won't fire later. See routes/webhooks.js handleUninstall.
+      // Uses the access token we just got from code-exchange directly — avoids the DB token
+      // lookup chain in apiRequest() (which can race with the upsert above). See
+      // routes/webhooks.js handleUninstall.
       if (tokenData.userId) {
         (async () => {
           try {
-            const installer = await ghlService.getUser(tokenData.locationId, tokenData.userId);
+            const installer = await ghlService.getUserWithToken(tokenData.userId, tokenData.accessToken);
             if (installer?.email) {
               await OAuthToken.findOneAndUpdate(
                 { locationId: tokenData.locationId },
@@ -148,7 +149,10 @@ router.get('/callback', async (req, res) => {
                   installerName: installer.name
                 }
               );
-              logger.info('Installer details captured for win-back', { locationId: tokenData.locationId, email: installer.email });
+              logger.info('Installer details captured for win-back (location)', {
+                locationId: tokenData.locationId,
+                email: installer.email
+              });
             }
           } catch (err) {
             logger.warn('Installer details capture failed (non-blocking):', err.message);
@@ -215,6 +219,34 @@ router.get('/callback', async (req, res) => {
       logger.info(`✅ Stored ${locationIds.length} location IDs for company ${tokenData.companyId}`);
 
       logger.info('✅ OAuth successful for company:', tokenData.companyId);
+
+      // Fire-and-forget: capture installer's email/name on the COMPANY-level OAuthToken doc so
+      // the uninstall handler can send the win-back email. Mirrors the sub-account branch above.
+      // Uses the company access token directly (the company token doc has no locationId, so the
+      // standard apiRequest token-lookup path wouldn't work here).
+      if (tokenData.userId) {
+        (async () => {
+          try {
+            const installer = await ghlService.getUserWithToken(tokenData.userId, tokenData.accessToken);
+            if (installer?.email) {
+              await OAuthToken.findOneAndUpdate(
+                { companyId: tokenData.companyId, tokenType: 'company' },
+                {
+                  installerUserId: installer.id,
+                  installerEmail: installer.email,
+                  installerName: installer.name
+                }
+              );
+              logger.info('Installer details captured for win-back (company)', {
+                companyId: tokenData.companyId,
+                email: installer.email
+              });
+            }
+          } catch (err) {
+            logger.warn('Installer details capture failed (non-blocking, company):', err.message);
+          }
+        })();
+      }
 
       // Save referral tracking if referral code present
       if (referralCode) {

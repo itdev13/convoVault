@@ -75,6 +75,34 @@ class GHLService {
   }
 
   /**
+   * Token-direct variant of getUser. Used during the OAuth callback before any locationId-scoped
+   * token doc has been written to Mongo (especially for COMPANY-level installs, where there's no
+   * locationId on the token at all). Hits GET /users/{userId} with the access token we just got
+   * from the code-exchange. Never throws — returns null on any error.
+   */
+  async getUserWithToken(userId, accessToken) {
+    if (!userId || !accessToken) return null;
+    try {
+      const response = await axios.get(`${this.baseURL}/users/${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Version': '2021-07-28'
+        }
+      });
+      const u = response.data?.user || response.data || {};
+      return {
+        id: u.id || userId,
+        email: u.email || null,
+        name: u.name || [u.firstName, u.lastName].filter(Boolean).join(' ') || null
+      };
+    } catch (error) {
+      logger.warn('getUserWithToken failed (non-blocking):', { userId, error: error.response?.data || error.message });
+      return null;
+    }
+  }
+
+  /**
    * Refresh token
    */
   async refreshAccessToken(refreshToken) {
