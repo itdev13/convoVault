@@ -254,16 +254,17 @@ export default function ExportEstimateModal({
         <div className="space-y-2">
           {/* Dynamic Volume Pricing Callout — celebrates the volume tier the user just unlocked.
               Tier ladder (mirrors getSmsPricing / getEmailPricing in billingService):
-                Email  ≤50k → $0.036/email (base)   >50k → $0.020 (44% off)   >100k → $0.002 (94% off, floor)
+                Email  ≤50k → $0.036/email (base)   >50k → $0.020 (44% off)   >100k → $0.002 (94% off)   >500k → $0.001 (97% off, floor)
                 SMS    ≤50k → $0.018/msg   (base)   >50k → $0.010 (44% off)   >100k → $0.001 (94% off, floor)
-              The >100k tier is the floor price — no further volume discount stacks on top of it.
+              The >500k email and >100k SMS tiers are the floor — no further volume discount stacks on top.
               Hidden for export types that don't use the volume-discount ladder at all (matches
               the "View Volume Discount Tiers" section's visibility rule). */}
           {!['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle'].includes(exportType) && (() => {
             const emailCount = Number(estimate.breakdown?.email?.count) || 0;
             const smsCount = Number(estimate.breakdown?.smsWhatsapp?.count) || 0;
             const tiers = [];
-            if (emailCount > 100000)     tiers.push({ pct: 94, label: `${formatNumber(emailCount)} emails`,   detail: 'rate dropped to $0.002/email (floor price)' });
+            if (emailCount > 500000)     tiers.push({ pct: 97, label: `${formatNumber(emailCount)} emails`,   detail: 'rate dropped to $0.001/email (mega-volume floor)' });
+            else if (emailCount > 100000)tiers.push({ pct: 94, label: `${formatNumber(emailCount)} emails`,   detail: 'rate dropped to $0.002/email' });
             else if (emailCount > 50000) tiers.push({ pct: 44, label: `${formatNumber(emailCount)} emails`,   detail: 'rate dropped to $0.020/email' });
             if (smsCount > 100000)       tiers.push({ pct: 94, label: `${formatNumber(smsCount)} messages`,   detail: 'rate dropped to $0.001/message (floor price)' });
             else if (smsCount > 50000)   tiers.push({ pct: 44, label: `${formatNumber(smsCount)} messages`,   detail: 'rate dropped to $0.010/message' });
@@ -690,8 +691,8 @@ export default function ExportEstimateModal({
           {/* Custom-rate request link: surface when bill is meaningful ($30+) OR for the test location, and we have a location to scope the override to. */}
           {/* Hide the "Request a custom rate" prompt once the run is already on the
               high-volume tier (> 100k items). At that point we're already at the floor price
-              ($0.001/SMS, $0.002/email, no further discount) — asking for a lower rate
-              doesn't make sense and would be misleading. */}
+              for SMS ($0.001) and near-floor for email ($0.002; drops to $0.001 above 500k) —
+              asking for a lower rate doesn't make sense and would be misleading. */}
           {currentLocationId
             && !estimate.fixedPriceRedownload
             && (Number(estimate.finalAmount) > PRICING_REQUEST_THRESHOLD || currentLocationId === PRICING_REQUEST_TEST_LOCATION_ID)

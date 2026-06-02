@@ -167,7 +167,7 @@ export default function Dashboard() {
               <p className="text-sm text-gray-800">
                 <span className="font-semibold text-emerald-900">Volume pricing tiers.</span>
                 <span className="hidden sm:inline text-gray-700 ml-1.5">
-                  Above <strong className="text-emerald-700">50k</strong>: SMS <strong className="text-emerald-700">$0.010</strong> / email <strong className="text-emerald-700">$0.020</strong>. Above <strong className="text-emerald-700">100k</strong>: SMS <strong className="text-emerald-700">$0.001</strong> / email <strong className="text-emerald-700">$0.002</strong> — auto-applied at estimate time.
+                  Above <strong className="text-emerald-700">50k</strong>: SMS <strong className="text-emerald-700">$0.010</strong> / email <strong className="text-emerald-700">$0.020</strong>. Above <strong className="text-emerald-700">100k</strong>: SMS <strong className="text-emerald-700">$0.001</strong> / email <strong className="text-emerald-700">$0.002</strong>. Above <strong className="text-emerald-700">500k</strong>: SMS &amp; email both <strong className="text-emerald-700">$0.001</strong> — auto-applied at estimate time.
                 </span>
               </p>
             </div>

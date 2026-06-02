@@ -39,12 +39,14 @@ const BASE_CREDIT_PRICE = 0.018;
 // price entirely — the volume tier still picks credits-per-email, but the credit rate is fixed
 // to the negotiated value (no further auto-discount at >50k).
 // Email pricing tiers:
-//   ≤ 50,000  emails → 2 credits × $0.018 = $0.036/email
-//   > 50,000  emails → 2 credits × $0.010 = $0.020/email
-//   > 100,000 emails → 1 credit  × $0.002 = $0.002/email   (high-volume tier; no volume discount on top)
+//   ≤ 50,000   emails → 2 credits × $0.018 = $0.036/email
+//   > 50,000   emails → 2 credits × $0.010 = $0.020/email
+//   > 100,000  emails → 1 credit  × $0.002 = $0.002/email
+//   > 500,000  emails → 1 credit  × $0.001 = $0.001/email   (mega-volume tier; matches SMS floor)
 function getEmailPricing(emailCount, customCreditPrice = null) {
   let creditsPerEmail, creditPrice;
-  if (emailCount > 100000)     { creditsPerEmail = 1; creditPrice = 0.002; }
+  if (emailCount > 500000)     { creditsPerEmail = 1; creditPrice = 0.001; }
+  else if (emailCount > 100000){ creditsPerEmail = 1; creditPrice = 0.002; }
   else if (emailCount > 50000) { creditsPerEmail = 2; creditPrice = 0.01;  }
   else                         { creditsPerEmail = 2; creditPrice = 0.018; }
   if (customCreditPrice) creditPrice = customCreditPrice;
