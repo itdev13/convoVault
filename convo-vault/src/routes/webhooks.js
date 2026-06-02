@@ -338,24 +338,86 @@ async function handleUninstall(data) {
 }
 
 /**
- * Pull installer contact info off the active OAuthToken doc(s) so the uninstall handler can
- * send a win-back email AFTER archiveAndDeleteTokens() wipes those rows. Returns the shape
- * that sendUninstallWinBackEmail() expects; fields are null when we never captured them
- * (e.g. older installs created before the installer-details capture was added).
+ * Pull installer contact info so the uninstall handler can send a win-back email.
+ * Must be called BEFORE archiveAndDeleteTokens() wipes the OAuthToken rows.
+ *
+ * Lookup order:
+ *   1. Location token (by locationId)       — installerEmail may be null if it was a
+ *                                              company-level OAuth (email stored on company token)
+ *   2. Company token (by companyId from #1) — installerEmail stored here when OAuth was
+ *                                              done at company level (common for new installs)
+ *   3. Three-tier email fallback (locationEmail → usersApi) inside captureFromToken()
+ *
+ * Never throws.
  */
 async function captureInstallerSnapshot(locationId, companyId) {
+  const base = { to: null, name: null, locationName: null, locationId: locationId || null, source: 'none' };
   try {
-    const findQuery = locationId ? { locationId } : { companyId };
-    const token = await OAuthToken.findOne(findQuery).select('installerEmail installerName locationName locationId');
-    return {
-      to: token?.installerEmail || null,
-      name: token?.installerName || null,
-      locationName: token?.locationName || null,
-      locationId: token?.locationId || locationId || null
-    };
+    // Step 1: try location token first (has locationName we want for the email)
+    let token = null;
+    if (locationId) {
+      token = await OAuthToken.findOne({ locationId }).select(
+        'installerEmail installerName locationName locationId companyId locationEmail'
+      );
+    }
+
+    // Step 2: if no location token OR location token has no installerEmail,
+    // check the company token using companyId (from token or from webhook data)
+    const resolvedCompanyId = token?.companyId || companyId;
+    if (resolvedCompanyId && (!token || !token.installerEmail)) {
+      const companyToken = await OAuthToken.findOne({
+        companyId: resolvedCompanyId,
+        tokenType: 'company'
+      }).select('installerEmail installerName');
+
+      if (companyToken?.installerEmail) {
+        return {
+          ...base,
+          to: companyToken.installerEmail,
+          name: companyToken.installerName || null,
+          locationName: token?.locationName || null,
+          locationId: token?.locationId || locationId || null,
+          source: 'companyToken'
+        };
+      }
+    }
+
+    if (!token) return base;
+
+    base.locationName = token.locationName || null;
+    base.locationId = token.locationId || locationId || null;
+
+    // Step 3: installerEmail on location token (sub-account-level OAuth)
+    if (token.installerEmail) {
+      return { ...base, to: token.installerEmail, name: token.installerName || null, source: 'installer' };
+    }
+
+    // Step 4: locationEmail fallback (already on every token from getLocationDetails)
+    if (token.locationEmail) {
+      return { ...base, to: token.locationEmail, name: token.locationName || null, source: 'locationEmail' };
+    }
+
+    // Step 5: live users search as last resort
+    if (locationId) {
+      try {
+        const ghlService = new GHLService();
+        const users = await ghlService.searchUsers(locationId, { companyId: resolvedCompanyId });
+        const candidate =
+          users.find(u => u?.email && /admin|owner/i.test(String(u.roles?.type || u.role || ''))) ||
+          users.find(u => u?.email);
+        if (candidate?.email) {
+          const name = candidate.name || [candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || null;
+          return { ...base, to: candidate.email, name, source: 'usersApi' };
+        }
+      } catch (apiErr) {
+        logger.warn('Win-back: users search fallback failed (non-blocking):', apiErr.message);
+      }
+    }
+
+    return base;
   } catch (err) {
     logger.warn('Failed to capture installer snapshot (non-blocking):', err.message);
-    return { to: null, name: null, locationName: null, locationId };
+    return base;
   }
 }
 

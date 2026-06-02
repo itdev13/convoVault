@@ -276,7 +276,7 @@ router.get('/callback', async (req, res) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Success - ConvoVault</title>
+        <title>Success - ExportKit</title>
         <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
         <style>
           body {
@@ -350,7 +350,7 @@ router.get('/callback', async (req, res) => {
       </head>
       <body>
         <div class="container">
-          <img src="/assets/logo-icon.svg" alt="ConvoVault" width="80" height="80" style="margin-bottom: 20px;">
+          <img src="/assets/logo-full.svg" alt="ExportKit" width="160" height="48" style="margin-bottom: 20px;">
           <h1>Connected Successfully!</h1>
           <p>${successMessage}</p>
           <div class="sub-account-id">
@@ -358,15 +358,15 @@ router.get('/callback', async (req, res) => {
           </div>
           <div class="features">
             <div class="access-box">
-              <h3>🎯 How to Access ConvoVault:</h3>
+              <h3>🎯 How to Access ExportKit:</h3>
               <div class="step-instruction">Open your sub-account dashboard</div>
-              <div class="step-instruction">Look for <strong style="color: #2563EB;">"ConvoVault"</strong> in the left navigation menu</div>
+              <div class="step-instruction">Look for <strong style="color: #2563EB;">"ExportKit"</strong> in the left navigation menu</div>
               <div class="step-instruction">Click to launch the app</div>
               <p style="color: #6B7280; font-size: 12px; margin-top: 12px; font-style: italic;">
-                💡 ConvoVault will appear as a new menu item in your sub-account's left navigation menu
+                💡 ExportKit will appear as a new menu item in your sub-account's left navigation menu
               </p>
             </div>
-            
+
             <strong style="display: block; margin-top: 20px;">Available Features:</strong>
             <ul>
               <li>📥 Download Conversations with Filters</li>
@@ -377,13 +377,13 @@ router.get('/callback', async (req, res) => {
           </div>
           <div style="background: #FEF3C7; padding: 15px; border-radius: 8px; margin-top: 25px; border-left: 4px solid #F59E0B;">
             <p style="color: #92400E; font-size: 13px; font-weight: 600; margin: 0;">
-              ✓ Installation Complete! Close this window and find ConvoVault in your account's left menu.
+              ✓ Installation Complete! Close this window and find ExportKit in your account's left menu.
             </p>
           </div>
-          
+
           <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <a href="https://export.vaultsuite.store" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
-              🌐 Visit Export Messages Website
+              🌐 Visit ExportKit Website
             </a>
           </div>
         </div>
@@ -404,7 +404,7 @@ router.get('/callback', async (req, res) => {
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Authorization Complete - ConvoVault</title>
+          <title>Authorization Complete - ExportKit</title>
           <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
           <style>
             body {
@@ -486,22 +486,22 @@ router.get('/callback', async (req, res) => {
           <div class="container">
             <div class="icon">✅</div>
             <h1>Authorization Already Completed!</h1>
-            <p>Your ConvoVault has been successfully connected</p>
+            <p>Your ExportKit account has been successfully connected</p>
             
             <div class="highlight-box">
-              <h3>🎯 How to Access ConvoVault:</h3>
+              <h3>🎯 How to Access ExportKit:</h3>
               <div class="step">Open your account dashboard</div>
-              <div class="step">Find <strong style="color: #2563EB;">"ConvoVault"</strong> in the left sidebar menu</div>
+              <div class="step">Find <strong style="color: #2563EB;">"ExportKit"</strong> in the left sidebar menu</div>
               <div class="step">Click to launch and start managing conversations</div>
             </div>
             
             <div class="tip">
-              <p>💡 ConvoVault appears as a new menu item in your account navigation</p>
+              <p>💡 ExportKit appears as a new menu item in your account navigation</p>
             </div>
             
             <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
               <a href="https://convo.vaultsuite.store/about.html" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; margin-bottom: 15px;">
-                🌐 Visit ConvoVault Website
+                🌐 Visit ExportKit Website
               </a>
             </div>
             
@@ -519,7 +519,7 @@ router.get('/callback', async (req, res) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Error - ConvoVault</title>
+        <title>Error - ExportKit</title>
         <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
         <style>
           body {
@@ -568,7 +568,7 @@ router.get('/callback', async (req, res) => {
         <div class="container">
           <div class="icon">⚠️</div>
           <h1>Connection Failed</h1>
-          <p>We encountered an error while connecting ConvoVault</p>
+          <p>We encountered an error while connecting ExportKit</p>
           <div class="error-detail">
             ${error.message}
           </div>
@@ -576,7 +576,7 @@ router.get('/callback', async (req, res) => {
           
           <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
             <a href="https://convo.vaultsuite.store/about.html" target="_blank" style="color: #fff; text-decoration: none; font-size: 14px; font-weight: 600;">
-              🌐 Visit ConvoVault Website
+              🌐 Visit ExportKit Website
             </a>
           </div>
         </div>
