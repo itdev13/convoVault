@@ -815,12 +815,12 @@ class GHLService {
 
       // Contact filter
       if (options.contactId && options.contactId !== 'undefined' && options.contactId.trim()) {
-        params.contactId = options.contactId;
+        params.contactId = options.contactId.trim();
       }
 
       // Conversation filter
       if (options.conversationId && options.conversationId !== 'undefined' && options.conversationId.trim()) {
-        params.conversationId = options.conversationId;
+        params.conversationId = options.conversationId.trim();
       }
 
       // User filter (one or more) — sent as repeated query: userIds[]=...
