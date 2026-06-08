@@ -27,6 +27,18 @@ import TagsTab from './tabs/TagsTab';
 import ImportCustomFieldsTab from './tabs/ImportCustomFieldsTab';
 import ImportCustomValuesTab from './tabs/ImportCustomValuesTab';
 import OpportunityStageHistoryTab from './tabs/OpportunityStageHistoryTab';
+import { MESSAGE_PRICE_TIERS } from '../constants/pricing';
+
+// Marketing tiers for the dashboard price-drop banner: every message tier below the base rate,
+// with the live price and the savings % vs the $0.018 base. Driven by the shared pricing constant.
+const SAVINGS_TIERS = MESSAGE_PRICE_TIERS
+  .filter((t) => t.savePct > 0)
+  .map((t) => ({
+    label: t.min >= 1000 ? `${t.min / 1000}k+` : `${t.min}+`,
+    price: `$${t.price}`,
+    savePct: t.savePct,
+  }));
+const MAX_SAVINGS_PCT = Math.max(...MESSAGE_PRICE_TIERS.map((t) => t.savePct));
 
 export default function Dashboard() {
   const { location, features } = useAuth();
@@ -165,13 +177,28 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 min-w-[200px]">
               <p className="text-sm text-gray-800">
-                <span className="font-semibold text-emerald-900">Volume pricing tiers.</span>
-                <span className="hidden sm:inline text-gray-700 ml-1.5">
-                  Above <strong className="text-emerald-700">50k</strong>: SMS <strong className="text-emerald-700">$0.010</strong> / email <strong className="text-emerald-700">$0.020</strong>. Above <strong className="text-emerald-700">100k</strong>: SMS <strong className="text-emerald-700">$0.001</strong> / email <strong className="text-emerald-700">$0.002</strong>. Above <strong className="text-emerald-700">500k</strong>: SMS &amp; email both <strong className="text-emerald-700">$0.001</strong> — auto-applied at estimate time.
+                <span className="font-semibold text-emerald-900">Save up to {MAX_SAVINGS_PCT}% on messages.</span>
+                <span className="text-gray-700 ml-1.5">
+                  SMS, WhatsApp &amp; email get cheaper the more you export — discount auto-applied at estimate time.
                 </span>
               </p>
+              {/* Tier chips: live price + savings vs the $0.018 base, driven by the shared pricing constant. */}
+              <div className="hidden sm:flex items-center gap-1.5 mt-1.5 flex-wrap">
+                {SAVINGS_TIERS.map((t) => (
+                  <span
+                    key={t.label}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-800 bg-white/80 px-2 py-0.5 rounded-md border border-emerald-200"
+                  >
+                    <strong className="text-emerald-900">{t.label}</strong>
+                    <span className="text-emerald-700">{t.price}</span>
+                    <span className="text-[10px] font-bold bg-emerald-600 text-white px-1 py-px rounded">
+                      Save {t.savePct}%
+                    </span>
+                  </span>
+                ))}
+              </div>
             </div>
-            <div className="hidden md:flex items-center gap-1.5 flex-shrink-0">
+            <div className="hidden md:flex items-center gap-1.5 flex-shrink-0 self-start">
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-white px-2 py-1 rounded-md border border-emerald-200">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                 Auto-applied

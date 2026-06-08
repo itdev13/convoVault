@@ -253,21 +253,28 @@ export default function ExportEstimateModal({
       {!postExportBilling && estimate && !estimating && estimate.itemCounts?.total > 0 && (
         <div className="space-y-2">
           {/* Dynamic Volume Pricing Callout — celebrates the volume tier the user just unlocked.
-              Tier ladder (mirrors getSmsPricing / getEmailPricing in billingService):
-                Email  ≤50k → $0.036/email (base)   >50k → $0.020 (44% off)   >100k → $0.002 (94% off)   >500k → $0.001 (97% off, floor)
-                SMS    ≤50k → $0.018/msg   (base)   >50k → $0.010 (44% off)   >100k → $0.001 (94% off, floor)
-              The >500k email and >100k SMS tiers are the floor — no further volume discount stacks on top.
-              Hidden for export types that don't use the volume-discount ladder at all (matches
-              the "View Volume Discount Tiers" section's visibility rule). */}
+              Message ladder (SMS/WhatsApp + email, 1 credit each, mirrors getMessageCreditPrice in billingService):
+                ≤1k → $0.018 (base)   1k+ → $0.006 (67% off)   10k+ → $0.003 (83% off)
+                50k+ → $0.002 (89% off)   100k+ → $0.001 (94% off)   500k+ → $0.0005 (97% off, floor)
+              Savings % is vs the $0.018 base. Hidden for export types that don't use the
+              message ladder (matches the "View Volume Discount Tiers" section's visibility rule). */}
           {!['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle'].includes(exportType) && (() => {
             const emailCount = Number(estimate.breakdown?.email?.count) || 0;
             const smsCount = Number(estimate.breakdown?.smsWhatsapp?.count) || 0;
+            // Per-count message price + savings vs $0.018 base (mirrors getMessageCreditPrice).
+            const msgTier = (n) => {
+              if (n > 500000) return { price: 0.0005, pct: 97 };
+              if (n > 100000) return { price: 0.001,  pct: 94 };
+              if (n > 50000)  return { price: 0.002,  pct: 89 };
+              if (n > 10000)  return { price: 0.003,  pct: 83 };
+              if (n > 1000)   return { price: 0.006,  pct: 67 };
+              return { price: 0.018, pct: 0 };
+            };
             const tiers = [];
-            if (emailCount > 500000)     tiers.push({ pct: 97, label: `${formatNumber(emailCount)} emails`,   detail: 'rate dropped to $0.001/email (mega-volume floor)' });
-            else if (emailCount > 100000)tiers.push({ pct: 94, label: `${formatNumber(emailCount)} emails`,   detail: 'rate dropped to $0.002/email' });
-            else if (emailCount > 50000) tiers.push({ pct: 44, label: `${formatNumber(emailCount)} emails`,   detail: 'rate dropped to $0.020/email' });
-            if (smsCount > 100000)       tiers.push({ pct: 94, label: `${formatNumber(smsCount)} messages`,   detail: 'rate dropped to $0.001/message (floor price)' });
-            else if (smsCount > 50000)   tiers.push({ pct: 44, label: `${formatNumber(smsCount)} messages`,   detail: 'rate dropped to $0.010/message' });
+            const emailTier = msgTier(emailCount);
+            if (emailTier.pct > 0) tiers.push({ pct: emailTier.pct, label: `${formatNumber(emailCount)} emails`, detail: `rate dropped to $${emailTier.price.toFixed(4)}/email` });
+            const smsTier = msgTier(smsCount);
+            if (smsTier.pct > 0) tiers.push({ pct: smsTier.pct, label: `${formatNumber(smsCount)} messages`, detail: `rate dropped to $${smsTier.price.toFixed(4)}/message` });
             if (tiers.length === 0) return null;
             const topPct = Math.max(...tiers.map(t => t.pct));
             return (
@@ -533,7 +540,8 @@ export default function ExportEstimateModal({
           {/* Pricing Breakdown */}
           <div className="bg-blue-50 rounded-lg px-4 py-2 border border-blue-200">
             <div className="space-y-2 text-sm">
-              {/* Credit-based pricing for every export type. Every $0.018 item = 1 credit; email is tiered (2–3 credits). */}
+              {/* Credit-based pricing for every export type. Every item = 1 credit at $0.018 base;
+                  messages (SMS/WhatsApp + email) drop by volume via the message price ladder. */}
               {!importMode && ['conversations', 'messages', 'contacts', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'customFields', 'customValues', 'tags'].includes(exportType) && (
                 <>
                   <div className="flex justify-between items-center">

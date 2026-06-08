@@ -31,39 +31,34 @@ const METER_IDS = {
 // Base credit price used by all default unit prices. Custom per-location credit prices override this.
 const BASE_CREDIT_PRICE = 0.018;
 
-// Email pricing tiers:
-//   ≤ 10,000 emails → 3 credits × $0.018 = $0.054/email
-//   > 10,000 emails → 2 credits × $0.018 = $0.036/email
-//   > 50,000 emails → 2 credits × $0.010 = $0.020/email
-// When `customCreditPrice` is set (per-location override from AppConfig), it REPLACES the credit
-// price entirely — the volume tier still picks credits-per-email, but the credit rate is fixed
-// to the negotiated value (no further auto-discount at >50k).
-// Email pricing tiers:
-//   ≤ 50,000   emails → 2 credits × $0.018 = $0.036/email
-//   > 50,000   emails → 2 credits × $0.010 = $0.020/email
-//   > 100,000  emails → 1 credit  × $0.002 = $0.002/email
-//   > 500,000  emails → 1 credit  × $0.001 = $0.001/email   (mega-volume tier; matches SMS floor)
+// Message volume pricing tiers (shared by SMS/WhatsApp AND email — 1 credit per item).
+// The volume tier IS the discount; messages do not get the separate percentage DISCOUNT_TIERS.
+//   ≤ 1,000     messages → $0.018/message
+//   1K–10K      messages → $0.006/message
+//   10K–50K     messages → $0.003/message
+//   > 50,000    messages → $0.002/message
+//   > 100,000   messages → $0.001/message
+//   > 500,000   messages → $0.0005/message  (mega-volume floor)
+// When `customCreditPrice` is set (per-location override from AppConfig), it REPLACES the
+// tier price entirely with the negotiated rate (no further auto-discount by volume).
+function getMessageCreditPrice(count) {
+  if (count > 500000) return 0.0005;
+  if (count > 100000) return 0.001;
+  if (count > 50000)  return 0.002;
+  if (count > 10000)  return 0.003;
+  if (count > 1000)   return 0.006;
+  return 0.018;
+}
+
 function getEmailPricing(emailCount, customCreditPrice = null) {
-  let creditsPerEmail, creditPrice;
-  if (emailCount > 500000)     { creditsPerEmail = 1; creditPrice = 0.001; }
-  else if (emailCount > 100000){ creditsPerEmail = 1; creditPrice = 0.002; }
-  else if (emailCount > 50000) { creditsPerEmail = 2; creditPrice = 0.01;  }
-  else                         { creditsPerEmail = 2; creditPrice = 0.018; }
-  if (customCreditPrice) creditPrice = customCreditPrice;
+  const creditsPerEmail = 1;
+  const creditPrice = customCreditPrice || getMessageCreditPrice(emailCount);
   return { creditsPerEmail, creditPrice, unitPrice: creditsPerEmail * creditPrice };
 }
 
-// Non-email message pricing tiers (SMS / WhatsApp / etc.):
-//   ≤ 50,000  messages → 1 credit × $0.018  = $0.018/message
-//   > 50,000  messages → 1 credit × $0.010  = $0.010/message
-//   > 100,000 messages → 1 credit × $0.001  = $0.001/message   (90% off — high-volume tier)
 function getSmsPricing(smsCount, customCreditPrice = null) {
   const creditsPerItem = 1;
-  let creditPrice;
-  if (smsCount > 100000)      creditPrice = 0.001;
-  else if (smsCount > 50000)  creditPrice = 0.01;
-  else                        creditPrice = 0.018;
-  if (customCreditPrice) creditPrice = customCreditPrice;
+  const creditPrice = customCreditPrice || getMessageCreditPrice(smsCount);
   return { creditsPerItem, creditPrice, unitPrice: creditsPerItem * creditPrice };
 }
 
@@ -73,7 +68,7 @@ function getSmsPricing(smsCount, customCreditPrice = null) {
 const DEFAULT_UNIT_PRICES = {
   conversations: 0.018,
   smsWhatsapp: 0.018,
-  email: 0.054,            // base rate (≤10k emails); overridden at higher volumes
+  email: 0.018,            // base rate (≤1k emails, 1 credit); overridden by getEmailPricing() at higher volumes
   notesAndTasks: 0.018,
   opportunities: 0.018,
   formSubmissions: 0.018,
@@ -252,18 +247,25 @@ class BillingService {
     const notesCost = notes * notesTasksPrice;
     const tasksCost = tasks * notesTasksPrice;
 
+    // Messages (SMS/WhatsApp + email) are priced PURELY by their own volume ladder
+    // (getMessageCreditPrice). The ladder IS their discount, so they are excluded from the
+    // percentage DISCOUNT_TIERS below — no stacking. They also stay out of the item count
+    // that selects the percentage tier, so a large message run can't inflate the flat-item discount.
+    const messagesCost = textMessagesCost + emailCost;
+
+    // Percentage volume discount applies only to flat-rate items.
+    const discountableItems = conversations + opportunities + formSubmissions + links + socialPosts + callLogs + templates + contacts + customFields + customValues + tags + notes + tasks;
+    const discountableAmount = conversationsCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost + templatesCost + contactsCost + customFieldsCost + customValuesCost + tagsCost + notesCost + tasksCost;
+
     // opportunityStageHistory is billed flat (no discount), so it stays out of the discounted totals.
     const totalItems = conversations + smsMessages + emailMessages + opportunities + formSubmissions + links + socialPosts + callLogs + templates + contacts + customFields + customValues + tags + notes + tasks;
-    const baseAmount = conversationsCost + textMessagesCost + emailCost + opportunitiesCost + formSubmissionsCost + linksCost + socialPostsCost + callLogsCost + templatesCost + contactsCost + customFieldsCost + customValuesCost + tagsCost + notesCost + tasksCost;
+    const baseAmount = discountableAmount + messagesCost;
 
-    // High-volume tiers ($0.001/SMS, $0.004/email above 100k) already represent the floor price;
-    // stacking the volume discount on top would compound past intended pricing. When either
-    // category crosses 100k, the run's volume discount is disabled entirely.
-    const onHighVolumeTier = smsMessages > 100000 || emailMessages > 100000;
-    const discountPercent = (totalItems > 0 && !onHighVolumeTier) ? this.getDiscountPercent(totalItems) : 0;
-    const discountAmount = baseAmount * (discountPercent / 100);
-    // Add opportunityStageHistory flat cost AFTER discount — custom build doesn't get volume tiers.
-    const finalAmount = (baseAmount - discountAmount) + opportunityStageCost;
+    const discountPercent = discountableItems > 0 ? this.getDiscountPercent(discountableItems) : 0;
+    const discountAmount = discountableAmount * (discountPercent / 100);
+    // Messages billed at ladder price (no % discount); flat items get the % discount;
+    // opportunityStageHistory flat cost added last (custom build, no volume tiers).
+    const finalAmount = (discountableAmount - discountAmount) + messagesCost + opportunityStageCost;
 
     logger.info('Billing calculation:', {
       totalItems,
