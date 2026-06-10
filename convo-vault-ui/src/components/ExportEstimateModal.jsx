@@ -2,13 +2,6 @@ import React, { useState } from 'react';
 import { Modal, Button, Spin, Alert, Input, Collapse, Radio } from 'antd';
 import { UNIT_PRICES, OLD_UNIT_PRICES, formatUnitPrice as formatPrice } from '../constants/pricing';
 import { useAuth } from '../context/AuthContext';
-import PricingRequestModal from './PricingRequestModal';
-
-// Threshold above which we surface the "Request custom rate" link inside this modal.
-const PRICING_REQUEST_THRESHOLD = 30;
-// Test location — always shows the link regardless of finalAmount, so we can exercise the flow
-// on small/free exports during QA. Remove once the feature is broadly rolled out.
-const PRICING_REQUEST_TEST_LOCATION_ID = 'WHspQgeC5SqFU8i55G7L';
 
 const { Panel } = Collapse;
 
@@ -33,7 +26,6 @@ export default function ExportEstimateModal({
   console.log('estimate modal props', estimate, exportType, postExportBilling);
   const [email, setEmail] = useState('');
   const [exportFormat, setExportFormat] = useState('csv');
-  const [pricingRequestOpen, setPricingRequestOpen] = useState(false);
   const { location, ghlContext } = useAuth() || {};
   const currentLocationId = location?.id || location?.locationId || ghlContext?.locationId || null;
 
@@ -250,7 +242,19 @@ export default function ExportEstimateModal({
       )}
 
       {/* Estimate Content */}
-      {!postExportBilling && estimate && !estimating && estimate.itemCounts?.total > 0 && (
+      {!postExportBilling && estimate && !estimating && estimate.itemCounts?.total > 0 && (() => {
+        // The percentage Volume Discount Tiers (0/20/40/50/70%) apply ONLY to flat-rate items.
+        // Messages (SMS/WhatsApp + email) are priced by the message ladder instead, so for a
+        // messages-only export `discountPercent` is 0 and the tier list would misleadingly
+        // highlight the "0–1000 → 0%" row next to the "89% off" ladder banner. Detect whether
+        // any discountable flat items are present; if not, hide the percentage-tier section.
+        const c = estimate.itemCounts || {};
+        const flatItemTotal = (c.conversations || 0) + (c.notes || 0) + (c.tasks || 0) +
+          (c.opportunities || 0) + (c.formSubmissions || 0) + (c.links || 0) +
+          (c.socialPosts || 0) + (c.callLogs || 0) + (c.templates || 0) + (c.contacts || 0) +
+          (c.customFields || 0) + (c.customValues || 0) + (c.tags || 0);
+        const hasDiscountableItems = flatItemTotal > 0;
+        return (
         <div className="space-y-2">
           {/* Dynamic Volume Pricing Callout — celebrates the volume tier the user just unlocked.
               Message ladder (SMS/WhatsApp + email, 1 credit each, mirrors getMessageCreditPrice in billingService):
@@ -696,28 +700,6 @@ export default function ExportEstimateModal({
             </div>
           </div>
 
-          {/* Custom-rate request link: surface when bill is meaningful ($30+) OR for the test location, and we have a location to scope the override to. */}
-          {/* Hide the "Request a custom rate" prompt once the run is already on the
-              high-volume tier (> 100k items). At that point we're already at the floor price
-              for SMS ($0.001) and near-floor for email ($0.002; drops to $0.001 above 500k) —
-              asking for a lower rate doesn't make sense and would be misleading. */}
-          {currentLocationId
-            && !estimate.fixedPriceRedownload
-            && (Number(estimate.finalAmount) > PRICING_REQUEST_THRESHOLD || currentLocationId === PRICING_REQUEST_TEST_LOCATION_ID)
-            && (Number(estimate.itemCounts?.total) || 0) <= 100000
-            && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center justify-between gap-3">
-              <span className="text-sm text-amber-900">💬 Think the price is too high?</span>
-              <button
-                type="button"
-                onClick={() => setPricingRequestOpen(true)}
-                className="text-sm font-semibold text-amber-800 hover:text-amber-900 underline underline-offset-2"
-              >
-                Request a custom rate
-              </button>
-            </div>
-          )}
-
           {/* Savings Banner - Show prominently when discount applied */}
           {estimate.discountPercent > 0 && (
             <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg px-4 py-2 text-white">
@@ -741,8 +723,10 @@ export default function ExportEstimateModal({
             </div>
           )}
 
-          {/* Volume Discount Tiers - Shown when the estimate provides tiers. Hidden for the standalone-billed flows (specialTabMessages/callTranscriptions) which have no volume discounts. */}
-          {(estimate.discountTiers?.length > 0) && !['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle'].includes(exportType) && (
+          {/* Volume Discount Tiers (percentage, flat-rate items only). Hidden for standalone-billed
+              flows and for messages-only exports — those use the message ladder, not these % tiers,
+              so showing them would misleadingly highlight the "0%" row. */}
+          {hasDiscountableItems && (estimate.discountTiers?.length > 0) && !['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle'].includes(exportType) && (
           <Collapse ghost className="bg-gray-50 rounded-lg" defaultActiveKey={estimate.discountPercent > 0 ? [] : []}>
             <Panel
               header={
@@ -876,14 +860,8 @@ export default function ExportEstimateModal({
             </Button>
           </div>
         </div>
-      )}
-      <PricingRequestModal
-        isOpen={pricingRequestOpen}
-        onClose={() => setPricingRequestOpen(false)}
-        locationId={currentLocationId}
-        currentPrice={0.018}
-        defaultEmail={email}
-      />
+        );
+      })()}
     </Modal>
   );
 }
