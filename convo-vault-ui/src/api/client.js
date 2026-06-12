@@ -74,9 +74,15 @@ apiClient.interceptors.response.use(
     // Create enhanced error with all relevant info
     const enhancedError = new Error(message);
     enhancedError.status = error.response?.status;
-    enhancedError.code = error.code;
+    // Prefer the backend's semantic code (e.g. INSUFFICIENT_FUNDS) over axios's network code,
+    // so callers can branch on it; fall back to the axios code when no backend code is present.
+    enhancedError.code = error.response?.data?.code || error.code;
     enhancedError.details = details || backendDetails;
-    
+    // Pass through the full backend payload so callers can read extras (e.g. requiredAmount).
+    enhancedError.data = error.response?.data;
+    enhancedError.requiredAmount = error.response?.data?.requiredAmount;
+    enhancedError.walletScope = error.response?.data?.walletScope;
+
     return Promise.reject(enhancedError);
   }
 );

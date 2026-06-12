@@ -2447,10 +2447,16 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
     // Step 4: Check wallet funds
     const hasFunds = await billingService.hasFunds(companyId, accessToken);
     if (!hasFunds) {
+      // Surface the exact amount the wallet needs so the UI can tell the user how much to
+      // recharge. GHL's has-funds endpoint only returns a boolean, so the required amount is
+      // the export estimate total. Once they top up to at least this, a retry exports in seconds.
+      const requiredAmount = Number(estimate.finalAmount) || 0;
       return res.status(402).json({
         success: false,
+        code: 'INSUFFICIENT_FUNDS',
         error: 'Insufficient wallet balance',
-        message: 'Please add funds to your GHL wallet to continue'
+        message: `Your agency or sub-account wallet doesn't have enough funds for this export. Add at least $${requiredAmount.toFixed(2)} and try again.`,
+        requiredAmount,
       });
   }
 
@@ -2495,6 +2501,24 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       transaction.status = 'failed';
       transaction.errorMessage = chargeError.message;
       await transaction.save();
+
+      // The charge can fail for insufficient funds even though hasFunds() passed earlier.
+      // When it does, return the same INSUFFICIENT_FUNDS payload the precheck uses so the UI
+      // shows the "recharge $X and try again" panel instead of a generic payment error.
+      if (chargeError.insufficientFunds) {
+        const requiredAmount = Number(estimate.finalAmount) || 0;
+        const walletName = chargeError.walletScope === 'agency' ? 'agency wallet'
+          : chargeError.walletScope === 'location' ? 'sub-account wallet'
+          : 'agency or sub-account wallet';
+        return res.status(402).json({
+          success: false,
+          code: 'INSUFFICIENT_FUNDS',
+          error: 'Insufficient wallet balance',
+          message: `Your ${walletName} doesn't have enough funds for this export. Add at least $${requiredAmount.toFixed(2)} and try again.`,
+          requiredAmount,
+          walletScope: chargeError.walletScope || null,
+        });
+      }
 
       return res.status(402).json({
         success: false,
@@ -3269,7 +3293,13 @@ router.post('/custom-charge', authenticateSession, async (req, res) => {
 
     const hasFunds = await billingService.hasFunds(companyId, accessToken);
     if (!hasFunds) {
-      return res.status(402).json({ success: false, error: 'Insufficient wallet balance' });
+      return res.status(402).json({
+        success: false,
+        code: 'INSUFFICIENT_FUNDS',
+        error: 'Insufficient wallet balance',
+        message: `Your agency or sub-account wallet doesn't have enough funds. Add at least $${parsedAmount.toFixed(2)} and try again.`,
+        requiredAmount: parsedAmount,
+      });
     }
 
     const meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: 1, description: `Custom charge for the work $${parsedAmount}` }];
@@ -3299,6 +3329,19 @@ router.post('/custom-charge', authenticateSession, async (req, res) => {
       transaction.status = 'failed';
       transaction.errorMessage = chargeError.message;
       await transaction.save();
+      if (chargeError.insufficientFunds) {
+        const walletName = chargeError.walletScope === 'agency' ? 'agency wallet'
+          : chargeError.walletScope === 'location' ? 'sub-account wallet'
+          : 'agency or sub-account wallet';
+        return res.status(402).json({
+          success: false,
+          code: 'INSUFFICIENT_FUNDS',
+          error: 'Insufficient wallet balance',
+          message: `Your ${walletName} doesn't have enough funds. Add at least $${parsedAmount.toFixed(2)} and try again.`,
+          requiredAmount: parsedAmount,
+          walletScope: chargeError.walletScope || null,
+        });
+      }
       return res.status(402).json({ success: false, error: chargeError.message });
     }
   } catch (error) {

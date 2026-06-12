@@ -130,14 +130,54 @@ export default function ExportEstimateModal({
 
       {/* Error State */}
       {error && !estimating && (() => {
+        // `error` may be a plain string (legacy) or an Error object carrying a backend code +
+        // requiredAmount (from the api client). Normalize both.
+        const errCode = typeof error === 'object' ? error.code : null;
+        const errText = typeof error === 'object' ? (error.message || String(error)) : String(error);
+
+        // Insufficient wallet funds — show a dedicated, actionable panel telling the user exactly
+        // how much their agency/sub-account wallet needs, how to recharge, and that a retry exports
+        // in seconds. Far clearer than a generic red error.
+        if (errCode === 'INSUFFICIENT_FUNDS') {
+          const required = Number(typeof error === 'object' ? error.requiredAmount : 0) || 0;
+          const scope = typeof error === 'object' ? error.walletScope : null;
+          const walletName = scope === 'agency' ? 'agency wallet'
+            : scope === 'location' ? 'sub-account wallet'
+            : 'agency or sub-account wallet';
+          return (
+            <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-lg">
+                  💳
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-amber-900">
+                    Not enough funds in your {walletName}
+                  </div>
+                  <p className="text-sm text-amber-800 mt-1">
+                    Your {walletName} doesn&apos;t have enough balance for this export.
+                    {required > 0 && (
+                      <> It needs at least <strong>${required.toFixed(2)}</strong> to continue.</>
+                    )}
+                  </p>
+                  <p className="text-sm text-amber-800 mt-2">
+                    Recharge your {walletName}{required > 0 && <> with at least <strong>${required.toFixed(2)}</strong></>},
+                    then run the export again — your data will be ready in seconds.
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
         // Backend "no data" responses are expected outcomes of the user's filter choice,
         // not failures — render them as an info alert instead of a red error.
-        const isNoData = /^No (items|notes|billable)/i.test(String(error));
+        const isNoData = /^No (items|notes|billable)/i.test(errText);
         return (
           <Alert
             type={isNoData ? 'info' : 'error'}
             message={isNoData ? 'No data to export' : 'Error'}
-            description={isNoData ? 'We couldn\'t find any data for the selected filters. This can sometimes happen due to system load — please try once more. If it still shows no data, adjust your filters and try again.' : error}
+            description={isNoData ? 'We couldn\'t find any data for the selected filters. This can sometimes happen due to system load — please try once more. If it still shows no data, adjust your filters and try again.' : errText}
             className="mb-4"
             showIcon
           />

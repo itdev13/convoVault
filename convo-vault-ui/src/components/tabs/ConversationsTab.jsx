@@ -269,7 +269,7 @@ export default function ConversationsTab({ onSelectConversation }) {
         setEstimateError(response.error || 'Export failed');
       }
     } catch (err) {
-      setEstimateError(err.message || 'Export failed');
+      setEstimateError(err.code === 'INSUFFICIENT_FUNDS' ? err : (err.message || 'Export failed'));
     } finally {
       setProcessing(false);
     }

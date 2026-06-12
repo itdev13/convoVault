@@ -575,7 +575,21 @@ class BillingService {
         companyId,
         error: error.response?.data || error.message
       });
-      throw new Error(error.response?.data?.message || 'Payment failed. Please check your wallet balance.');
+      const ghlMsg = error.response?.data?.message || '';
+      // hasFunds() is a boolean precheck and can pass while the actual charge still fails for
+      // lack of funds (balance covers something but not this amount, or it drained between the
+      // check and the charge). GHL returns these as HTTP 400 with messages like
+      // "Agency wallet has insufficient funds" / "Location wallet has insufficient funds".
+      // Detect that here so the route can return the INSUFFICIENT_FUNDS experience, and capture
+      // which wallet is short so the UI can name it precisely.
+      const isInsufficientFunds = /insufficient|not enough funds|low balance/i.test(ghlMsg);
+      const err = new Error(ghlMsg || 'Payment failed. Please check your wallet balance.');
+      err.insufficientFunds = isInsufficientFunds;
+      // 'agency' | 'location' | null — derived from the GHL message when available.
+      err.walletScope = /agency/i.test(ghlMsg) ? 'agency'
+        : /location|sub-?account/i.test(ghlMsg) ? 'location'
+        : null;
+      throw err;
     }
   }
 
