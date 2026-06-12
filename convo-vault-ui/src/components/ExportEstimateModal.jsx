@@ -145,22 +145,22 @@ export default function ExportEstimateModal({
             : scope === 'location' ? 'sub-account wallet'
             : 'agency or sub-account wallet';
           return (
-            <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4">
+            <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4">
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-lg">
+                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 flex items-center justify-center text-lg">
                   💳
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-amber-900">
+                  <div className="text-sm font-semibold text-red-900">
                     Not enough funds in your {walletName}
                   </div>
-                  <p className="text-sm text-amber-800 mt-1">
+                  <p className="text-sm text-red-800 mt-1">
                     Your {walletName} doesn&apos;t have enough balance for this export.
                     {required > 0 && (
                       <> It needs at least <strong>${required.toFixed(2)}</strong> to continue.</>
                     )}
                   </p>
-                  <p className="text-sm text-amber-800 mt-2">
+                  <p className="text-sm text-red-800 mt-2">
                     Recharge your {walletName}{required > 0 && <> with at least <strong>${required.toFixed(2)}</strong></>},
                     then run the export again — your data will be ready in seconds.
                   </p>
