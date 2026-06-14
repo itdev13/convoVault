@@ -2273,22 +2273,32 @@ exports.handler = async (event, context) => {
         if (job.exportType === 'conversations') {
           hasMoreData = pageResult.hasMore;
           skip += pageResult.data.length;
+          if (pageResult.data.length < API_PAGE_SIZE) {
+            hasMoreData = false;
+          }
+
         } else {
+          // Messages: the cursor is the ONLY source of truth for "more data".
+          // GHL's message export runs on Elasticsearch shards; when a shard times out it can
+          // return a SHORT page (< API_MESSAGES_PAGE_SIZE) while STILL handing back a valid
+          // nextCursor. Treating a short page as "done" (the old behavior) silently dropped the
+          // remaining messages. So we keep paginating until GHL stops giving us a cursor.
           cursor = pageResult.nextCursor;
           hasMoreData = !!cursor;
+
+          // Safety valve: if a page returns ZERO rows we stop even if a cursor is present.
+          // A non-null cursor that yields no data would otherwise loop forever (GHL-side bug).
+          if (pageResult.data.length === 0) {
+            log('Empty page received — stopping pagination', { hadCursor: !!cursor });
+            hasMoreData = false;
+            cursor = null;
+          }
         }
 
         records.push(...pageResult.data);
         recordsFetched += pageResult.data.length;
 
         log('Fetched page', { pageRecords: pageResult.data.length, batchTotal: recordsFetched, cursor, hasMoreData });
-
-        // No more data available - use correct page size for each type
-        const pageSize = job.exportType === 'conversations' ? API_PAGE_SIZE : API_MESSAGES_PAGE_SIZE;
-        if (pageResult.data.length < pageSize) {
-          hasMoreData = false;
-          cursor = null;
-        }
 
         // Rate limiting (GHL: 100 req/10 sec)
         if (hasMoreData && recordsFetched < BATCH_SIZE) {
