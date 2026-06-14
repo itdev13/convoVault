@@ -2283,15 +2283,52 @@ exports.handler = async (event, context) => {
           // return a SHORT page (< API_MESSAGES_PAGE_SIZE) while STILL handing back a valid
           // nextCursor. Treating a short page as "done" (the old behavior) silently dropped the
           // remaining messages. So we keep paginating until GHL stops giving us a cursor.
+          const sentCursor = cursor;            // the cursor we just sent (before overwrite)
           cursor = pageResult.nextCursor;
           hasMoreData = !!cursor;
 
-          // Safety valve: if a page returns ZERO rows we stop even if a cursor is present.
-          // A non-null cursor that yields no data would otherwise loop forever (GHL-side bug).
+          // An empty page is suspicious — zero data is usually a transient shard failure, not the
+          // real end. Confirm with ONE retry before stopping. Two cases:
+          //   (a) empty + GHL returned a nextCursor → retry that nextCursor.
+          //   (b) empty + NO nextCursor            → retry the SAME cursor we just sent (sentCursor),
+          //       since GHL gave us nothing to advance with but the blip may clear.
+          // If the retry returns data we continue from its nextCursor; if it's empty again we
+          // accept the end (stops infinite loops).
           if (pageResult.data.length === 0) {
-            log('Empty page received — stopping pagination', { hadCursor: !!cursor });
-            hasMoreData = false;
-            cursor = null;
+            const retryCursor = cursor || sentCursor;
+            if (retryCursor) {
+              log('Empty page — retrying once to confirm end', { retryCursor, usedNextCursor: !!cursor });
+              await sleep(500);
+              let retry;
+              try {
+                retry = await fetchMessagesPage(job.locationId, accessToken, job.filters || {}, retryCursor);
+              } catch (retryErr) {
+                if (retryErr.response?.status === 401) {
+                  await refreshAndUpdateToken();
+                  retry = await fetchMessagesPage(job.locationId, accessToken, job.filters || {}, retryCursor);
+                } else {
+                  throw retryErr;
+                }
+              }
+
+              if (retry.data.length > 0) {
+                // Transient blip — absorb the retry's data and continue.
+                records.push(...retry.data);
+                recordsFetched += retry.data.length;
+                cursor = retry.nextCursor;
+                hasMoreData = !!cursor;
+                log('Retry recovered data', { recovered: retry.data.length, cursor, hasMoreData });
+              } else {
+                // Two empty pages in a row — accept this as the true end.
+                log('Retry also empty — stopping pagination', {});
+                hasMoreData = false;
+                cursor = null;
+              }
+            } else {
+              // No cursor at all to retry with — genuinely done.
+              hasMoreData = false;
+              cursor = null;
+            }
           }
         }
 
