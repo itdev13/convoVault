@@ -207,12 +207,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* NotifyPro Cross-Promo Banner — real-time GHL notifications.
+        {/* NotifyPro Cross-Promo Banner — temporarily hidden (replaced by Telegram Messaging Connector promo).
             Info: https://notify.vaultsuite.store · Marketplace app id: 6962592adbdd5106c52e257a */}
+        {/*
         <div className="mb-4 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 rounded-xl px-5 py-3 flex items-center justify-between shadow-md">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-              {/* Bell icon */}
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
@@ -243,6 +243,44 @@ export default function Dashboard() {
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 bg-white hover:bg-orange-50 text-orange-600 text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
+            >
+              Install now
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
+            </a>
+          </div>
+        </div>
+        */}
+
+        {/* Telegram Messaging Connector Cross-Promo Banner — now live on the HighLevel Marketplace.
+            Marketplace app id: 69b67036e65bf138703a31d7 */}
+        <div className="mb-4 bg-gradient-to-r from-sky-500 via-cyan-500 to-blue-600 rounded-xl px-5 py-3 flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+              {/* Paper-plane (Telegram) icon */}
+              <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M21.94 4.3 2.9 11.64c-1.24.5-1.23 1.2-.22 1.5l4.87 1.52 1.88 5.77c.23.63.11.88.77.88.51 0 .74-.23 1.02-.51l2.36-2.3 4.9 3.62c.9.5 1.55.24 1.78-.84l3.2-15.1c.33-1.32-.5-1.92-1.36-1.53Z" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-white font-semibold text-sm">🚀 Telegram Messaging Connector — now live on the HighLevel Marketplace</p>
+                <span className="hidden sm:inline-flex items-center bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/30">
+                  Free to install
+                </span>
+              </div>
+              <p className="text-sky-50 text-xs mt-0.5">
+                Two-way Telegram messaging inside your Conversations inbox — Bot &amp; Phone Account support, media &amp; attachment sync, auto contact creation, 10+ workflow actions, 6+ triggers, and group management.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <a
+              href="https://marketplace.gohighlevel.com/integration/69b67036e65bf138703a31d7/versions/69cd720d516a315c8f08c6e4"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 bg-white hover:bg-sky-50 text-blue-600 text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
             >
               Install now
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
