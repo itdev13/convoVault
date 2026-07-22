@@ -88,8 +88,10 @@ class ConversationsManagerApp {
       exposedHeaders: ['Content-Disposition']
     }));
     
-    this.app.use(express.json());
-    this.app.use(express.urlencoded({ extended: true }));
+    // Raise body limit above the 100KB default: import endpoints (contacts / notes /
+    // custom fields & values) POST parsed CSV rows as JSON, which easily exceeds 100KB.
+    this.app.use(express.json({ limit: '25mb' }));
+    this.app.use(express.urlencoded({ extended: true, limit: '25mb' }));
     this.app.use(express.static(path.join(__dirname, '../public')));
 
     // Request logging with response status

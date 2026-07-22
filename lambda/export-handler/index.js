@@ -23,7 +23,13 @@ const EMAIL_FROM_NAME = 'VaultSuite';
 const EMAIL_FROM_ADDRESS = 'support@vaultsuite.store';
 
 // Batch processing configuration
-const BATCH_SIZE = 5000;            // Records per Lambda invocation
+// Lowered from 5000 → 2000 to cap peak heap per invocation. The OOM (Runtime.OutOfMemory at
+// 2048MB) came from materializing a full batch at once: the `records` array + its stringified
+// `content` + the `accumulated` (pendingBuffer + content) copy + the .map() intermediate array
+// all live simultaneously. Fat records (messages w/ attachments, contacts w/ many custom fields)
+// made 5000 exceed 2GB. Fewer records per invocation = smaller peak; the self-invoke chain just
+// runs a few more times.
+const BATCH_SIZE = 2000;            // Records per Lambda invocation
 const API_PAGE_SIZE = 100;          // Records per GHL API call
 const API_MESSAGES_PAGE_SIZE = 1000;
 const API_CALL_LOGS_PAGE_SIZE = 50; // Max pageSize for Voice AI call logs API
@@ -1314,6 +1320,19 @@ function specialMessagesToCSV(messages, includeHeader = true) {
 }
 
 /**
+ * Stringify an array of records into a comma-joined JSON fragment WITHOUT building an
+ * intermediate array of N stringified copies (which `data.map(JSON.stringify).join(',')` does).
+ * Appending to one accumulator keeps peak memory to ~one copy instead of two.
+ */
+function joinStringified(data) {
+  let out = '';
+  for (let i = 0; i < data.length; i++) {
+    out += (i === 0 ? '' : ',') + JSON.stringify(data[i]);
+  }
+  return out;
+}
+
+/**
  * Convert to JSON format
  */
 function toJSON(data, exportType, isFirst, isLast) {
@@ -1326,14 +1345,14 @@ function toJSON(data, exportType, isFirst, isLast) {
     }, null, 2);
   } else if (isFirst) {
     // First batch - open JSON array
-    return `{"${exportType}":[` + data.map(d => JSON.stringify(d)).join(',');
+    return `{"${exportType}":[` + joinStringified(data);
   } else if (isLast) {
     // Last batch - close JSON array
-    const items = data.length > 0 ? ',' + data.map(d => JSON.stringify(d)).join(',') : '';
+    const items = data.length > 0 ? ',' + joinStringified(data) : '';
     return items + `],"exportedAt":"${new Date().toISOString()}"}`;
   } else {
     // Middle batch - just data with leading comma
-    return ',' + data.map(d => JSON.stringify(d)).join(',');
+    return ',' + joinStringified(data);
   }
 }
 

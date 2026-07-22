@@ -578,6 +578,25 @@ class GHLService {
         return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1);
       }
 
+      // Handle transient GHL slowness with a SINGLE backoff retry (read endpoints only).
+      // GHL's contacts search can exceed their own 30s server-side limit and return HTTP 400 with
+      // body "Request Timeout after 30000ms" (or 502/503/504). A large location can time out
+      // repeatedly, so we retry only ONCE (not 3×) — enough to clear a transient blip without
+      // turning a consistently-slow query into a 90s hang. Only idempotent reads are retried.
+      const ghlMsg = error.response?.data?.message || error.message || '';
+      const status = error.response?.status;
+      const isTimeoutish =
+        error.code === 'ECONNABORTED' ||
+        /timeout/i.test(ghlMsg) ||
+        status === 502 || status === 503 || status === 504;
+      const isReadEndpoint =
+        method === 'GET' || /\/search$/.test(endpoint) || endpoint === '/contacts/search';
+      if (isTimeoutish && isReadEndpoint && retryCount < 1) {
+        logger.warn(`⏳ Transient GHL timeout, retrying once in 2s`, { endpoint, status, message: ghlMsg });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1);
+      }
+
       // For other errors or after retry failed, throw original error
       logger.error(`API request failed: ${method} ${endpoint}`, {
         status: error.response?.status,
