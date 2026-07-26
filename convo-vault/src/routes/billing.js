@@ -52,7 +52,9 @@ const MAX_DATE_RANGE_MS = 2 * 365 * 24 * 60 * 60 * 1000;
 const MAX_DATE_RANGE_MS_SPECIAL_TAB = 365 * 24 * 60 * 60 * 1000; // 1 year
 
 /**
- * Validate date range doesn't exceed the allowed maximum
+ * Validate the date range. There is no maximum span — any range is allowed as long as the
+ * dates are valid and startDate is before endDate. (`maxRange` is kept in the signature for
+ * backward compatibility with existing callers but is no longer enforced.)
  */
 function validateDateRange(startDate, endDate, maxRange = MAX_DATE_RANGE_MS) {
   if (!startDate || !endDate) return { valid: true };
@@ -62,10 +64,6 @@ function validateDateRange(startDate, endDate, maxRange = MAX_DATE_RANGE_MS) {
 
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
     return { valid: false, error: 'Invalid date format' };
-  }
-
-  if (end - start > maxRange) {
-    return { valid: false, error: maxRange === MAX_DATE_RANGE_MS ? 'Date range cannot exceed 2 years' : 'Date range cannot exceed 1 year' };
   }
 
   if (end < start) {
