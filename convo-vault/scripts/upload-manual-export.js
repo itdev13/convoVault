@@ -31,10 +31,17 @@ const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 
-// AWS SDK lives in the lambda's node_modules (not convo-vault's).
-const awsPath = path.resolve(__dirname, '../../lambda/export-handler/node_modules');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require(path.join(awsPath, '@aws-sdk/client-s3'));
-const { getSignedUrl } = require(path.join(awsPath, '@aws-sdk/s3-request-presigner'));
+// AWS SDK: resolve from convo-vault's own node_modules (normal require). If the S3 packages
+// aren't installed here, print an install hint instead of a cryptic MODULE_NOT_FOUND.
+let S3Client, PutObjectCommand, GetObjectCommand, getSignedUrl;
+try {
+  ({ S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3'));
+  ({ getSignedUrl } = require('@aws-sdk/s3-request-presigner'));
+} catch (e) {
+  console.error('Missing AWS S3 SDK. Install it in convo-vault first:');
+  console.error('  npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner');
+  process.exit(1);
+}
 
 const ExportJob = require('../src/models/ExportJob');
 const BillingTransaction = require('../src/models/BillingTransaction');
