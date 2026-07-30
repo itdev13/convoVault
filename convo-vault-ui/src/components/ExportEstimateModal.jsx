@@ -668,7 +668,7 @@ export default function ExportEstimateModal({
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Price per Message</span>
-                    <span className="font-medium text-gray-800">$0.018</span>
+                    <span className="font-medium text-gray-800">$0.004</span>
                   </div>
                   <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
                     Messages gathered from the first 100 contacts matching your tag(s) — no volume discounts apply

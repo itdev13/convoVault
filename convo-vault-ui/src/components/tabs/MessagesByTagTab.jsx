@@ -11,7 +11,7 @@ import ExportProgress from '../ExportProgress';
  * Messages by Contact Tag — the user selects one or more tags; we resolve every contact carrying
  * those tags, CAP at the first 100 contacts, then gather all of their messages (optionally filtered
  * by channel + date range) via the same message export API the Messages tab uses, once per
- * contact, and export. Flat $0.018/message rate.
+ * contact, and export. Flat $0.004/message rate.
  */
 export default function MessagesByTagTab() {
   const { location } = useAuth();
