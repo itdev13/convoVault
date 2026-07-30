@@ -1456,7 +1456,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         filters: { tags: tagsFilter, channel: channelFilter || null },
         messages: firstChunkMessages,
         totalMessages: allMessages.length,
-        totalConversations: allConversationIds.length,
+        totalConversations: contactIdsFilter.length,
         chunkIndex: 0,
         totalChunks,
         status: 'ready'
@@ -1471,7 +1471,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             filters: { tags: tagsFilter, channel: channelFilter || null },
             messages: allMessages.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
             totalMessages: allMessages.length,
-            totalConversations: allConversationIds.length,
+            totalConversations: contactIdsFilter.length,
             groupId: specialExport._id,
             chunkIndex: ci,
             totalChunks,
