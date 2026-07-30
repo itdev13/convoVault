@@ -1397,15 +1397,16 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         });
       }
 
-      // CAP at the first 500 contacts EXPLICITLY.
-      let cappedAt500 = false;
+      // CAP at the first MAX_CONTACTS contacts EXPLICITLY.
+      const MAX_CONTACTS = 100;
+      let cappedAt500 = false; // field name kept for the UI contract; means "capped at MAX_CONTACTS"
       let contactIdsFilter = resolvedIds;
-      if (resolvedContactCount > 500) {
+      if (resolvedContactCount > MAX_CONTACTS) {
         cappedAt500 = true;
-        contactIdsFilter = resolvedIds.slice(0, 500);
-        logger.warn('messagesByTag: resolved contacts exceed 500, capping', { resolvedContactCount, cappedTo: 500, tags: tagsFilter });
+        contactIdsFilter = resolvedIds.slice(0, MAX_CONTACTS);
+        logger.warn('messagesByTag: resolved contacts exceed cap, capping', { resolvedContactCount, cappedTo: MAX_CONTACTS, tags: tagsFilter });
       }
-      logger.info('messagesByTag: contact resolution complete', { tags: tagsFilter, resolvedContactCount, usedContactCount: contactIdsFilter.length, cappedAt500 });
+      logger.info('messagesByTag: contact resolution complete', { tags: tagsFilter, resolvedContactCount, usedContactCount: contactIdsFilter.length, cap: MAX_CONTACTS, cappedAt500 });
 
       // Gather messages by calling the SAME message export API the Messages tab uses
       // (GET /conversations/messages/export via ghlService.exportMessages), once per contactId.
@@ -1416,12 +1417,15 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       const allMessages = [];
       const CONTACT_PARALLEL = 5;
       const PAGE_LIMIT = 100;
+      let contactsDone = 0;
+      let failedContacts = 0;
       for (let i = 0; i < contactIdsFilter.length; i += CONTACT_PARALLEL) {
         const batch = contactIdsFilter.slice(i, i + CONTACT_PARALLEL);
         const results = await Promise.allSettled(
           batch.map(async (cid) => {
             const msgs = [];
             let cursor = null;
+            let pages = 0;
             while (true) {
               const opts = { contactId: cid, limit: PAGE_LIMIT };
               if (channelFilter) opts.channel = channelFilter;
@@ -1430,19 +1434,30 @@ router.post('/estimate', authenticateSession, async (req, res) => {
               if (cursor) opts.cursor = cursor;
               const resp = await withRetry(() => ghlService.exportMessages(locationId, opts));
               const pageMsgs = resp.messages || [];
+              pages++;
               msgs.push(...pageMsgs);
               cursor = resp.nextCursor || null;
               if (!cursor || pageMsgs.length < PAGE_LIMIT) break;
             }
+            // Per-contact API-call log: how many export-API hits (pages) and messages for this contact.
+            logger.info('messagesByTag: contact fetched', { contactId: cid, apiCalls: pages, messages: msgs.length, channel: channelFilter || 'all' });
             return msgs;
           })
         );
         for (const r of results) {
-          if (r.status === 'fulfilled') allMessages.push(...r.value);
+          if (r.status === 'fulfilled') {
+            allMessages.push(...r.value);
+          } else {
+            failedContacts++;
+            logger.warn('messagesByTag: contact fetch failed', { error: r.reason?.message });
+          }
         }
+        contactsDone += batch.length;
+        // Progress log per batch of contacts (each batch = up to CONTACT_PARALLEL parallel API loops).
+        logger.info('messagesByTag: progress', { contactsDone, totalContacts: contactIdsFilter.length, messagesSoFar: allMessages.length });
       }
 
-      logger.info('messagesByTag: fetched', { totalMessages: allMessages.length, contacts: contactIdsFilter.length, channel: channelFilter || 'all' });
+      logger.info('messagesByTag: fetched', { totalMessages: allMessages.length, contacts: contactIdsFilter.length, failedContacts, channel: channelFilter || 'all' });
 
       // Split into 5,000-message chunks to stay under MongoDB's 16MB BSON limit.
       // Lambda BATCH_SIZE is also 5000 so each invocation loads exactly one chunk doc.
@@ -1485,7 +1500,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       }
 
       const total = allMessages.length;
-      const unitPrice = 0.018;
+      const unitPrice = 0.004;
       const finalAmount = total * unitPrice;
       return res.json({
         success: true,
@@ -2558,9 +2573,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];
     } else if (exportType === 'messagesByTag') {
-      // Messages by Tag: standalone billing (flat $0.018/msg, single meter charge, no discount).
-      // Same meter/rate as specialTabMessages.
-      const unitPrice = 0.018;
+      // Messages by Tag: standalone billing (flat $0.004/msg, single meter charge, no discount).
+      const unitPrice = 0.004;
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Messages by tag export' }];

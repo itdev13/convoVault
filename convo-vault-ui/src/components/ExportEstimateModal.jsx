@@ -671,7 +671,7 @@ export default function ExportEstimateModal({
                     <span className="font-medium text-gray-800">$0.018</span>
                   </div>
                   <div className="text-xs text-blue-600 bg-blue-50 rounded px-2 py-1">
-                    Messages gathered from the first 500 contacts matching your tag(s) — no volume discounts apply
+                    Messages gathered from the first 100 contacts matching your tag(s) — no volume discounts apply
                   </div>
                 </>
               )}

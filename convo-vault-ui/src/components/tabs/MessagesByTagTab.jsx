@@ -9,7 +9,7 @@ import ExportProgress from '../ExportProgress';
 
 /**
  * Messages by Contact Tag — the user selects one or more tags; we resolve every contact carrying
- * those tags, CAP at the first 500 contacts, then gather all of their messages (optionally filtered
+ * those tags, CAP at the first 100 contacts, then gather all of their messages (optionally filtered
  * by channel + date range) via the same message export API the Messages tab uses, once per
  * contact, and export. Flat $0.018/message rate.
  */
@@ -250,7 +250,7 @@ export default function MessagesByTagTab() {
             <p className={`text-sm ${cappedAt500 ? 'text-amber-800' : 'text-blue-800'}`}>
               <strong>{resolvedContactCount.toLocaleString()}</strong> contact{resolvedContactCount === 1 ? '' : 's'} matched the selected tag{selectedTags.length === 1 ? '' : 's'}.
               {cappedAt500 && (
-                <> <strong>Only the first 500 contacts are included</strong> in this export.</>
+                <> <strong>Only the first 100 contacts are included</strong> in this export.</>
               )}
             </p>
           </div>
@@ -270,7 +270,7 @@ export default function MessagesByTagTab() {
         <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="text-sm text-amber-800">
             <strong>How it works:</strong> we resolve every contact carrying the selected tag(s), then gather their
-            messages (filtered by channel when set). <strong>Only the first 500 contacts</strong> are included.
+            messages (filtered by channel when set). <strong>Only the first 100 contacts</strong> are included.
             Pricing: <strong>$0.018 / message</strong> — no volume discount.
           </p>
         </div>
