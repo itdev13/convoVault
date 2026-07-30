@@ -1318,9 +1318,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
 
     } else if (exportType === 'messagesByTag') {
       // Messages by Contact Tag: resolve contacts by tag(s), CAP at the first 500, then gather
-      // every message (optionally filtered by channel) for those contacts. Reuses the
-      // specialTabMessages per-contact conversation discovery + per-conversation message fetch +
-      // 5,000-message chunked SpecialExport storage, so Lambda reads it via the same chunk path.
+      // every message (optionally filtered by channel + date range) for those contacts by calling
+      // the SAME message export API the Messages tab uses (exportMessages), once per contactId.
+      // Messages are stored in 5,000-message chunked SpecialExport docs, so Lambda reads them via
+      // the same chunk path as specialTabMessages.
       const tagsFilter = Array.isArray(filters?.tags)
         ? filters.tags.filter(Boolean)
         : (typeof filters?.tags === 'string' && filters.tags.trim() ? [filters.tags.trim()] : []);
@@ -1406,70 +1407,32 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       }
       logger.info('messagesByTag: contact resolution complete', { tags: tagsFilter, resolvedContactCount, usedContactCount: contactIdsFilter.length, cappedAt500 });
 
-      // Per-contact conversation discovery (mirrors specialTabMessages). Concurrency 3.
-      const allConversationIds = [];
-      const CONTACT_PARALLEL = 3;
-      const seen = new Set();
+      // Gather messages by calling the SAME message export API the Messages tab uses
+      // (GET /conversations/messages/export via ghlService.exportMessages), once per contactId.
+      // channel + startDate/endDate are passed straight to GHL — identical behavior/output to the
+      // Messages tab, just scoped to each tagged contact. No conversation discovery needed.
+      // channel values mirror the Messages tab: '' (all except email), SMS, Email, WhatsApp,
+      // Facebook, Instagram.
+      const allMessages = [];
+      const CONTACT_PARALLEL = 5;
+      const PAGE_LIMIT = 100;
       for (let i = 0; i < contactIdsFilter.length; i += CONTACT_PARALLEL) {
         const batch = contactIdsFilter.slice(i, i + CONTACT_PARALLEL);
         const results = await Promise.allSettled(
-          batch.map(cid => withRetry(() => ghlService.searchConversations(locationId, { contactId: cid, limit: 100 })))
-        );
-        for (const r of results) {
-          if (r.status === 'fulfilled') {
-            const convos = r.value?.conversations || [];
-            for (const c of convos) {
-              if (c?.id && !seen.has(c.id)) {
-                seen.add(c.id);
-                allConversationIds.push(c.id);
-              }
-            }
-          }
-        }
-      }
-
-      logger.info('messagesByTag: conversations resolved', { count: allConversationIds.length, contacts: contactIdsFilter.length });
-
-      // Fetch messages for each conversation (5 parallel). If a channel is selected, filter
-      // client-side by GHL message type; otherwise include all messages.
-      const channelMatches = (msg) => {
-        if (!channelFilter) return true;
-        const type = String(msg.type || '').toLowerCase();
-        const want = channelFilter.toLowerCase();
-        // GHL message types look like TYPE_SMS, TYPE_EMAIL, TYPE_WHATSAPP, TYPE_CALL, TYPE_VOICEMAIL,
-        // TYPE_LIVE_CHAT, TYPE_GMB, TYPE_INSTAGRAM (IG), TYPE_FACEBOOK (FB), etc.
-        const aliases = {
-          ig: 'instagram',
-          fb: 'facebook',
-          live_chat: 'live_chat',
-          gmb: 'gmb'
-        };
-        const normalized = aliases[want] || want;
-        return type.includes(normalized);
-      };
-
-      const allMessages = [];
-      const PARALLEL = 5;
-      for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
-        const batch = allConversationIds.slice(i, i + PARALLEL);
-        const results = await Promise.allSettled(
-          batch.map(async (cId) => {
+          batch.map(async (cid) => {
             const msgs = [];
-            let cursor = undefined;
-            const PAGE_SIZE = 300;
+            let cursor = null;
             while (true) {
-              const msgOptions = { limit: PAGE_SIZE };
-              if (cursor) msgOptions.lastMessageId = cursor;
-              const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
-              // GHL response: { messages: { lastMessageId, nextPage, messages: [...] } }
-              const wrapper = result.messages || {};
-              const pageMsgs = wrapper.messages || [];
-              const filtered = pageMsgs
-                .filter(channelMatches)
-                .map(m => ({ ...m, conversationId: cId }));
-              msgs.push(...filtered);
-              if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
-              cursor = wrapper.lastMessageId;
+              const opts = { contactId: cid, limit: PAGE_LIMIT };
+              if (channelFilter) opts.channel = channelFilter;
+              if (filters?.startDate) opts.startDate = filters.startDate;
+              if (filters?.endDate) opts.endDate = filters.endDate;
+              if (cursor) opts.cursor = cursor;
+              const resp = await withRetry(() => ghlService.exportMessages(locationId, opts));
+              const pageMsgs = resp.messages || [];
+              msgs.push(...pageMsgs);
+              cursor = resp.nextCursor || null;
+              if (!cursor || pageMsgs.length < PAGE_LIMIT) break;
             }
             return msgs;
           })
@@ -1479,7 +1442,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
       }
 
-      logger.info('messagesByTag: fetched', { totalMessages: allMessages.length, totalConversations: allConversationIds.length, channel: channelFilter || 'all' });
+      logger.info('messagesByTag: fetched', { totalMessages: allMessages.length, contacts: contactIdsFilter.length, channel: channelFilter || 'all' });
 
       // Split into 5,000-message chunks to stay under MongoDB's 16MB BSON limit.
       // Lambda BATCH_SIZE is also 5000 so each invocation loads exactly one chunk doc.

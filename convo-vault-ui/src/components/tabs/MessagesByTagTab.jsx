@@ -10,7 +10,8 @@ import ExportProgress from '../ExportProgress';
 /**
  * Messages by Contact Tag — the user selects one or more tags; we resolve every contact carrying
  * those tags, CAP at the first 500 contacts, then gather all of their messages (optionally filtered
- * by channel) and export. Reuses the specialTabMessages chunked pipeline + flat $0.018/message rate.
+ * by channel + date range) via the same message export API the Messages tab uses, once per
+ * contact, and export. Flat $0.018/message rate.
  */
 export default function MessagesByTagTab() {
   const { location } = useAuth();
@@ -209,16 +210,12 @@ export default function MessagesByTagTab() {
             size="large"
             placeholder="All Channels"
             options={[
-              { value: '', label: 'All Channels' },
+              { value: '', label: 'All Channels Except Email' },
               { value: 'SMS', label: 'SMS' },
               { value: 'Email', label: 'Email' },
               { value: 'WhatsApp', label: 'WhatsApp' },
-              { value: 'Call', label: 'Call' },
-              { value: 'Voicemail', label: 'Voicemail' },
-              { value: 'Live_Chat', label: 'Live Chat' },
-              { value: 'GMB', label: 'Google My Business' },
-              { value: 'IG', label: 'Instagram' },
-              { value: 'FB', label: 'Facebook' },
+              { value: 'Facebook', label: 'Facebook' },
+              { value: 'Instagram', label: 'Instagram' },
             ]}
           />
         </div>
