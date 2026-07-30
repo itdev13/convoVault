@@ -67,13 +67,36 @@ function readIdsFromCsv(filePath) {
   return { locationId: (cols[1] || '').trim(), companyId: (cols[2] || '').trim() };
 }
 
-// Count data rows = total lines minus header. Cheap streaming count.
+// Quote-aware CSV parser: handles embedded newlines/commas inside quoted fields.
+// A note body spanning several visual lines is still ONE record, so a naive line count
+// over-counts badly (e.g. 3802 real notes showed as ~8500 lines).
+function parseRows(str) {
+  const rows = [];
+  let field = '', row = [], inQ = false;
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (inQ) {
+      if (c === '"') {
+        if (str[i + 1] === '"') { field += '"'; i++; }
+        else inQ = false;
+      } else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c === '\r') { /* skip */ }
+      else field += c;
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+// Accurate record count via the quote-aware parser (excludes the header row).
 function countDataRows(filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
-  // Note: bodies may contain embedded newlines, so this over-counts vs true record count.
-  // For a manual upload the itemCounts is informational; use the DB row count if you have it.
-  const lines = content.split('\n').filter((l) => l.length > 0);
-  return Math.max(0, lines.length - 1);
+  const rows = parseRows(content);
+  return rows.slice(1).filter((r) => r.length > 1 && r[0]).length;
 }
 
 async function main() {

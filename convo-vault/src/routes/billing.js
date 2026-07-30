@@ -116,7 +116,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle', 'messagesByTag'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -1316,6 +1316,231 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
       });
 
+    } else if (exportType === 'messagesByTag') {
+      // Messages by Contact Tag: resolve contacts by tag(s), CAP at the first 500, then gather
+      // every message (optionally filtered by channel) for those contacts. Reuses the
+      // specialTabMessages per-contact conversation discovery + per-conversation message fetch +
+      // 5,000-message chunked SpecialExport storage, so Lambda reads it via the same chunk path.
+      const tagsFilter = Array.isArray(filters?.tags)
+        ? filters.tags.filter(Boolean)
+        : (typeof filters?.tags === 'string' && filters.tags.trim() ? [filters.tags.trim()] : []);
+
+      if (tagsFilter.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Messages by Tag export requires at least one tag in filters.tags.'
+        });
+      }
+
+      const channelFilter = typeof filters?.channel === 'string' ? filters.channel.trim() : '';
+
+      // Helper: retry on 429 with exponential backoff (mirrors specialTabMessages)
+      const withRetry = async (fn, maxRetries = 3) => {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            return await fn();
+          } catch (err) {
+            if (err.response?.status === 429 && attempt < maxRetries) {
+              const delay = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+              logger.warn('Rate limited (429), retrying...', { attempt: attempt + 1, delay });
+              await new Promise(r => setTimeout(r, delay));
+            } else {
+              throw err;
+            }
+          }
+        }
+      };
+
+      // Resolve contacts matching the tag(s) via pagination (copied from the notes tag loop).
+      // Union across tags, deduped.
+      const resolvedIds = [];
+      const seenContacts = new Set();
+      for (const tag of tagsFilter) {
+        let startAfterId = null;
+        let startAfter = null;
+        let hasMore = true;
+        let page = 0;
+        const MAX_PAGES = 100; // Safety limit: 100 pages * 100 contacts = 10,000 max per tag
+        while (hasMore && page < MAX_PAGES) {
+          page++;
+          const result = await withRetry(() => ghlService.searchContacts(locationId, { tag, limit: 100, startAfterId, startAfter }));
+          const contacts = result.contacts || [];
+          logger.info('messagesByTag: tag contacts page result', { tag, page, contactsReturned: contacts.length, metaTotal: result.meta?.total });
+          for (const c of contacts) {
+            if (!seenContacts.has(c.id)) {
+              seenContacts.add(c.id);
+              resolvedIds.push(c.id);
+            }
+          }
+          if (contacts.length < 100) {
+            hasMore = false;
+          } else if (result.meta?.startAfterId) {
+            startAfterId = result.meta.startAfterId;
+            startAfter = result.meta.startAfter || null;
+          } else {
+            logger.warn('messagesByTag: no pagination cursor in meta, stopping', { tag, page, totalResolved: resolvedIds.length });
+            hasMore = false;
+          }
+        }
+        if (page >= MAX_PAGES) {
+          logger.warn('messagesByTag: hit max pages limit for tag contact resolution', { tag, totalResolved: resolvedIds.length });
+        }
+      }
+
+      const resolvedContactCount = resolvedIds.length;
+
+      if (resolvedContactCount === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No contacts found for the selected tag(s).'
+        });
+      }
+
+      // CAP at the first 500 contacts EXPLICITLY.
+      let cappedAt500 = false;
+      let contactIdsFilter = resolvedIds;
+      if (resolvedContactCount > 500) {
+        cappedAt500 = true;
+        contactIdsFilter = resolvedIds.slice(0, 500);
+        logger.warn('messagesByTag: resolved contacts exceed 500, capping', { resolvedContactCount, cappedTo: 500, tags: tagsFilter });
+      }
+      logger.info('messagesByTag: contact resolution complete', { tags: tagsFilter, resolvedContactCount, usedContactCount: contactIdsFilter.length, cappedAt500 });
+
+      // Per-contact conversation discovery (mirrors specialTabMessages). Concurrency 3.
+      const allConversationIds = [];
+      const CONTACT_PARALLEL = 3;
+      const seen = new Set();
+      for (let i = 0; i < contactIdsFilter.length; i += CONTACT_PARALLEL) {
+        const batch = contactIdsFilter.slice(i, i + CONTACT_PARALLEL);
+        const results = await Promise.allSettled(
+          batch.map(cid => withRetry(() => ghlService.searchConversations(locationId, { contactId: cid, limit: 100 })))
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            const convos = r.value?.conversations || [];
+            for (const c of convos) {
+              if (c?.id && !seen.has(c.id)) {
+                seen.add(c.id);
+                allConversationIds.push(c.id);
+              }
+            }
+          }
+        }
+      }
+
+      logger.info('messagesByTag: conversations resolved', { count: allConversationIds.length, contacts: contactIdsFilter.length });
+
+      // Fetch messages for each conversation (5 parallel). If a channel is selected, filter
+      // client-side by GHL message type; otherwise include all messages.
+      const channelMatches = (msg) => {
+        if (!channelFilter) return true;
+        const type = String(msg.type || '').toLowerCase();
+        const want = channelFilter.toLowerCase();
+        // GHL message types look like TYPE_SMS, TYPE_EMAIL, TYPE_WHATSAPP, TYPE_CALL, TYPE_VOICEMAIL,
+        // TYPE_LIVE_CHAT, TYPE_GMB, TYPE_INSTAGRAM (IG), TYPE_FACEBOOK (FB), etc.
+        const aliases = {
+          ig: 'instagram',
+          fb: 'facebook',
+          live_chat: 'live_chat',
+          gmb: 'gmb'
+        };
+        const normalized = aliases[want] || want;
+        return type.includes(normalized);
+      };
+
+      const allMessages = [];
+      const PARALLEL = 5;
+      for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
+        const batch = allConversationIds.slice(i, i + PARALLEL);
+        const results = await Promise.allSettled(
+          batch.map(async (cId) => {
+            const msgs = [];
+            let cursor = undefined;
+            const PAGE_SIZE = 300;
+            while (true) {
+              const msgOptions = { limit: PAGE_SIZE };
+              if (cursor) msgOptions.lastMessageId = cursor;
+              const result = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
+              // GHL response: { messages: { lastMessageId, nextPage, messages: [...] } }
+              const wrapper = result.messages || {};
+              const pageMsgs = wrapper.messages || [];
+              const filtered = pageMsgs
+                .filter(channelMatches)
+                .map(m => ({ ...m, conversationId: cId }));
+              msgs.push(...filtered);
+              if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
+              cursor = wrapper.lastMessageId;
+            }
+            return msgs;
+          })
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') allMessages.push(...r.value);
+        }
+      }
+
+      logger.info('messagesByTag: fetched', { totalMessages: allMessages.length, totalConversations: allConversationIds.length, channel: channelFilter || 'all' });
+
+      // Split into 5,000-message chunks to stay under MongoDB's 16MB BSON limit.
+      // Lambda BATCH_SIZE is also 5000 so each invocation loads exactly one chunk doc.
+      const CHUNK_SIZE = 5000;
+      const totalChunks = Math.max(1, Math.ceil(allMessages.length / CHUNK_SIZE));
+
+      // Create chunk 0 first to obtain its _id as the groupId for all remaining chunks.
+      const firstChunkMessages = allMessages.slice(0, CHUNK_SIZE);
+      const specialExport = await SpecialExport.create({
+        locationId,
+        filters: { tags: tagsFilter, channel: channelFilter || null },
+        messages: firstChunkMessages,
+        totalMessages: allMessages.length,
+        totalConversations: allConversationIds.length,
+        chunkIndex: 0,
+        totalChunks,
+        status: 'ready'
+      });
+
+      // Create remaining chunks linked by groupId = specialExport._id
+      if (totalChunks > 1) {
+        const chunkDocs = [];
+        for (let ci = 1; ci < totalChunks; ci++) {
+          chunkDocs.push({
+            locationId,
+            filters: { tags: tagsFilter, channel: channelFilter || null },
+            messages: allMessages.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
+            totalMessages: allMessages.length,
+            totalConversations: allConversationIds.length,
+            groupId: specialExport._id,
+            chunkIndex: ci,
+            totalChunks,
+            status: 'ready',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+        await SpecialExport.insertMany(chunkDocs);
+        logger.info('messagesByTag: chunks stored', { totalChunks, totalMessages: allMessages.length });
+      }
+
+      const total = allMessages.length;
+      const unitPrice = 0.018;
+      const finalAmount = total * unitPrice;
+      return res.json({
+        success: true,
+        data: {
+          estimate: {
+            itemCounts: { messagesByTag: total, total },
+            baseAmount: finalAmount,
+            discountPercent: 0,
+            discountAmount: 0,
+            finalAmount
+          },
+          resolvedContactCount,
+          cappedAt500,
+          filters,
+          exportType,
+          specialExportId: specialExport._id
+        }
+      });
     } else if (exportType === 'specialTabMessages') {
       // Special Messages: fetch messages matching the type(s) from a SCOPED set of conversations.
       // Caller must provide either filters.conversationId OR filters.contactIds — the previous
@@ -2080,7 +2305,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle', 'messagesByTag'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -2257,6 +2482,11 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         // LiveChat: use estimatedTotal from frontend (already counted during estimate)
         totalItems = filters?.estimatedTotal || 0;
 
+      } else if (exportType === 'messagesByTag') {
+        // Messages by Tag: messages were already gathered + chunked during /estimate.
+        // Use estimatedTotal from frontend (do not re-walk GHL).
+        totalItems = filters?.estimatedTotal || 0;
+
       } else if (exportType === 'callTranscriptions') {
         // Use estimatedTotal from frontend (already counted during estimate — heavy task, do not re-walk)
         totalItems = filters?.estimatedTotal || 0;
@@ -2364,6 +2594,13 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Special messages export' }];
+    } else if (exportType === 'messagesByTag') {
+      // Messages by Tag: standalone billing (flat $0.018/msg, single meter charge, no discount).
+      // Same meter/rate as specialTabMessages.
+      const unitPrice = 0.018;
+      const finalAmount = totalItems * unitPrice;
+      estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
+      meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Messages by tag export' }];
     } else if (exportType === 'callTranscriptions') {
       // Call Transcriptions: standalone billing (flat $0.05/record, single meter charge, no discount).
       // Reuses the same meter as specialTabMessages.
@@ -2590,8 +2827,9 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       completed: filters?.completed ?? null,
       overdue: filters?.overdue ?? null,
       unAssigned: filters?.unAssigned != null ? filters?.unAssigned : null,
-      // Tag filter for notes export
-      tags: filters?.tags || null,
+      // Tag filter for notes export (single string). messagesByTag sends an array of tags —
+      // store it comma-joined so it fits the String schema (Lambda reads chunks by id, not this).
+      tags: Array.isArray(filters?.tags) ? filters.tags.join(',') : (filters?.tags || null),
       // LiveChat-specific filters. Same array / string / null handling as `templateType` above.
       specialTabType: exportType
     };
@@ -2616,7 +2854,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     // Step 9a: Link the SpecialExport to this job.
     // For specialTabMessages and opportunityStageHistory it was created during /estimate; for callTranscriptions it was created in Step 7a (post-charge).
-    if (['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle'].includes(exportType) && filters?.specialExportId) {
+    if (['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle', 'messagesByTag'].includes(exportType) && filters?.specialExportId) {
       try {
         await SpecialExport.findByIdAndUpdate(filters.specialExportId, {
           exportJobId: exportJob._id
