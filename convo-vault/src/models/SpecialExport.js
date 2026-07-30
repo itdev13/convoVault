@@ -104,7 +104,8 @@ const specialExportSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// TTL: auto-delete after 7 days
-specialExportSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
+// TTL: auto-delete 5 hours after createdAt. MongoDB's background TTL monitor removes expired
+// docs automatically (runs ~every 60s), so no cron is needed.
+specialExportSchema.index({ createdAt: 1 }, { expireAfterSeconds: 5 * 60 * 60 });
 
 module.exports = mongoose.model('SpecialExport', specialExportSchema);
