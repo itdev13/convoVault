@@ -271,7 +271,7 @@ export default function MessagesByTagTab() {
           <p className="text-sm text-amber-800">
             <strong>How it works:</strong> we resolve every contact carrying the selected tag(s), then gather their
             messages (filtered by channel when set). <strong>Only the first 100 contacts</strong> are included.
-            Pricing: <strong>$0.018 / message</strong> — no volume discount.
+            Pricing: <strong>$0.004 / message</strong> — no volume discount.
           </p>
         </div>
       </div>
