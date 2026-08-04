@@ -15,7 +15,6 @@ export const billingAPI = {
     });
     return response;
   },
-
   /**
    * Charge wallet and start export
    * @param {string} locationId - Location ID
