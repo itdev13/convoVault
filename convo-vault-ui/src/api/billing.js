@@ -48,6 +48,20 @@ export const billingAPI = {
   },
 
   /**
+   * Get a FRESH presigned download URL for a completed export, generated on the fly.
+   * The backend regenerates the S3 URL at click-time (valid while inside the 7-day window),
+   * avoiding the stale-signature problem of storing a long-lived URL. Returns { url }.
+   * @param {string} jobId - Export job ID
+   * @param {string} locationId - Location ID (for verification)
+   */
+  getDownloadUrl: async (jobId, locationId) => {
+    const response = await apiClient.get(`/billing/download/${jobId}`, {
+      params: { locationId }
+    });
+    return response;
+  },
+
+  /**
    * Get export history for location with pagination
    * @param {string} locationId - Location ID
    * @param {number} page - Page number (default 1)

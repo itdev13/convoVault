@@ -123,6 +123,29 @@ export default function ExportTab() {
     }
   };
 
+  // Download: fetch a FRESH presigned URL from the backend (generated on the fly), then open it.
+  // We no longer open the stored downloadUrl directly — that signature dies within hours.
+  const [downloadingJobId, setDownloadingJobId] = useState(null);
+  const handleDownload = async (jobId) => {
+    setDownloadingJobId(jobId);
+    try {
+      const response = await billingAPI.getDownloadUrl(jobId, location?.id);
+      if (response.success && response.data?.url) {
+        window.open(response.data.url, '_blank');
+      } else {
+        alert(response.error || 'Could not generate download link. Please try again.');
+      }
+    } catch (err) {
+      // Backend returns 410 with code DOWNLOAD_EXPIRED once past the 7-day window.
+      const msg = err?.code === 'DOWNLOAD_EXPIRED'
+        ? 'This download link has expired (7-day limit). Please run the export again.'
+        : (err?.message || 'Could not generate download link. Please try again.');
+      alert(msg);
+    } finally {
+      setDownloadingJobId(null);
+    }
+  };
+
   // Handle page change
   const handlePageChange = (page) => {
     setCurrentPage(page);
@@ -291,20 +314,17 @@ export default function ExportTab() {
                             <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700">
                               Expired
                             </span>
-                          ) : job.downloadUrl ? (
+                          ) : (
                             <button
-                              onClick={() => window.open(job.downloadUrl, '_blank')}
-                              className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center gap-1"
+                              onClick={() => handleDownload(job.jobId)}
+                              disabled={downloadingJobId === job.jobId}
+                              className="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center gap-1 disabled:bg-gray-400"
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                               </svg>
-                              Download
+                              {downloadingJobId === job.jobId ? 'Preparing…' : 'Download'}
                             </button>
-                          ) : (
-                            <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700">
-                              completed
-                            </span>
                           )
                         ) : (
                           <span className={`text-xs px-2 py-1 rounded ${

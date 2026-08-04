@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const billingService = require('../services/billingService');
 const ghlService = require('../services/ghlService');
 const BillingTransaction = require('../models/BillingTransaction');
@@ -2971,6 +2973,63 @@ router.get('/export-status/:jobId', authenticateSession, async (req, res) => {
       success: false,
       error: 'Failed to get export status'
     });
+  }
+});
+
+// S3 client for on-the-fly presigned download URLs. Uses the backend's ambient AWS credentials
+// (EC2 role / env). Region falls back to us-east-1 (the exports bucket's region).
+const downloadS3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+
+/**
+ * @route GET /api/billing/download/:jobId
+ * @desc Regenerate a fresh presigned S3 download URL ON THE FLY and redirect to it.
+ *   Why: the URL stored at export time is signed with SHORT-LIVED credentials (STS session
+ *   tokens live ≤12h), so a stored 7-day URL actually dies within hours (ExpiredToken).
+ *   Instead we presign at click-time with a short (1h) expiry — always fresh, always works —
+ *   but only while the job is still inside its 7-day policy window (downloadUrlExpiresAt).
+ *   After 7 days the link is genuinely expired (410).
+ */
+router.get('/download/:jobId', authenticateSession, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = await ExportJob.findById(jobId);
+
+    if (!job) {
+      return res.status(404).json({ success: false, error: 'Export job not found' });
+    }
+
+    // Access check: same location, or same company (mirrors export-status).
+    if (job.locationId !== req.query.locationId && job.companyId !== req.user?.companyId) {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+
+    if (job.status !== 'completed' || !job.s3Key) {
+      return res.status(409).json({ success: false, error: 'Export is not ready for download yet.' });
+    }
+
+    // 7-day policy gate: refuse once the original window has elapsed.
+    if (job.downloadUrlExpiresAt && Date.now() >= new Date(job.downloadUrlExpiresAt).getTime()) {
+      return res.status(410).json({
+        success: false,
+        code: 'DOWNLOAD_EXPIRED',
+        error: 'This download link has expired (7-day limit reached). Please run the export again.'
+      });
+    }
+
+    // Fresh short-lived presigned URL (1h — used immediately). Signature is seconds old, so it
+    // works regardless of whether the backend creds are permanent or temporary.
+    const freshUrl = await getSignedUrl(
+      downloadS3,
+      new GetObjectCommand({ Bucket: job.s3Bucket || 'convo-vault-exports-1', Key: job.s3Key }),
+      { expiresIn: 60 * 60 }
+    );
+
+    // Return the URL as JSON. The route is session-authenticated (Bearer token), so the client
+    // fetches it via the api client and then opens the returned S3 URL in a new tab.
+    return res.json({ success: true, data: { url: freshUrl } });
+  } catch (error) {
+    logError('Download redirect error', error, { jobId: req.params?.jobId });
+    res.status(500).json({ success: false, error: 'Failed to generate download link' });
   }
 });
 
