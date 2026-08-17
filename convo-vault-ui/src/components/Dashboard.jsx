@@ -56,6 +56,10 @@ export default function Dashboard() {
   // Charge and Call Transcriptions stay gated; Complete Messages and Import Notes are now live for everyone.
   const [customChargeEnabled, setCustomChargeEnabled] = useState(false);
   const [callTranscriptionsEnabled, setCallTranscriptionsEnabled] = useState(false);
+  // Per-location tab kill-switch (from AppConfig `disabledTabs:<locationId>`). Holds tab ids to
+  // hide, and/or the value 'import' to hide the whole Import mode. Empty = nothing disabled.
+  const [disabledTabs, setDisabledTabs] = useState([]);
+  const importDisabled = disabledTabs.includes('import');
 
   // Persist mode + sub-tab
   useEffect(() => { localStorage.setItem('dataMode', dataMode); }, [dataMode]);
@@ -66,6 +70,7 @@ export default function Dashboard() {
     billingAPI.getPricing(location.id).then(res => {
       setCustomChargeEnabled(!!res?.data?.customChargeEnabled);
       setCallTranscriptionsEnabled(!!res?.data?.callTranscriptionsEnabled);
+      setDisabledTabs(Array.isArray(res?.data?.disabledTabs) ? res.data.disabledTabs : []);
     }).catch(() => {});
   }, [location?.id]);
 
@@ -106,9 +111,6 @@ export default function Dashboard() {
     ...(customChargeEnabled ? [{ label: 'Billing', items: [{ id: 'customCharge', label: 'Charge', icon: '💳' }] }] : []),
   ];
 
-  // All export tab ids (flat) — used for tab-switching validation
-  const exportTabs = exportGroups.flatMap(g => g.items);
-
   // Sidebar groups for Import Data
   const importGroups = [
     {
@@ -127,7 +129,17 @@ export default function Dashboard() {
     },
   ];
 
-  const importTabs = importGroups.flatMap(g => g.items);
+  // Apply the per-location disabled-tabs filter: drop any hidden tab id, then drop groups left
+  // empty. 'import' in disabledTabs hides the whole Import mode (handled at the mode toggle).
+  const applyDisabled = (groups) =>
+    groups
+      .map(g => ({ ...g, items: g.items.filter(it => !disabledTabs.includes(it.id)) }))
+      .filter(g => g.items.length > 0);
+
+  const exportGroupsVisible = applyDisabled(exportGroups);
+  const importGroupsVisible = importDisabled ? [] : applyDisabled(importGroups);
+  const exportTabs = exportGroupsVisible.flatMap(g => g.items);
+  const importTabs = importGroupsVisible.flatMap(g => g.items);
 
   const tabs = dataMode === 'export' ? exportTabs : importTabs;
 
@@ -342,7 +354,8 @@ export default function Dashboard() {
         <div className="flex items-end gap-2">
           {[
             { key: 'export', label: 'Export Data', tagline: 'Pull data out as CSV / JSON' },
-            { key: 'import', label: 'Import Data', tagline: 'Bring data in from a CSV' },
+            // Import mode hidden entirely when disabled for this location.
+            ...(importDisabled ? [] : [{ key: 'import', label: 'Import Data', tagline: 'Bring data in from a CSV' }]),
           ].map(m => {
             // Only highlight the mode tab when the user is actually inside the export/import sub-tabs.
             // Standalone tabs (Export History, Support) take focus away from both mode tabs.
@@ -429,7 +442,7 @@ export default function Dashboard() {
           {/* Sidebar */}
           {!['exports', 'support'].includes(activeTab) && (
           <aside className="w-65  flex-shrink-0 border-r border-gray-100 py-4 bg-gray-50/60">
-            {(dataMode === 'export' ? exportGroups : importGroups).map((group, gi) => (
+            {(dataMode === 'export' ? exportGroupsVisible : importGroupsVisible).map((group, gi) => (
               <div key={group.label || `g-${gi}`} className="mb-1">
                 {group.label && (
                   <div className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 select-none">

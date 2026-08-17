@@ -194,6 +194,13 @@ const exportJobSchema = new mongoose.Schema({
     default: null
   },
 
+  // Secret token for the public email download link (/billing/download-email/:jobId?token=…).
+  // Email links can't carry a session token, so this random token authorizes the redirect.
+  downloadToken: {
+    type: String,
+    default: null
+  },
+
   // Email notification
   notificationEmail: {
     type: String,

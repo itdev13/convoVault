@@ -3034,6 +3034,54 @@ router.get('/download/:jobId', authenticateSession, async (req, res) => {
 });
 
 /**
+ * @route GET /api/billing/download-email/:jobId?token=…
+ * @desc PUBLIC (no session) download link used in the "Your Export is Ready" email. Email links
+ *   can't carry a login token, so this is authorized by the per-job `downloadToken` instead.
+ *   Same fix as the in-app route: regenerates a FRESH presigned S3 URL on click (the URL stored
+ *   at export time is signed with short-lived STS creds and dies within hours), enforces the
+ *   7-day window via downloadUrlExpiresAt, then 302-redirects the browser straight to S3.
+ */
+router.get('/download-email/:jobId', async (req, res) => {
+  const sendHtml = (title, msg) => res.status(410).send(
+    `<html><body style="font-family:Arial,sans-serif;text-align:center;padding:60px">
+       <h2 style="color:#EF4444">${title}</h2><p style="color:#6B7280">${msg}</p></body></html>`
+  );
+  try {
+    const { jobId } = req.params;
+    const { token } = req.query;
+    const job = await ExportJob.findById(jobId);
+
+    if (!job || job.status !== 'completed' || !job.s3Key) {
+      return sendHtml('Export not found', 'This export is no longer available.');
+    }
+
+    // Token gate — must match the job's stored downloadToken.
+    if (!token || !job.downloadToken || token !== job.downloadToken) {
+      return res.status(403).send(
+        `<html><body style="font-family:Arial,sans-serif;text-align:center;padding:60px">
+           <h2 style="color:#EF4444">Invalid link</h2>
+           <p style="color:#6B7280">This download link is not valid.</p></body></html>`
+      );
+    }
+
+    // 7-day policy gate.
+    if (job.downloadUrlExpiresAt && Date.now() >= new Date(job.downloadUrlExpiresAt).getTime()) {
+      return sendHtml('Link expired', 'This download link has expired (7-day limit). Please run the export again from the app.');
+    }
+
+    const freshUrl = await getSignedUrl(
+      downloadS3,
+      new GetObjectCommand({ Bucket: job.s3Bucket || 'convo-vault-exports-1', Key: job.s3Key }),
+      { expiresIn: 60 * 60 }
+    );
+    return res.redirect(302, freshUrl);
+  } catch (error) {
+    logError('Email download redirect error', error, { jobId: req.params?.jobId });
+    return sendHtml('Something went wrong', 'Could not generate the download link. Please try again from the app.');
+  }
+});
+
+/**
  * @route GET /api/billing/export-history
  * @desc Get recent export jobs for location with pagination
  */
@@ -3117,6 +3165,36 @@ router.get('/pricing', async (req, res) => {
   const callTranscriptionsEnabled = locationId
     ? (callTranscriptionsLocationIds.includes('*') || callTranscriptionsLocationIds.includes(locationId))
     : false;
+
+  // Per-tab kill-switch. One AppConfig doc per tab: key `disabledTab:<tab>`, whose `values`
+  // holds a mix of locationIds AND companyIds. A tab is disabled for this location if its
+  // locationId OR its companyId appears in that tab's values (company id = disable for every
+  // location under that company). 'import' is the special tab id that hides the whole Import mode.
+  // Checked tabs = every export/import tab id the UI can render, plus 'import'/'export'.
+  const CONFIGURABLE_TABS = [
+    'import', 'export',
+    'messages', 'specialTabMessages', 'contactBundle', 'messagesByTag', 'callTranscriptions',
+    'contacts', 'opportunities', 'opportunityStageHistory', 'formSubmissions',
+    'notes', 'tasks', 'templates', 'links', 'callLogs', 'customFields', 'customValues', 'tags',
+    'importContacts', 'importNotes', 'importCustomFields', 'importCustomValues'
+  ];
+  let disabledTabs = [];
+  if (locationId) {
+    // Resolve the companyId for this location so company-level disables apply.
+    let companyId = null;
+    try {
+      const companyLoc = await CompanyLocation.findCompanyByLocation(locationId);
+      companyId = companyLoc?.companyId || null;
+    } catch (e) { /* non-blocking: fall back to location-only matching */ }
+
+    const perTab = await Promise.all(
+      CONFIGURABLE_TABS.map(tab => AppConfig.getValues(`disabledTab:${tab}`))
+    );
+    disabledTabs = CONFIGURABLE_TABS.filter((tab, i) => {
+      const vals = perTab[i];
+      return vals.includes(locationId) || (companyId && vals.includes(companyId));
+    });
+  }
   res.json({
     success: true,
     data: {
@@ -3128,7 +3206,9 @@ router.get('/pricing', async (req, res) => {
       specialTabEnabled: true,
       importNotesEnabled: true,
       customChargeEnabled,
-      callTranscriptionsEnabled
+      callTranscriptionsEnabled,
+      // Tab ids (and/or 'import') to hide for this location. UI filters its tab list by this.
+      disabledTabs
     }
   });
 });

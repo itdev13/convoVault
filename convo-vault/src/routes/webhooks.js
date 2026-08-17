@@ -9,6 +9,24 @@ const { authenticateSession } = require('../middleware/auth');
 const GHLService = require('../services/ghlService');
 const ThrottleQueue = require('../utils/throttleQueue');
 const { sendUninstallWinBackEmail } = require('../services/winbackEmailer');
+const AppConfig = require('../models/AppConfig');
+
+/**
+ * Send the uninstall win-back email UNLESS this company is on the suppression list
+ * (AppConfig key `suppressWinbackEmailCompanyIds`). Lets us silence the win-back email for
+ * specific companies (e.g. internal/partner accounts) without code changes.
+ */
+async function maybeSendWinBack(installerSnapshot, companyId) {
+  try {
+    if (companyId && await AppConfig.hasValue('suppressWinbackEmailCompanyIds', companyId)) {
+      logger.info('⏭️  Win-back email suppressed for company', { companyId });
+      return;
+    }
+  } catch (err) {
+    logger.warn('Win-back suppression check failed (sending anyway):', { error: err.message });
+  }
+  sendUninstallWinBackEmail(installerSnapshot);
+}
 
 const tokenGenQueue = new ThrottleQueue({ name: 'proactive-token-gen', delayMs: 350 });
 
@@ -279,7 +297,7 @@ async function handleUninstall(data) {
       await archiveAndDeleteTokens(locationId, companyId, null, data);
 
       // Fire win-back email async (don't block webhook response)
-      sendUninstallWinBackEmail(installerSnapshot);
+      await maybeSendWinBack(installerSnapshot, companyId);
       
       // Create uninstall record anyway for tracking
       const uninstallRecord = new Installation({
@@ -318,7 +336,7 @@ async function handleUninstall(data) {
     await archiveAndDeleteTokens(locationId, companyId, installation._id, data);
 
     // Fire one-shot pricing-first win-back email (async — never blocks webhook response).
-    sendUninstallWinBackEmail(installerSnapshot);
+    await maybeSendWinBack(installerSnapshot, companyId);
 
     // Hard-delete referral record on uninstall so reinstalls don't inherit stale attribution
     try {

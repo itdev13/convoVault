@@ -2,7 +2,12 @@ const { S3Client, CreateMultipartUploadCommand, UploadPartCommand, CompleteMulti
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const axios = require('axios');
+const crypto = require('crypto');
 const { MongoClient, ObjectId } = require('mongodb');
+
+// Public base URL of the convo-vault backend, used to build the email download link that
+// regenerates a fresh presigned URL on click. Falls back to the prod host.
+const PUBLIC_API_URL = process.env.PUBLIC_API_URL || 'https://convoapi.vaultsuite.store';
 
 
 // Initialize AWS services
@@ -2621,6 +2626,9 @@ exports.handler = async (event, context) => {
 
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+      // Secret token authorizing the public email download link (email links carry no session).
+      const downloadToken = crypto.randomBytes(24).toString('hex');
+
       // Update job as completed
       await updateJob(db, exportJobId, {
         status: 'completed',
@@ -2628,6 +2636,7 @@ exports.handler = async (event, context) => {
         s3Bucket: S3_BUCKET,
         downloadUrl,
         downloadUrlExpiresAt: expiresAt,
+        downloadToken,
         completedAt: new Date(),
         totalBatches: currentBatch
       });
@@ -2655,10 +2664,13 @@ exports.handler = async (event, context) => {
         }
       }
 
-      // Send email notification
+      // Send email notification. The link points at the backend's public email-download route
+      // (regenerates a fresh presigned URL on click) instead of the stored S3 URL, which dies
+      // within hours because it's signed with short-lived STS creds.
       let emailSent = false;
       if (job.notificationEmail) {
-        emailSent = await sendEmail(job.notificationEmail, downloadUrl, {
+        const emailDownloadUrl = `${PUBLIC_API_URL}/api/billing/download-email/${exportJobId}?token=${downloadToken}`;
+        emailSent = await sendEmail(job.notificationEmail, emailDownloadUrl, {
           exportType: job.exportType,
           format: job.format,
           totalItems: processedItems
