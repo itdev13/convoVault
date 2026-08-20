@@ -106,6 +106,17 @@ async function handleInstall(data) {
   // is attributed to the lite app (and its appId is preserved as-is from the payload).
   const isLite = !!process.env.GHL_LITE_APP_ID && appId === process.env.GHL_LITE_APP_ID;
 
+  // Diagnostic: shows exactly what GHL sent vs the configured lite appId, so we can tell whether
+  // an install is being attributed to the right app (lite vs premium).
+  logger.info('📥 INSTALL webhook', {
+    appId,
+    liteAppIdConfigured: process.env.GHL_LITE_APP_ID || '(unset)',
+    matchedLite: isLite,
+    companyId,
+    locationId: locationId || '(company-level)',
+    level: locationId ? 'location' : 'company'
+  });
+
   try {
     // Check if installation already exists
     const query = locationId 

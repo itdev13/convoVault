@@ -167,7 +167,7 @@ router.get('/callback', async (req, res) => {
       // Uses the access token we just got from code-exchange directly — avoids the DB token
       // lookup chain in apiRequest() (which can race with the upsert above). See
       // routes/webhooks.js handleUninstall.
-      if (tokenData.userId) {
+      if (!isLite && tokenData.userId) {
         (async () => {
           try {
             const installer = await ghlService.getUserWithToken(tokenData.userId, tokenData.accessToken);
@@ -255,7 +255,7 @@ router.get('/callback', async (req, res) => {
       // the uninstall handler can send the win-back email. Mirrors the sub-account branch above.
       // Uses the company access token directly (the company token doc has no locationId, so the
       // standard apiRequest token-lookup path wouldn't work here).
-      if (tokenData.userId) {
+      if (!isLite && tokenData.userId) {
         (async () => {
           try {
             const installer = await ghlService.getUserWithToken(tokenData.userId, tokenData.accessToken);
