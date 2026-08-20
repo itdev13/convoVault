@@ -29,162 +29,60 @@ export default function Dashboard() {
     }).catch(() => {});
   }, [location?.id]);
 
-  // Sidebar groups for Export Data — messages only.
-  const exportGroups = [
-    {
-      label: 'Messages',
-      items: [
-        { id: 'messages', label: 'Messages', icon: '📊' },
-      ]
-    },
-  ];
+  // Known views for this single-page app. `disabledTabs` is still fetched (config contract)
+  // but with only 'messages' as an export view there's nothing to gate here.
+  const knownViews = ['messages', 'exports', 'support'];
 
-  // Apply the per-location disabled-tabs filter: drop any hidden tab id, then drop groups left empty.
-  const applyDisabled = (groups) =>
-    groups
-      .map(g => ({ ...g, items: g.items.filter(it => !disabledTabs.includes(it.id)) }))
-      .filter(g => g.items.length > 0);
-
-  const exportGroupsVisible = applyDisabled(exportGroups);
-  const exportTabs = exportGroupsVisible.flatMap(g => g.items);
-
-  // If the persisted activeTab isn't a known sub-tab, snap to the first one.
+  // If the persisted activeTab isn't a known view (or was disabled), snap back to Messages.
   useEffect(() => {
-    if (exportTabs.length === 0) return;
-    const standalone = ['exports', 'support'].includes(activeTab);
-    if (!standalone && !exportTabs.some(t => t.id === activeTab)) {
-      setActiveTab(exportTabs[0].id);
+    if (!knownViews.includes(activeTab) || disabledTabs.includes(activeTab)) {
+      setActiveTab('messages');
     }
-  }, [exportTabs.length]);
+  }, [activeTab, disabledTabs]);
+
+  // Header nav links drive the view. Messages is the default/home page; Export History &
+  // Support are secondary destinations. onNavigate is the single entry point for view changes.
+  const handleNavigate = (key) => {
+    setActiveTab(key);
+    setShowConversationView(false);
+  };
+
+  // Page heading per view — gives each destination a light, distinct lead-in rather than a tab row.
+  const isSecondary = ['exports', 'support'].includes(activeTab);
+  const pageMeta = {
+    messages: {
+      title: 'Export Messages',
+      subtitle: 'Pull your SMS, WhatsApp & email conversations out as CSV or JSON.',
+    },
+    exports: {
+      title: 'Export History',
+      subtitle: 'Track and re-download your previous exports.',
+    },
+    support: {
+      title: 'Support',
+      subtitle: 'Get help and reach the team.',
+    },
+  };
+  const meta = pageMeta[activeTab] || pageMeta.messages;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <Header />
-      
-      <div className="max-w-12xl mx-auto px-3 py-3">
-        {/* Mode tabs — this lite app is Export-only, so the single "Export Messages" tab plus the
-            standalone Export History & Support quick-access tabs make up the top row. */}
-        <div className="flex items-end gap-2">
-          {[
-            { key: 'export', label: 'Export Messages', tagline: 'Pull your messages out as CSV / JSON' },
-          ].map(m => {
-            // Highlight only when inside the messages sub-tab (not the standalone tabs).
-            const active = !['exports', 'support'].includes(activeTab);
-            return (
-              <button
-                key={m.key}
-                onClick={() => { setActiveTab('messages'); setShowConversationView(false); }}
-                className={`
-                  group relative flex items-center gap-3 px-5 pt-3 pb-4 rounded-t-xl transition-all
-                  ${active
-                    ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-lg z-10'
-                    : 'bg-white/70 hover:bg-white text-gray-600 border border-gray-200 border-b-0'
-                  }
-                `}
-              >
-                {/* Icon */}
-                <div className={`
-                  w-9 h-9 rounded-lg flex items-center justify-center transition-colors
-                  ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500 group-hover:text-gray-700'}
-                `}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <div className={`font-bold text-sm leading-tight ${active ? 'text-white' : 'text-gray-700'}`}>
-                    {m.label}
-                  </div>
-                  <div className={`text-xs leading-tight mt-0.5 ${active ? 'text-indigo-100' : 'text-gray-500'}`}>
-                    {m.tagline}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+    <div className="min-h-screen bg-slate-50">
+      <Header activeTab={activeTab} onNavigate={handleNavigate} />
 
-          {/* Export History & Support — quick-access tabs, same visual style as the mode tab */}
-          {[
-            { key: 'exports', label: 'Export History', tagline: 'View past exports', icon: '📤' },
-            { key: 'support', label: 'Support', tagline: 'Get help', icon: '🆘' },
-          ].map(t => {
-            const active = activeTab === t.key;
-            return (
-              <button
-                key={t.key}
-                onClick={() => { setActiveTab(t.key); setShowConversationView(false); }}
-                className={`
-                  group relative flex items-center gap-3 px-5 pt-3 pb-4 rounded-t-xl transition-all
-                  ${active
-                    ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-lg z-10'
-                    : 'bg-white/70 hover:bg-white text-gray-600 border border-gray-200 border-b-0'
-                  }
-                `}
-              >
-                <div className={`
-                  w-9 h-9 rounded-lg flex items-center justify-center text-lg transition-colors
-                  ${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500 group-hover:text-gray-700'}
-                `}>
-                  {t.icon}
-                </div>
-                <div className="text-left">
-                  <div className={`font-bold text-sm leading-tight ${active ? 'text-white' : 'text-gray-700'}`}>
-                    {t.label}
-                  </div>
-                  <div className={`text-xs leading-tight mt-0.5 ${active ? 'text-indigo-100' : 'text-gray-500'}`}>
-                    {t.tagline}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+      {/* Single-page shell. Distinct from ExportKit: no top tab-card row — a centered content
+          column with a light section heading, then one card holding the active view. */}
+      <main className="max-w-5xl mx-auto px-6 py-8">
+        {!showConversationView && (
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold tracking-tight text-slate-900">{meta.title}</h2>
+            <p className="text-sm text-slate-500 mt-1">{meta.subtitle}</p>
+          </div>
+        )}
 
-        {/* Sidebar nav + content panel.
-            Sidebar is hidden for standalone tabs (Export History, Support) where it doesn't apply. */}
-        <div className="bg-white rounded-xl shadow-lg flex overflow-hidden border-t border-gray-200">
-          {/* Sidebar */}
-          {!['exports', 'support'].includes(activeTab) && (
-          <aside className="w-65  flex-shrink-0 border-r border-gray-100 py-4 bg-gray-50/60">
-            {exportGroupsVisible.map((group, gi) => (
-              <div key={group.label || `g-${gi}`} className="mb-1">
-                {group.label && (
-                  <div className="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest text-gray-400 select-none">
-                    {group.label}
-                  </div>
-                )}
-                {group.items.map((tab) => {
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => {
-                        setActiveTab(tab.id);
-                        setShowConversationView(false);
-                      }}
-                      title={tab.label}
-                      className={`
-                        w-full flex items-center gap-2.5 px-4 py-2 text-sm font-medium transition-all text-left
-                        ${isActive
-                          ? 'bg-indigo-50 text-indigo-700 border-r-2 border-indigo-600'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800 border-r-2 border-transparent'
-                        }
-                      `}
-                    >
-                      <span className="text-base leading-none">{tab.icon}</span>
-                      <span className="truncate">{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </aside>
-          )}
-
-          {/* Content */}
-          <div className="flex-1 min-w-0 p-8">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_1px_3px_rgba(15,23,42,0.06)] overflow-hidden">
+          <div className={`min-w-0 ${isSecondary ? 'p-6 sm:p-8' : 'p-6 sm:p-8'}`}>
             {showConversationView && (
-              <div className="mb-6 flex items-center gap-2 text-sm text-gray-600">
+              <div className="mb-6 flex items-center gap-2 text-sm text-slate-600">
                 <button
                   onClick={() => setShowConversationView(false)}
                   className="hover:text-indigo-600 transition-colors font-medium"
@@ -194,7 +92,7 @@ export default function Dashboard() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-                <span className="text-gray-900 font-medium">{selectedConversation?.contactName || 'Messages'}</span>
+                <span className="text-slate-900 font-medium">{selectedConversation?.contactName || 'Messages'}</span>
               </div>
             )}
 
@@ -212,8 +110,7 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-
-      </div>
+      </main>
     </div>
   );
 }
