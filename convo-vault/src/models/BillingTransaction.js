@@ -103,6 +103,14 @@ const billingTransactionSchema = new mongoose.Schema({
     type: String,
     default: null,
     index: true
+  },
+
+  // True when this charge belongs to the "Export Messages" (lite) app. Segregates lite vs
+  // premium billing in the shared DB (lite charges also bill the lite GHL marketplace app).
+  lite: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 
 }, {

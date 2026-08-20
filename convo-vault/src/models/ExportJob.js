@@ -245,6 +245,14 @@ const exportJobSchema = new mongoose.Schema({
   userId: {
     type: String,
     default: null
+  },
+
+  // True when this export belongs to the "Export Messages" (lite) app. Segregates lite vs
+  // premium export data in the shared DB.
+  lite: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 
 }, {

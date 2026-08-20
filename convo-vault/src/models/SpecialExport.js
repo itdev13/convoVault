@@ -101,6 +101,12 @@ const specialExportSchema = new mongoose.Schema({
   errorMessage: {
     type: String,
     default: null
+  },
+  // True when this belongs to the "Export Messages" (lite) app. Segregates lite vs premium.
+  lite: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, { timestamps: true });
 

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="url(#gradient)" opacity="0.1"/>
+  
+  <!-- Gradient definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563EB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#06B6D4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Vault Icon -->
+  <g id="vault">
+    <!-- Main vault body -->
+    <rect x="14" y="26" width="36" height="32" rx="4" fill="#2563EB" stroke="#1E40AF" stroke-width="2.5"/>
+    
+    <!-- Vault door -->
+    <circle cx="32" cy="42" r="12" fill="#1E40AF"/>
+    <circle cx="32" cy="42" r="9" fill="#3B82F6" opacity="0.4"/>
+    
+    <!-- Combination lock marks -->
+    <line x1="32" y1="34" x2="32" y2="30" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="32" y1="50" x2="32" y2="54" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="24" y1="42" x2="20" y2="42" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="40" y1="42" x2="44" y2="42" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    
+    <!-- Center dot -->
+    <circle cx="32" cy="42" r="3" fill="white"/>
+  </g>
+  
+  <!-- Chat Bubble overlay -->
+  <g id="bubble">
+    <!-- Bubble background -->
+    <circle cx="46" cy="16" r="12" fill="white" stroke="#E5E7EB" stroke-width="1"/>
+    
+    <!-- Bubble body -->
+    <path d="M 38 10 L 50 10 C 52 10 54 12 54 14 L 54 20 C 54 22 52 24 50 24 L 44 24 L 42 26 L 42 24 L 38 24 C 36 24 34 22 34 20 L 34 14 C 34 12 36 10 38 10 Z" 
+          fill="#06B6D4"/>
+    
+    <!-- Message dots -->
+    <circle cx="41" cy="17" r="1.5" fill="white"/>
+    <circle cx="46" cy="17" r="1.5" fill="white"/>
+    <circle cx="51" cy="17" r="1.5" fill="white"/>
+  </g>
+</svg>
+

@@ -1,0 +1,447 @@
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../context/AuthContext';
+import { messagesAPI } from '../api/messages';
+import { exportAPI } from '../api/export';
+import { Button, Select, Tooltip } from 'antd';
+import { useErrorModal } from './ErrorModal';
+import { useInfoModal } from './InfoModal';
+import { getMessageTypeDisplay, getMessageTypeIcon } from '../utils/messageTypes';
+
+export default function ConversationMessages({ conversation, onBack }) {
+  const { location } = useAuth();
+  const [pageSize, setPageSize] = useState(20);
+  const [lastMessageId, setLastMessageId] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const { showError, ErrorModalComponent } = useErrorModal();
+  const { showInfo, InfoModalComponent } = useInfoModal();
+  
+  // Helper to safely format dates (reused in display and export)
+  const formatDate = (dateValue) => {
+    if (!dateValue) return 'No date';
+    try {
+      const date = new Date(dateValue);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return date.toLocaleString();
+    } catch (e) {
+      return 'Invalid date';
+    }
+  };
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['conversation-messages', conversation?.id, location?.id, pageSize, lastMessageId],
+    queryFn: async () => {
+      const response = await messagesAPI.get(conversation.id, location.id, {
+        limit: pageSize,
+        lastMessageId: lastMessageId
+      });
+      return response;
+    },
+    enabled: !!conversation && !!location?.id,
+    cacheTime: 0, // Don't cache - always fetch fresh
+    staleTime: 0, // Data is immediately stale
+    refetchOnMount: 'always' // Always refetch on mount
+  });
+
+  const messages = data?.data?.messages || [];
+  const hasMore = data?.data?.pagination?.hasMore || false;
+  const nextCursor = data?.data?.pagination?.nextCursor;
+
+  // Download ALL messages for this conversation as CSV
+  // Calls API twice in parallel: once for regular messages, once for emails
+  // Creates two separate CSVs with different headers
+  const handleDownload = async () => {
+    try {
+      setDownloading(true);
+      
+      const exportLimit = 500;
+      const timestamp = Date.now();
+      const baseName = conversation.contactName || 'messages';
+      
+      // Fetch regular messages (without channel parameter) and emails (channel=Email) in parallel
+      const fetchMessages = async (channel = null) => {
+        let allMessages = [];
+        let cursor = null;
+        let hasMore = true;
+        let batchCount = 0;
+        
+        while (hasMore && batchCount < 20) {
+          const params = {
+            conversationId: conversation.id,
+            limit: exportLimit,
+            cursor: cursor || undefined
+          };
+          
+          if (channel) {
+            params.channel = channel;
+          }
+          
+          const response = await exportAPI.exportMessages(location.id, params);
+          const batch = response.data.messages || [];
+          allMessages = [...allMessages, ...batch];
+          
+          cursor = response.data.pagination?.nextCursor;
+          hasMore = !!cursor && batch.length === exportLimit;
+          batchCount++;
+          
+          if (hasMore) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        }
+        
+        return allMessages;
+      };
+      
+      // Fetch both in parallel
+      const [regularMessages, emailMessages] = await Promise.all([
+        fetchMessages(), // No channel = all non-email messages
+        fetchMessages('Email') // channel=Email = email messages only
+      ]);
+      
+      // Helper to safely format dates for CSV (detailed format)
+      const formatDateForCsv = (dateValue) => {
+        if (!dateValue) return '';
+        try {
+          const date = new Date(dateValue);
+          if (isNaN(date.getTime())) return '';
+          return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+          });
+        } catch (e) {
+          return '';
+        }
+      };
+      
+      // Create regular messages CSV
+      if (regularMessages.length > 0) {
+        const csvHeaders = 'Message Date,Message ID,Conversation ID,Message Type,Direction,Status,Message Body,Attachments,Contact ID\n';
+        const csvRows = regularMessages.map(msg => {
+          const formattedDate = formatDateForCsv(msg.dateAdded);
+          const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
+          const attachments = msg.attachments && msg.attachments.length > 0 
+            ? msg.attachments.join('; ') 
+            : '';
+          return `"${formattedDate}","${msg.id}","${msg.conversationId || ''}","${getMessageTypeDisplay(msg.type) || ''}","${msg.direction || ''}","${msg.status || ''}","${message}","${attachments}","${msg.contactId || ''}"`;
+        }).join('\n');
+        
+        const csv = csvHeaders + csvRows;
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${baseName}_messages_${timestamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+      
+      // Create email messages CSV with email-specific fields
+      if (emailMessages.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        const csvHeaders = 'Message Date,Message ID,Conversation ID,Subject,From,To,CC,BCC,Direction,Status,Message Body,Attachments,Contact ID\n';
+        const csvRows = emailMessages.map(msg => {
+          const formattedDate = formatDateForCsv(msg.dateAdded);
+          const message = (msg.body || '').replace(/"/g, '""').replace(/\n/g, ' ');
+          const subject = (msg.subject || msg.meta?.email?.subject || '').replace(/"/g, '""');
+          const from = msg.from || msg.meta?.email?.from || msg.meta?.from || '';
+          const to = msg.to ? (Array.isArray(msg.to) ? msg.to.join('; ') : msg.to) : msg.meta?.email?.to || msg.meta?.to || '';
+          const cc = msg.cc ? (Array.isArray(msg.cc) ? msg.cc.join('; ') : msg.cc) : msg.meta?.email?.cc || '';
+          const bcc = msg.bcc ? (Array.isArray(msg.bcc) ? msg.bcc.join('; ') : msg.bcc) : msg.meta?.email?.bcc || '';
+          const attachments = msg.attachments && msg.attachments.length > 0 
+            ? msg.attachments.join('; ') 
+            : '';
+          
+          return `"${formattedDate}","${msg.id}","${msg.conversationId || ''}","${subject}","${from}","${to}","${cc}","${bcc}","${msg.direction || ''}","${msg.status || ''}","${message}","${attachments}","${msg.contactId || ''}"`;
+        }).join('\n');
+        
+        const csv = csvHeaders + csvRows;
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${baseName}_emails_${timestamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+      
+      // Show detailed success message
+      if (regularMessages.length === 0 && emailMessages.length === 0) {
+        showInfo('No Messages', 'No messages found in this conversation.');
+        return;
+      }
+      
+      // Build details array for modal
+      const exportDetails = [];
+      
+      if (regularMessages.length > 0 && emailMessages.length > 0) {
+        exportDetails.push({
+          icon: '1️⃣',
+          title: `${baseName}_messages_${timestamp}.csv`,
+          items: [
+            `${regularMessages.length} messages (SMS, WhatsApp, Calls, etc.)`
+          ]
+        });
+        exportDetails.push({
+          icon: '2️⃣',
+          title: `${baseName}_emails_${timestamp}.csv`,
+          items: [
+            `${emailMessages.length} email messages with full metadata`,
+            'Includes: Subject, From, To, CC, BCC'
+          ]
+        });
+      } else if (regularMessages.length > 0) {
+        exportDetails.push({
+          icon: '📄',
+          title: `${baseName}_messages_${timestamp}.csv`,
+          items: [`${regularMessages.length} messages exported`]
+        });
+      } else {
+        exportDetails.push({
+          icon: '📧',
+          title: `${baseName}_emails_${timestamp}.csv`,
+          items: [`${emailMessages.length} email messages with metadata`]
+        });
+      }
+      
+      showInfo(
+        'Export Complete!',
+        `Downloaded ${exportDetails.length} CSV file${exportDetails.length > 1 ? 's' : ''}:`,
+        exportDetails
+      );
+      
+    } catch (err) {
+      showError('Export Failed', 'Failed to export messages from this conversation. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <>
+      {ErrorModalComponent}
+      {InfoModalComponent}
+      <div className="space-y-6">
+      {/* Conversation Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-6 shadow-lg text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+            <div className="w-14 h-14 bg-white/20 backdrop-blur rounded-full flex items-center justify-center text-2xl font-bold border-2 border-white/30">
+              {(conversation.contactName || 'U')[0].toUpperCase()}
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">
+                {conversation.contactName || 'Unknown Contact'}
+              </h2>
+              <p className="text-blue-100 text-sm mt-1">
+                Conversation ID: {conversation.id}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Export Progress */}
+      {downloading && (
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+            <div className="flex-1">
+              <span className="text-blue-700 font-medium block">
+                Fetching all messages from this conversation...
+              </span>
+              <span className="text-blue-600 text-sm block mt-1">
+                ℹ️ Email messages will be exported to a separate CSV file
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading */}
+      {isLoading && (
+        <div className="text-center py-16">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading messages...</p>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border-1 border-solid border-red-300 rounded-xl p-6">
+          <p className="text-red-700">Error: {error.message}</p>
+        </div>
+      )}
+
+      {/* Export All Messages Banner */}
+      <div className="bg-red-50 border-1 border-solid border-red-300 rounded-xl p-3 overflow-hidden">
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          animation: 'scrollBanner 15s linear infinite',
+          whiteSpace: 'nowrap'
+        }}>
+          <span className="text-red-600 font-semibold text-sm">
+            📦 Export all messages at once — visit the <strong>Messages Tab</strong> to bulk export all messages
+          </span>
+        </div>
+        <style>{`
+          @keyframes scrollBanner {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+          }
+        `}</style>
+      </div>
+
+      {/* Pagination Controls */}
+      {!isLoading && !error && messages.length > 0 && (
+        <div className="flex items-center justify-between bg-white border-1 border-solid border-gray-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium">Page Size:</span>
+            <Select
+              value={pageSize}
+              onChange={(value) => {
+                setPageSize(value);
+                setLastMessageId(null);
+              }}
+              size="large"
+              style={{ width: 100 }}
+              options={[
+                { value: 20, label: '20' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' }
+              ]}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => setLastMessageId(null)} disabled={!lastMessageId} size="large">
+              Previous
+            </Button>
+            <Button onClick={() => setLastMessageId(nextCursor)} disabled={!hasMore} type="primary" size="large">
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Messages */}
+      {!isLoading && !error && messages.length > 0 && (
+        <div className="bg-white rounded-xl border-1 border-solid border-gray-200 p-6 min-h-[400px] space-y-4">
+          {messages.map((message) => {
+            const isOutbound = message.direction === 'outbound';
+            return (
+              <div key={message.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[70%] rounded-2xl px-5 py-3 shadow-sm ${
+                    isOutbound
+                      ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}
+                >
+                  <div className={`text-xs mb-1 flex items-center gap-1.5 ${isOutbound ? 'text-blue-100' : 'text-gray-500'}`}>
+                    <span>{getMessageTypeIcon(message.type)}</span>
+                    <span>{getMessageTypeDisplay(message.type)}</span>
+                    <span>•</span>
+                    <span>{formatDate(message.dateAdded)}</span>
+                  </div>
+                  
+                    {/* Email Thread Notice */}
+                    {(message.type === 'TYPE_EMAIL' || message.type === 'Email' || message.type === 3) && 
+                    message.meta?.email?.messageIds && 
+                    message.meta.email.messageIds.length > 1 && (
+                      <div className={`text-xs mb-2 px-2 py-1 rounded flex items-center gap-1.5 ${
+                        isOutbound ? 'bg-blue-500/20 text-blue-100' : 'bg-blue-50 text-blue-700'
+                      }`}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span className="font-medium">
+                          Email Thread ({message.meta.email.messageIds.length} messages)
+                        </span>
+                        <Tooltip
+                          title="Click 'Export CSV' button above to download the complete email thread with all messages and metadata."
+                          placement="top"
+                        >
+                          <svg className={`w-3.5 h-3.5 cursor-help ${isOutbound ? 'text-blue-100' : 'text-blue-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </Tooltip>
+                      </div>
+                    )}
+                    
+                  <div className="text-sm">{message.body}</div>
+                  
+                  {/* Attachments */}
+                  {message.attachments && message.attachments.length > 0 && (
+                    <div className="mt-2 flex items-center gap-2 text-xs">
+                      <svg className={`w-3.5 h-3.5 ${isOutbound ? 'text-blue-100' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                      <span className={isOutbound ? 'text-blue-100' : 'text-gray-600'}>
+                        {message.attachments.length} attachment{message.attachments.length > 1 ? 's' : ''}
+                      </span>
+                      <Tooltip
+                        title="Attachment URLs are included in the CSV export. Click 'Export CSV' above to download all attachment links."
+                        placement="top"
+                      >
+                        <svg className={`w-3.5 h-3.5 cursor-help ${isOutbound ? 'text-blue-100' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </Tooltip>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* No Messages State */}
+      {!isLoading && !error && messages.length === 0 && (
+        <div className="bg-white rounded-xl border-1 border-solid border-gray-200 p-12 min-h-[400px] flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-6xl mb-4">💬</div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Messages Found</h3>
+            <p className="text-gray-500 mb-6">This conversation doesn't have any messages yet</p>
+            <button
+              onClick={onBack}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Back to Conversations
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Footer Stats */}
+      {messages.length > 0 && (
+        <div className="bg-gray-50 border-1 border-solid border-gray-200 rounded-xl p-4">
+          <div className="text-sm text-gray-600">
+            💬 {messages.length} messages • {messages.filter(m => m.direction === 'inbound').length} received • {messages.filter(m => m.direction === 'outbound').length} sent
+            {hasMore && <span className="ml-4 text-blue-600">• More available</span>}
+          </div>
+        </div>
+      )}
+      </div>
+    </>
+  );
+}
+

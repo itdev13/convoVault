@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="240" height="60" viewBox="0 0 240 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Vault Icon -->
+  <g id="vault-icon">
+    <!-- Vault body -->
+    <rect x="8" y="20" width="36" height="32" rx="4" fill="#2563EB" stroke="#1E40AF" stroke-width="2"/>
+    
+    <!-- Vault door circle -->
+    <circle cx="26" cy="36" r="10" fill="#1E40AF"/>
+    <circle cx="26" cy="36" r="8" fill="#3B82F6" opacity="0.3"/>
+    
+    <!-- Combination lock marks -->
+    <line x1="26" y1="30" x2="26" y2="27" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <line x1="26" y1="42" x2="26" y2="45" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    <line x1="20" y1="36" x2="17" y2="36" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- Lock indicator -->
+    <circle cx="26" cy="36" r="2" fill="white"/>
+  </g>
+  
+  <!-- Chat Bubble -->
+  <g id="chat-bubble">
+    <!-- Bubble body -->
+    <path d="M 32 8 L 48 8 C 50 8 52 10 52 12 L 52 22 C 52 24 50 26 48 26 L 38 26 L 34 30 L 34 26 L 32 26 C 30 26 28 24 28 22 L 28 12 C 28 10 30 8 32 8 Z" 
+          fill="#06B6D4" stroke="#0891B2" stroke-width="2"/>
+    
+    <!-- Message dots -->
+    <circle cx="36" cy="17" r="1.5" fill="white"/>
+    <circle cx="40" cy="17" r="1.5" fill="white"/>
+    <circle cx="44" cy="17" r="1.5" fill="white"/>
+  </g>
+  
+  <!-- Text: ConvoVault -->
+  <g id="text" transform="translate(65, 0)">
+    <text x="0" y="32" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="24" font-weight="700" fill="#1F2937">
+      Convo<tspan fill="#2563EB">Vault</tspan>
+    </text>
+    <text x="0" y="48" font-family="Inter, -apple-system, system-ui, sans-serif" font-size="10" font-weight="500" fill="#6B7280" letter-spacing="1">
+      SECURE CONVERSATIONS
+    </text>
+  </g>
+</svg>
+

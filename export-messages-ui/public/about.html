@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Export Messages - Data Export Tool for CRM</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <script>
+    // Vercel Analytics - Track page views and important actions
+    (function() {
+      // Track custom events
+      function trackEvent(eventName, properties) {
+        // Use Vercel Analytics Web API
+        if (typeof window !== 'undefined' && window.va) {
+          window.va('event', eventName, properties);
+        }
+        // Also use the Web API directly as fallback
+        if (typeof fetch !== 'undefined') {
+          fetch('/api/analytics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              event: eventName,
+              ...properties,
+              timestamp: new Date().toISOString(),
+              url: window.location.href
+            })
+          }).catch(() => {}); // Silent fail if endpoint doesn't exist
+        }
+      }
+      
+      // Track important actions when DOM is ready
+      document.addEventListener('DOMContentLoaded', function() {
+        // Track specific "Get Started Now" button in hero section
+        const getStartedHeroBtn = document.querySelector('a[data-analytics="cta_get_started_hero"]');
+        if (getStartedHeroBtn) {
+          getStartedHeroBtn.addEventListener('click', function() {
+            trackEvent('cta_get_started_hero', {
+              location: 'about_page',
+              button_text: 'Get Started Now',
+              button_position: 'hero',
+              section: 'hero_cta'
+            });
+          });
+        }
+        
+        // Track CTA button clicks - Most Important Action
+        const ctaButtons = document.querySelectorAll('a[href*="marketplace.gohighlevel.com"]:not([data-analytics])');
+        ctaButtons.forEach(button => {
+          button.addEventListener('click', function() {
+            const buttonText = this.textContent.trim();
+            const eventName = buttonText.includes('Install')
+              ? 'cta_install_now'
+              : 'cta_get_started';
+            
+            trackEvent(eventName, {
+              location: 'about_page',
+              button_text: buttonText,
+              button_position: this.closest('.cta-buttons') ? 'cta_section' : 'hero'
+            });
+          });
+        });
+        
+        // Track "See How It Works" navigation click
+        const howItWorksLink = document.querySelector('a[href="#how-it-works"]');
+        if (howItWorksLink) {
+          howItWorksLink.addEventListener('click', function() {
+            trackEvent('nav_how_it_works', {
+              location: 'about_page'
+            });
+          });
+        }
+        
+        // Track section views - Important for engagement metrics
+        const sections = [
+          { id: 'how-it-works', name: 'how_it_works' },
+          { selector: '.features:first-of-type', name: 'features' },
+          { selector: '.cta-section', name: 'cta_section' }
+        ];
+        
+        const viewedSections = new Set();
+        const observerOptions = {
+          root: null,
+          rootMargin: '0px',
+          threshold: 0.3
+        };
+        
+        const sectionObserver = new IntersectionObserver(function(entries) {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              const sectionName = entry.target.dataset.section;
+              
+              if (sectionName && !viewedSections.has(sectionName)) {
+                viewedSections.add(sectionName);
+                trackEvent('section_view', {
+                  section: sectionName,
+                  location: 'about_page'
+                });
+              }
+            }
+          });
+        }, observerOptions);
+        
+        // Observe important sections
+        sections.forEach(section => {
+          let element;
+          if (section.id) {
+            element = document.getElementById(section.id);
+          } else if (section.selector) {
+            element = document.querySelector(section.selector);
+          }
+          
+          if (element) {
+            element.dataset.section = section.name;
+            sectionObserver.observe(element);
+          }
+        });
+      });
+    })();
+  </script>
+  <script defer src="https://va.vercel-scripts.com/v1/script.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      color: #1F2937;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    
+    /* Hero Section */
+    .hero {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 80px 20px 100px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+      animation: float 6s ease-in-out infinite;
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-20px) rotate(5deg); }
+    }
+    
+    .hero-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .hero-logo {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: pulse 3s ease-in-out infinite;
+    }
+    
+    .hero-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    .hero h1 {
+      font-size: 56px;
+      font-weight: 800;
+      margin-bottom: 20px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .hero p {
+      font-size: 22px;
+      margin-bottom: 40px;
+      opacity: 0.95;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    
+    .cta-buttons {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      padding: 16px 40px;
+      font-size: 18px;
+      font-weight: 600;
+      border-radius: 12px;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.3s;
+      cursor: pointer;
+      border: none;
+    }
+    
+    .btn-primary {
+      background: white;
+      color: #667eea;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 2px solid white;
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
+    /* Features Section */
+    .features {
+      padding: 80px 20px;
+      background: #F9FAFB;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .section-title {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+    
+    .section-title h2 {
+      font-size: 42px;
+      font-weight: 800;
+      margin-bottom: 15px;
+      color: #1F2937;
+    }
+    
+    .section-title p {
+      font-size: 18px;
+      color: #6B7280;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 30px;
+    }
+    
+    .feature-card {
+      background: white;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      transition: all 0.3s;
+      border: 2px solid transparent;
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-10px);
+      box-shadow: 0 8px 30px rgba(102, 126, 234, 0.2);
+      border-color: #667eea;
+    }
+    
+    .feature-icon {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      margin-bottom: 25px;
+    }
+    
+    .feature-card h3 {
+      font-size: 24px;
+      margin-bottom: 15px;
+      color: #1F2937;
+    }
+    
+    .feature-card p {
+      color: #6B7280;
+      line-height: 1.8;
+    }
+    
+    /* How It Works */
+    .how-it-works {
+      padding: 80px 20px;
+      background: white;
+    }
+    
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 40px;
+      margin-top: 60px;
+    }
+    
+    .step {
+      text-align: center;
+      position: relative;
+    }
+    
+    .step-number {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      font-weight: 800;
+      margin: 0 auto 25px;
+      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    .step h3 {
+      font-size: 22px;
+      margin-bottom: 12px;
+      color: #1F2937;
+    }
+    
+    .step p {
+      color: #6B7280;
+      line-height: 1.8;
+    }
+    
+    /* Video Section */
+    .video-section {
+      padding: 80px 20px;
+      background: #F9FAFB;
+    }
+    
+    .video-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    
+    .video-wrapper {
+      position: relative;
+      padding-bottom: 56.25%; /* 16:9 aspect ratio */
+      height: 0;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #000;
+      margin-top: 30px;
+    }
+    
+    .video-wrapper iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    
+    /* Use Cases */
+    .use-cases {
+      padding: 80px 20px;
+      background: linear-gradient(to bottom, #F9FAFB 0%, white 100%);
+    }
+    
+    .use-cases-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 25px;
+      margin-top: 50px;
+    }
+    
+    .use-case {
+      background: white;
+      padding: 30px;
+      border-radius: 15px;
+      border-left: 4px solid #667eea;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      transition: all 0.3s;
+    }
+    
+    .use-case:hover {
+      transform: translateX(5px);
+      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
+    }
+    
+    .use-case-icon {
+      font-size: 32px;
+      margin-bottom: 15px;
+    }
+    
+    .use-case h4 {
+      font-size: 18px;
+      margin-bottom: 10px;
+      color: #1F2937;
+    }
+    
+    .use-case p {
+      color: #6B7280;
+      font-size: 14px;
+    }
+    
+    /* Screenshots */
+    .screenshots {
+      padding: 80px 20px;
+      background: white;
+    }
+    
+    .screenshot-container {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 20px;
+      padding: 60px;
+      margin-top: 50px;
+      box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+    }
+    
+    .screenshot {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    
+    .screenshot img {
+      width: 100%;
+      border-radius: 8px;
+    }
+    
+    /* CTA Section */
+    .cta-section {
+      padding: 100px 20px;
+      background: linear-gradient(135deg, #1F2937 0%, #111827 100%);
+      color: white;
+      text-align: center;
+    }
+    
+    .cta-section h2 {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    
+    .cta-section p {
+      font-size: 20px;
+      margin-bottom: 40px;
+      opacity: 0.9;
+    }
+    
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 30px;
+      max-width: 900px;
+      margin: 60px auto 0;
+    }
+    
+    .stat {
+      text-align: center;
+    }
+    
+    .stat-number {
+      font-size: 48px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+    
+    .stat-label {
+      color: #6B7280;
+      font-size: 16px;
+    }
+    
+    /* Footer */
+    .footer {
+      background: #1F2937;
+      color: white;
+      padding: 40px 20px;
+      text-align: center;
+    }
+    
+    .footer p {
+      opacity: 0.7;
+    }
+    
+    /* App Updates Badge */
+    .updates-badge {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+    }
+    
+    .updates-button {
+      background: linear-gradient(135deg, #4299e1 0%, #667eea 100%);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 25px;
+      font-weight: 700;
+      font-size: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(66, 153, 225, 0.4);
+      position: relative;
+    }
+    
+    .updates-button::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      width: 12px;
+      height: 12px;
+      background: #48bb78;
+      border-radius: 50%;
+      border: 2px solid white;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.2); opacity: 0.8; }
+    }
+    
+    .updates-popover {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 10px;
+      width: 380px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      display: none;
+      border: 2px solid #e2e8f0;
+    }
+    
+    .updates-badge:hover .updates-popover {
+      display: block;
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .updates-popover::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 20px;
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-top: 2px solid #e2e8f0;
+      border-right: 2px solid #e2e8f0;
+      transform: rotate(-45deg);
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 36px; }
+      .hero p { font-size: 18px; }
+      .section-title h2 { font-size: 32px; }
+      .cta-section h2 { font-size: 36px; }
+      .screenshot-container { padding: 30px; }
+      .video-container { padding: 20px; }
+      .updates-badge { top: 10px; right: 10px; }
+      .updates-popover { width: 320px; }
+    }
+  </style>
+</head>
+<body>
+  
+  <!-- App Updates Badge (Fixed Position) -->
+  <div class="updates-badge">
+    <div class="updates-button">
+      <span>⚡</span>
+      <span>App Updates</span>
+    </div>
+    
+    <!-- Popover (Shows on Hover) -->
+    <div class="updates-popover">
+      <div style="padding: 20px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid #e2e8f0;">
+          <span style="background: #4299e1; color: white; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">NEW</span>
+          <h3 style="font-size: 16px; font-weight: 700; color: #1F2937; margin: 0;">Latest Updates</h3>
+        </div>
+        
+        <div style="space-y: 12px;">
+          <div style="display: flex; align-items: start; gap: 8px; margin-bottom: 12px;">
+            <span style="color: #48bb78; font-weight: 700; flex-shrink: 0;">✓</span>
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="color: #1F2937; font-size: 14px;">Universal Search</strong>
+                <span style="background: #48bb78; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;">LIVE</span>
+              </div>
+              <p style="color: #6B7280; font-size: 12px; margin: 4px 0 0 0; line-height: 1.4;">
+                Search across name, email, company, tags
+              </p>
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: start; gap: 8px; margin-bottom: 12px;">
+            <span style="color: #48bb78; font-weight: 700; flex-shrink: 0;">✓</span>
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="color: #1F2937; font-size: 14px;">Date Range Filters</strong>
+                <span style="background: #48bb78; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;">LIVE</span>
+              </div>
+              <p style="color: #6B7280; font-size: 12px; margin: 4px 0 0 0; line-height: 1.4;">
+                Start/End date filters for conversations
+              </p>
+            </div>
+          </div>
+          
+          <div style="display: flex; align-items: start; gap: 8px; margin-bottom: 12px;">
+            <span style="color: #48bb78; font-weight: 700; flex-shrink: 0;">✓</span>
+            <div style="flex: 1;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <strong style="color: #1F2937; font-size: 14px;">Email Metadata</strong>
+                <span style="background: #48bb78; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700;">LIVE</span>
+              </div>
+              <p style="color: #6B7280; font-size: 12px; margin: 4px 0 0 0; line-height: 1.4;">
+                Subject, From, To, CC, BCC in email CSVs
+              </p>
+            </div>
+          </div>
+          
+          <div style="background: #EFF6FF; border-radius: 8px; padding: 12px; margin-top: 12px; border: 1px solid #BFDBFE;">
+            <div style="display: flex; align-items: start; gap: 8px;">
+              <span style="color: #2563EB; font-weight: 700; flex-shrink: 0;">💡</span>
+              <div>
+                <strong style="color: #1E40AF; font-size: 13px; display: block;">Need a Feature?</strong>
+                <p style="color: #3B82F6; font-size: 11px; margin: 4px 0 0 0; line-height: 1.4;">
+                  Use Support tab - we'll add it in 24h!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Hero Section -->
+  <div class="hero">
+    <div class="hero-content">
+      <div class="hero-logo">
+        <img src="assets/app-icon-marketplace.svg" alt="Export Messages Logo" />
+      </div>
+      <div style="display: inline-block; background: rgba(255,255,255,0.2); padding: 8px 20px; border-radius: 20px; margin-bottom: 20px; border: 2px solid rgba(255,255,255,0.4);">
+        <span style="font-size: 16px; font-weight: 700;">💰 Free to Install • Pay Per Export</span>
+      </div>
+      <h1>Export Messages</h1>
+      <p>The ultimate data export tool for your CRM. Export conversations, SMS, emails, WhatsApp, Facebook & Instagram messages with advanced filtering. CSV & JSON formats.</p>
+      <div style="display: inline-block; background: rgba(72, 187, 120, 0.2); padding: 12px 24px; border-radius: 30px; margin: 20px 0; border: 2px solid rgba(72, 187, 120, 0.5);">
+        <span style="font-size: 18px; font-weight: 700; color: #ffffff;">⚡ No Developers Needed - 100% User-Friendly</span>
+      </div>
+      <div class="cta-buttons">
+        <a href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356" class="btn btn-primary" data-analytics="cta_get_started_hero">Get Started Now</a>
+        <a href="#how-it-works" class="btn btn-secondary">See How It Works</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="features">
+    <div class="container">
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-number">5</div>
+          <div class="stat-label">Core Features</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number">∞</div>
+          <div class="stat-label">Conversations</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number">6+</div>
+          <div class="stat-label">Channel Types</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number">100%</div>
+          <div class="stat-label">Secure</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features Section -->
+  <div class="features">
+    <div class="container">
+      <div class="section-title">
+        <h2>Powerful Features</h2>
+        <p>Everything you need to manage your conversations professionally</p>
+      </div>
+      
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">💬</div>
+          <h3>Conversations Tab</h3>
+          <p>Search and export conversations with 10+ advanced filters including message type, direction and status. Export to CSV with full metadata. Perfect for compliance and analysis.</p>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Messages & Export Tab</h3>
+          <p>Export all messages with advanced filtering. Separate CSV files for regular messages and emails (with Subject, From, To, CC, BCC). Email thread detection included.</p>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">📁</div>
+          <h3>Export History</h3>
+          <p>All your exports are saved for 7 days. Re-download any CSV or JSON file anytime — no need to re-run the export. Quick access to your recent exports.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🆘</div>
+          <h3>Support Tab</h3>
+          <p>In-app support with ticket submission, screenshot attachments, and 24-hour response time. Get help directly without leaving the app.</p>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">📚</div>
+          <h3>API Documentation</h3>
+          <p>Complete REST API with interactive documentation. Generate your personal API token and integrate Export Messages with external tools and automations.</p>
+        </div>
+        
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Enterprise Security</h3>
+          <p>Rate limiting, input validation, XSS protection, and secure authentication. Token archiving on uninstall. Industry-standard security for your data.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- No Developers Needed Section -->
+  <div class="features" style="background: linear-gradient(135deg, #4299e1 0%, #667eea 100%); padding: 60px 0;">
+    <div class="container">
+      <div class="section-title" style="color: white;">
+        <h2 style="color: white;">⚡ No Developers Needed</h2>
+        <p style="color: rgba(255,255,255,0.9);">100% user-friendly interface - anyone can use it!</p>
+      </div>
+      
+      <div class="features-grid" style="max-width: 900px; margin: 0 auto;">
+        <div class="feature-card" style="background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.3);">
+          <div class="feature-icon" style="background: rgba(255,255,255,0.2);">🎯</div>
+          <h3 style="color: white;">Simple Interface</h3>
+          <p style="color: rgba(255,255,255,0.9);">Intuitive dashboard with clear tabs. No training required. Start exporting in minutes.</p>
+        </div>
+        
+        <div class="feature-card" style="background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.3);">
+          <div class="feature-icon" style="background: rgba(255,255,255,0.2);">⚡</div>
+          <h3 style="color: white;">One-Click Actions</h3>
+          <p style="color: rgba(255,255,255,0.9);">Search, filter, export - all with simple clicks. Download CSV with one button.</p>
+        </div>
+        
+        <div class="feature-card" style="background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.3);">
+          <div class="feature-icon" style="background: rgba(255,255,255,0.2);">📤</div>
+          <h3 style="color: white;">One-Click Export</h3>
+          <p style="color: rgba(255,255,255,0.9);">Select filters. Click export. Download your CSV. That's it!</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- How It Works -->
+  <div class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-title">
+        <h2>How It Works</h2>
+        <p>Get started in minutes - no technical knowledge required</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Install from Marketplace</h3>
+          <p>Find Export Messages in the CRM marketplace and install it with one click. It's completely free to install - no credit card required.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Connect Your Account</h3>
+          <p>Securely connect Export Messages to your sub-account using OAuth 2.0. A new "Export Messages" tab appears in your sidebar automatically.</p>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Export & Pay Per Use</h3>
+          <p>Select your conversations, apply filters, and export as CSV or JSON. You only pay for what you export - no subscriptions, no hidden costs.</p>
+        </div>
+      </div>
+
+      <!-- Install Screenshot -->
+      <div style="margin-top: 60px; text-align: center;">
+        <div style="background: white; border-radius: 20px; padding: 30px; box-shadow: 0 8px 30px rgba(0,0,0,0.1); max-width: 900px; margin: 0 auto;">
+          <p style="font-size: 14px; margin-bottom: 15px; color:mediumblue">Install Export Messages App on the CRM Marketplace</p>
+          <img src="/assets/installpage.png" alt="Export Messages - CRM Marketplace Install Page" style="width: 100%; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);" onerror="this.style.display='none'" />
+        </div>
+      </div>
+
+      <!-- Pay-per-Credit Section -->
+      <div id="pricing" style="margin-top: 60px;">
+        <div style="max-width: 700px; margin: 0 auto; background: #f0f4f8; border-radius: 20px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+
+          <!-- Header -->
+          <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px;">
+            <h3 style="font-size: 26px; font-weight: 700; color: #1F2937; margin: 0 0 20px 0;">Pay-per-Credit</h3>
+            <span style="font-size: 20px; font-weight: 800; color: #1F2937;">$Dynamic</span>
+          </div>
+          <hr style="border: none; border-top: 1px solid #d1d5db; margin: 0 0 25px 0;">
+
+          <!-- Features List -->
+          <div style="margin-bottom: 30px;">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0;">
+              <span style="color: #667eea; font-size: 16px;">&#11088;</span>
+              <span style="color: #374151; font-size: 15px;">Custom Date Range</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 8px 0;">
+              <span style="color: #667eea; font-size: 16px;">&#11088;</span>
+              <span style="color: #374151; font-size: 15px;">Automatic CRM wallet payment deduction</span>
+            </div>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #d1d5db; margin: 0 0 25px 0;">
+
+          <!-- Channel / Credit per Element Table -->
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+            <thead>
+              <tr>
+                <th style="text-align: left; padding: 10px 12px; font-size: 14px; font-weight: 700; color: #1F2937; background: #e5e7eb; border-radius: 6px 0 0 6px;">Channel</th>
+                <th style="text-align: left; padding: 10px 12px; font-size: 14px; font-weight: 700; color: #1F2937; background: #e5e7eb; border-radius: 0 6px 6px 0;">Credit per Element</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding: 12px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb;">SMS / WhatsApp / Instagram / Facebook</td>
+                <td style="padding: 12px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb;">1 Credit</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px; font-size: 14px; color: #374151;">Email</td>
+                <td style="padding: 12px; font-size: 14px; color: #374151;">3 Credits</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <hr style="border: none; border-top: 1px solid #d1d5db; margin: 0 0 25px 0;">
+
+          <!-- Price per Credit Table -->
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+            <thead>
+              <tr>
+                <th style="text-align: left; padding: 10px 12px; font-size: 14px; font-weight: 700; color: #1F2937; background: #e5e7eb; border-radius: 6px 0 0 6px;">Credits</th>
+                <th style="text-align: left; padding: 10px 12px; font-size: 14px; font-weight: 700; color: #1F2937; background: #e5e7eb;">Price per Credit ($ / Credit)</th>
+                <th style="text-align: left; padding: 10px 12px; font-size: 14px; font-weight: 700; color: #1F2937; background: #e5e7eb; border-radius: 0 6px 6px 0;">Discount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding: 10px 12px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb;">0 – 1k</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb;">$0.0250</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #6B7280; border-bottom: 1px solid #e5e7eb;">—</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 12px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb;">1k – 2k</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb;">$0.0200</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #48bb78; font-weight: 600; border-bottom: 1px solid #e5e7eb;">20% off</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 12px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb;">2k – 5k</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #374151; border-bottom: 1px solid #e5e7eb;">$0.0150</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #48bb78; font-weight: 600; border-bottom: 1px solid #e5e7eb;">40% off</td>
+              </tr>
+              <tr style="background: rgba(102, 126, 234, 0.05);">
+                <td style="padding: 10px 12px; font-size: 14px; color: #667eea; font-weight: 600; border-bottom: 1px solid #e5e7eb;">5k – 30k</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #667eea; font-weight: 600; border-bottom: 1px solid #e5e7eb;">$0.0125</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #48bb78; font-weight: 600; border-bottom: 1px solid #e5e7eb;">50% off</td>
+              </tr>
+              <tr style="background: rgba(72, 187, 120, 0.08);">
+                <td style="padding: 10px 12px; font-size: 14px; color: #374151; font-weight: 600;">30k+</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #374151; font-weight: 600;">$0.0075</td>
+                <td style="padding: 10px 12px; font-size: 14px; color: #48bb78; font-weight: 700;">70% off</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <hr style="border: none; border-top: 1px solid #d1d5db; margin: 0 0 25px 0;">
+
+          <!-- CRM Wallet Info -->
+          <p style="color: #374151; font-size: 15px; line-height: 1.7; margin: 0 0 12px 0;">
+            We will charge through the <strong>CRM Wallet</strong> system.
+          </p>
+          <p style="color: #374151; font-size: 15px; line-height: 1.7; margin: 0 0 30px 0;">
+            <strong style="color: #1F2937;">No</strong> need for <strong>external</strong> payments or <strong>credit card</strong> information, everything stays safe and controlled inside the CRM.
+          </p>
+
+          <!-- Install Now Button -->
+          <div style="text-align: center;">
+            <a href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356" style="display: inline-block; background: blue; color: #fff; font-size: 18px; font-weight: 700; padding: 16px 60px; border-radius: 30px; text-decoration: none; box-shadow: 0 4px 15px rgba(200, 245, 66, 0.4); transition: transform 0.2s;">Install Now</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video Section -->
+  <div class="video-section">
+    <div class="container">
+      <div class="section-title">
+        <h2>See How to Use Export Messages</h2>
+        <p>Watch this quick tutorial to learn how to export conversations and use all features</p>
+      </div>
+      
+      <div class="video-container">
+        <div class="video-wrapper">
+          <iframe 
+            width="100%" 
+            height="100%" 
+            src="https://www.youtube.com/embed/2YxEKvGYNWQ" 
+            title="How to Use Export Messages" 
+            frameborder="0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+            allowfullscreen>
+          </iframe>
+        </div>
+        <div style="margin-top: 20px; text-align: center;">
+          <p style="color: #6B7280; font-size: 14px;">
+            Having trouble viewing? 
+            <a href="https://youtu.be/2YxEKvGYNWQ" target="_blank" rel="noopener noreferrer" style="color: #667eea; text-decoration: underline;">
+              Watch on YouTube
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Use Cases -->
+  <div class="use-cases">
+    <div class="container">
+      <div class="section-title">
+        <h2>Perfect For Every Industry</h2>
+        <p>Export Messages helps CRM users across all industries export their data</p>
+      </div>
+      
+      <div class="use-cases-grid">
+        <div class="use-case">
+          <div class="use-case-icon">🏥</div>
+          <h4>Healthcare</h4>
+          <p>HIPAA-compliant conversation archiving for medical practices and healthcare providers</p>
+        </div>
+        
+        <div class="use-case">
+          <div class="use-case-icon">⚖️</div>
+          <h4>Legal Firms</h4>
+          <p>Complete case documentation and communication records for legal compliance</p>
+        </div>
+        
+        <div class="use-case">
+          <div class="use-case-icon">🏠</div>
+          <h4>Real Estate</h4>
+          <p>Client communication backup and transaction documentation</p>
+        </div>
+        
+        <div class="use-case">
+          <div class="use-case-icon">💼</div>
+          <h4>Financial Services</h4>
+          <p>Compliance-ready audit trails and client interaction records</p>
+        </div>
+        
+        <div class="use-case">
+          <div class="use-case-icon">🏪</div>
+          <h4>Insurance</h4>
+          <p>Policy holder communication logs and claims documentation</p>
+        </div>
+        
+        <div class="use-case">
+          <div class="use-case-icon">📱</div>
+          <h4>Marketing Agencies</h4>
+          <p>Client conversation archives and campaign communication tracking</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screenshots -->
+  <div class="screenshots">
+    <div class="container">
+      <div class="section-title">
+        <h2>Beautiful & Intuitive Interface</h2>
+        <p>Designed for professionals, built for everyone</p>
+      </div>
+      
+      <div class="screenshot-container">
+        <div class="screenshot">
+          <img src="/assets/convo-vault.png" alt="Export Messages Dashboard Interface" onerror="this.src='https://placehold.co/1200x600/667eea/white?text=Export Messages+Dashboard'" />
+        </div>
+      </div>
+      
+      <div style="margin-top: 30px; text-align: center;">
+        <p style="color: #6B7280; font-size: 16px; margin-bottom: 20px;">
+          ✨ Clean, modern interface • Responsive design • Easy to navigate • Real-time data
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Benefits -->
+  <div class="features" style="background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);">
+    <div class="container">
+      <div class="section-title">
+        <h2>Why Choose Export Messages?</h2>
+        <p>Built for professionals who demand excellence</p>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 30px; margin-top: 50px;">
+        <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+          <div style="font-size: 36px; margin-bottom: 15px;">⚡</div>
+          <h3 style="margin-bottom: 10px; color: #1F2937;">Lightning Fast</h3>
+          <p style="color: #6B7280;">Export thousands of messages in seconds with our optimized pagination and caching system.</p>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+          <div style="font-size: 36px; margin-bottom: 15px;">🛡️</div>
+          <h3 style="margin-bottom: 10px; color: #1F2937;">Enterprise Security</h3>
+          <p style="color: #6B7280;">Bank-level encryption, OAuth 2.0, and automatic token refresh. Your data is always protected.</p>
+        </div>
+        
+        <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+          <div style="font-size: 36px; margin-bottom: 15px;">📊</div>
+          <h3 style="margin-bottom: 10px; color: #1F2937;">Full Context</h3>
+          <p style="color: #6B7280;">Every export includes conversationId for proper threading. Perfect for analytics and reporting.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Latest Updates Section -->
+  <div class="features">
+    <div class="container">
+      <div class="section-title">
+        <h2>🎉 Latest Updates</h2>
+        <p>New features and improvements we've added recently</p>
+      </div>
+      
+      <div style="max-width: 800px; margin: 0 auto; space-y: 20px;">
+        <!-- Update 1 - Live -->
+        <div style="background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 4px solid #48bb78; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <span style="background: #48bb78; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">LIVE</span>
+            <h3 style="font-size: 20px; color: #1F2937; margin: 0;">Universal Search</h3>
+          </div>
+          <p style="color: #6B7280; margin: 0;">
+            Search conversations across multiple fields: contact name, email, company name, tags, and message content. Find any conversation instantly!
+          </p>
+        </div>
+
+        <!-- Update 2 - Live -->
+        <div style="background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 4px solid #48bb78; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <span style="background: #48bb78; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">LIVE</span>
+            <h3 style="font-size: 20px; color: #1F2937; margin: 0;">Date Range Filters</h3>
+          </div>
+          <p style="color: #6B7280; margin: 0;">
+            Filter conversations by Start Date and End Date. Perfect for monthly reports, compliance audits, and historical data analysis.
+          </p>
+        </div>
+
+        <!-- Update 3 - Live -->
+        <div style="background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); border-left: 4px solid #48bb78; margin-bottom: 20px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <span style="background: #48bb78; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">LIVE</span>
+            <h3 style="font-size: 20px; color: #1F2937; margin: 0;">Enhanced Email Exports</h3>
+          </div>
+          <p style="color: #6B7280; margin: 0;">
+            Email messages now export with complete metadata: <strong>Subject, From, To, CC, BCC</strong> in separate CSV files for better email analysis.
+          </p>
+        </div>
+
+        <!-- Coming Soon -->
+        <div style="background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); border-radius: 15px; padding: 30px; border: 2px solid #667eea;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+            <span style="background: #667eea; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;">MORE COMING</span>
+            <h3 style="font-size: 20px; color: #1F2937; margin: 0;">Your Ideas Shape Our Roadmap</h3>
+          </div>
+          <p style="color: #4B5563; margin: 0 0 15px 0;">
+            Many more features in the pipeline! Need a specific field in exports? Want a custom filter? 
+          </p>
+          <p style="color: #667eea; font-weight: 600; margin: 0;">
+            💬 Raise a request in the Support tab - we'll address it immediately (usually within 24 hours)!
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA Section -->
+  <div class="cta-section">
+    <div class="container">
+      <h2>Ready to Export Your Conversations and Messages?</h2>
+      <p>Join businesses that trust Export Messages for professional CRM data exports</p>
+      <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; margin: 30px auto; max-width: 600px; border: 2px solid rgba(255,255,255,0.3);">
+        <div style="font-size: 24px; font-weight: 700; margin-bottom: 10px;">💰 Incredibly Affordable</div>
+        <p style="margin: 0; font-size: 16px; opacity: 0.9;">Free to install • No subscriptions • Pay only when you export • Volume discounts</p>
+      </div>
+      <div class="cta-buttons">
+        <a href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356" class="btn btn-primary">Install Now - It's Free</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="container">
+      <p>&copy; 2026 Export Messages. Data Export Tool for CRM.</p>
+      <p style="margin-top: 10px; font-size: 14px;">No Developers Needed • User-Friendly • Secure</p>
+    </div>
+  </div>
+</body>
+</html>
+

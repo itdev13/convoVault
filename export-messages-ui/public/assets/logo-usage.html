@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ConvoVault Logo Usage Examples</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 40px;
+      background: #F9FAFB;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    h1 {
+      color: #1F2937;
+      margin-bottom: 30px;
+    }
+    
+    .section {
+      margin: 40px 0;
+      padding: 30px;
+      background: #F9FAFB;
+      border-radius: 8px;
+    }
+    
+    .section h2 {
+      color: #374151;
+      margin-bottom: 20px;
+      font-size: 20px;
+    }
+    
+    .logo-preview {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      margin: 15px 0;
+      border: 1px solid #E5E7EB;
+    }
+    
+    .logo-preview.dark {
+      background: #1F2937;
+    }
+    
+    .preview-label {
+      font-size: 14px;
+      color: #6B7280;
+      font-weight: 600;
+      min-width: 150px;
+    }
+    
+    code {
+      background: #1F2937;
+      color: #06B6D4;
+      padding: 15px;
+      border-radius: 6px;
+      display: block;
+      margin: 10px 0;
+      font-size: 13px;
+      overflow-x: auto;
+    }
+    
+    .color-palette {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+    
+    .color-box {
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      color: white;
+      font-weight: 600;
+    }
+    
+    .color-box span {
+      display: block;
+      font-size: 12px;
+      margin-top: 8px;
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 ConvoVault Logo Assets</h1>
+    
+    <!-- Logo Variations -->
+    <div class="section">
+      <h2>Logo Variations</h2>
+      
+      <div class="logo-preview">
+        <div class="preview-label">Full Logo (Light)</div>
+        <img src="logo-full.svg" alt="ConvoVault Full Logo" height="60">
+      </div>
+      
+      <div class="logo-preview dark">
+        <div class="preview-label" style="color: white;">Full Logo (Dark)</div>
+        <img src="logo-full.svg" alt="ConvoVault Full Logo" height="60" style="filter: brightness(0) invert(1);">
+      </div>
+      
+      <div class="logo-preview">
+        <div class="preview-label">Simple Logo</div>
+        <img src="logo-simple.svg" alt="ConvoVault Simple" height="50">
+      </div>
+      
+      <div class="logo-preview">
+        <div class="preview-label">Icon Only</div>
+        <img src="logo-icon.svg" alt="ConvoVault Icon" height="64">
+      </div>
+      
+      <div class="logo-preview">
+        <div class="preview-label">Favicon</div>
+        <img src="favicon.svg" alt="ConvoVault Favicon" height="32">
+      </div>
+    </div>
+    
+    <!-- Usage Examples -->
+    <div class="section">
+      <h2>HTML Usage</h2>
+      
+      <p style="margin-bottom: 15px; color: #6B7280;">Copy and paste these code snippets:</p>
+      
+      <h3 style="margin: 20px 0 10px 0; color: #374151;">Header Logo:</h3>
+      <code>&lt;img src="/assets/logo-full.svg" alt="ConvoVault" height="60"&gt;</code>
+      
+      <h3 style="margin: 20px 0 10px 0; color: #374151;">App Icon:</h3>
+      <code>&lt;img src="/assets/logo-icon.svg" alt="ConvoVault" width="64" height="64"&gt;</code>
+      
+      <h3 style="margin: 20px 0 10px 0; color: #374151;">Favicon (in &lt;head&gt;):</h3>
+      <code>&lt;link rel="icon" type="image/svg+xml" href="/assets/favicon.svg"&gt;</code>
+      
+      <h3 style="margin: 20px 0 10px 0; color: #374151;">Inline SVG (for React/Vue):</h3>
+      <code>import Logo from './assets/logo-simple.svg';</code>
+    </div>
+    
+    <!-- Color Palette -->
+    <div class="section">
+      <h2>Brand Colors</h2>
+      
+      <div class="color-palette">
+        <div class="color-box" style="background: #2563EB;">
+          Primary Blue
+          <span>#2563EB</span>
+        </div>
+        <div class="color-box" style="background: #06B6D4;">
+          Teal Accent
+          <span>#06B6D4</span>
+        </div>
+        <div class="color-box" style="background: #1E40AF;">
+          Dark Blue
+          <span>#1E40AF</span>
+        </div>
+        <div class="color-box" style="background: #F59E0B;">
+          Gold Accent
+          <span>#F59E0B</span>
+        </div>
+        <div class="color-box" style="background: #1F2937;">
+          Text Dark
+          <span>#1F2937</span>
+        </div>
+        <div class="color-box" style="background: #6B7280;">
+          Text Gray
+          <span>#6B7280</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Usage Guidelines -->
+    <div class="section">
+      <h2>Usage Guidelines</h2>
+      
+      <div style="line-height: 1.8; color: #4B5563;">
+        <h3 style="margin: 15px 0 10px 0; color: #374151;">✅ Do:</h3>
+        <ul style="margin-left: 20px;">
+          <li>Use the full logo on light backgrounds</li>
+          <li>Maintain proper spacing around the logo</li>
+          <li>Use SVG format for scalability</li>
+          <li>Keep colors consistent with brand palette</li>
+        </ul>
+        
+        <h3 style="margin: 25px 0 10px 0; color: #374151;">❌ Don't:</h3>
+        <ul style="margin-left: 20px;">
+          <li>Stretch or distort the logo</li>
+          <li>Change the colors or add effects</li>
+          <li>Use low-resolution versions</li>
+          <li>Place on busy backgrounds without proper contrast</li>
+        </ul>
+      </div>
+    </div>
+    
+    <!-- File Information -->
+    <div class="section">
+      <h2>File Sizes & Formats</h2>
+      
+      <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+        <thead>
+          <tr style="background: white; border-bottom: 2px solid #E5E7EB;">
+            <th style="padding: 12px; text-align: left; color: #374151;">File</th>
+            <th style="padding: 12px; text-align: left; color: #374151;">Dimensions</th>
+            <th style="padding: 12px; text-align: left; color: #374151;">Use Case</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 1px solid #E5E7EB;">
+            <td style="padding: 12px; color: #6B7280;">logo-full.svg</td>
+            <td style="padding: 12px; color: #6B7280;">240x60</td>
+            <td style="padding: 12px; color: #6B7280;">Website header, documentation</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E7EB;">
+            <td style="padding: 12px; color: #6B7280;">logo-icon.svg</td>
+            <td style="padding: 12px; color: #6B7280;">64x64</td>
+            <td style="padding: 12px; color: #6B7280;">App icon, marketplace listing</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #E5E7EB;">
+            <td style="padding: 12px; color: #6B7280;">logo-simple.svg</td>
+            <td style="padding: 12px; color: #6B7280;">200x50</td>
+            <td style="padding: 12px; color: #6B7280;">Compact spaces, mobile</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px; color: #6B7280;">favicon.svg</td>
+            <td style="padding: 12px; color: #6B7280;">32x32</td>
+            <td style="padding: 12px; color: #6B7280;">Browser tab icon</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
+

@@ -24,11 +24,16 @@ router.post('/decrypt-user-data', async (req, res) => {
       });
     }
 
-    // Decrypt using Shared Secret
-    const sharedSecret = process.env.GHL_APP_SHARED_SECRET;
-    
+    // Each GHL marketplace app has its OWN shared secret; the premium secret cannot decrypt a
+    // lite-app SSO payload. The UI tells us which app it is via the `X-App` header ('lite' for
+    // the "Export Messages" app), so we pick the matching secret.
+    const isLite = String(req.get('X-App') || req.body?.app || '').toLowerCase() === 'lite';
+    const sharedSecret = isLite
+      ? process.env.GHL_LITE_APP_SHARED_SECRET
+      : process.env.GHL_APP_SHARED_SECRET;
+
     if (!sharedSecret) {
-      logger.error('Shared Secret not configured');
+      logger.error('Shared Secret not configured', { isLite });
       return res.status(500).json({
         success: false,
         error: 'Shared Secret not configured'

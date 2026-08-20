@@ -99,8 +99,16 @@ const installationSchema = new mongoose.Schema({
   // Raw webhook data (for debugging)
   rawWebhookData: {
     type: mongoose.Schema.Types.Mixed
+  },
+
+  // True when this record belongs to the "Export Messages" (lite) app rather than premium
+  // convoVault. Used to segregate installs/exports/billing per app in the shared DB.
+  lite: {
+    type: Boolean,
+    default: false,
+    index: true
   }
-  
+
 }, {
   timestamps: true
 });
