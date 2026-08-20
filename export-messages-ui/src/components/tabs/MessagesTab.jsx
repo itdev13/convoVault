@@ -385,22 +385,6 @@ export default function MessagesTab() {
           >
               Export Messages
           </Button>
-            <Tooltip
-              title={
-                <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                  <strong>Pay-per-use export</strong>
-                  <br />
-                  1 cent per text message, 3 cents per email. Volume discounts up to 70%!
-                </div>
-              }
-              placement="left"
-            >
-              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center cursor-help">
-                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </Tooltip>
           </div>
         </div>
       </div>
@@ -432,7 +416,7 @@ export default function MessagesTab() {
         {/* Chip row: always-visible common controls + active optional chips + Search */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Channel pill */}
-          <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full pl-3 pr-1 py-0.5 hover:border-indigo-300 transition-colors">
+          <div className="inline-flex items-center gap-1.5 bg-slate-100 rounded-full pl-3 pr-1 py-1 ring-1 ring-transparent hover:ring-indigo-200 transition-all">
             <span className="text-xs font-semibold text-slate-500">Channel</span>
             <Select
               value={filters.channel}
@@ -456,7 +440,7 @@ export default function MessagesTab() {
           </div>
 
           {/* Start Date pill */}
-          <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full pl-3 pr-1 py-0.5 hover:border-indigo-300 transition-colors">
+          <div className="inline-flex items-center gap-1.5 bg-slate-100 rounded-full pl-3 pr-1 py-1 ring-1 ring-transparent hover:ring-indigo-200 transition-all">
             <span className="text-xs font-semibold text-slate-500">From</span>
             <DatePicker
               value={filters.startDate ? dayjs(filters.startDate) : null}
@@ -469,7 +453,7 @@ export default function MessagesTab() {
           </div>
 
           {/* End Date pill */}
-          <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full pl-3 pr-1 py-0.5 hover:border-indigo-300 transition-colors">
+          <div className="inline-flex items-center gap-1.5 bg-slate-100 rounded-full pl-3 pr-1 py-1 ring-1 ring-transparent hover:ring-indigo-200 transition-all">
             <span className="text-xs font-semibold text-slate-500">To</span>
             <DatePicker
               value={filters.endDate ? dayjs(filters.endDate) : null}
@@ -482,7 +466,7 @@ export default function MessagesTab() {
           </div>
 
           {/* Page Size pill */}
-          <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full pl-3 pr-1 py-0.5 hover:border-indigo-300 transition-colors">
+          <div className="inline-flex items-center gap-1.5 bg-slate-100 rounded-full pl-3 pr-1 py-1 ring-1 ring-transparent hover:ring-indigo-200 transition-all">
             <span className="text-xs font-semibold text-slate-500">Show</span>
             <Select
               value={filters.limit}
@@ -502,7 +486,7 @@ export default function MessagesTab() {
 
           {/* Active optional filter chips */}
           {activeFilters.includes('contact') && (
-            <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-full pl-3 pr-1 py-0.5">
+            <div className="inline-flex items-center gap-1 bg-indigo-50 rounded-full pl-3 pr-1 py-1">
               <span className="text-xs font-semibold text-indigo-600">Contact</span>
               <Select
                 showSearch
@@ -545,7 +529,7 @@ export default function MessagesTab() {
           )}
 
           {activeFilters.includes('contactId') && (
-            <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-full pl-3 pr-1 py-0.5">
+            <div className="inline-flex items-center gap-1 bg-indigo-50 rounded-full pl-3 pr-1 py-1">
               <span className="text-xs font-semibold text-indigo-600">Contact ID</span>
               <Input
                 value={filters.contactId}
@@ -570,7 +554,7 @@ export default function MessagesTab() {
           )}
 
           {activeFilters.includes('user') && (
-            <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-full pl-3 pr-1 py-0.5">
+            <div className="inline-flex items-center gap-1 bg-indigo-50 rounded-full pl-3 pr-1 py-1">
               <span className="text-xs font-semibold text-indigo-600">User</span>
               <Select
                 showSearch
@@ -613,7 +597,7 @@ export default function MessagesTab() {
           )}
 
           {activeFilters.includes('conversationId') && (
-            <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-full pl-3 pr-1 py-0.5">
+            <div className="inline-flex items-center gap-1 bg-indigo-50 rounded-full pl-3 pr-1 py-1">
               <span className="text-xs font-semibold text-indigo-600">Conversation ID</span>
               <Input
                 value={filters.conversationId}
