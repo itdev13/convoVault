@@ -55,7 +55,7 @@ export default function Header({ activeTab = 'messages', onNavigate = () => {} }
 
   return (
     <header className="bg-indigo-700 border-b border-indigo-800/40 shadow-sm">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
+      <div className="w-full px-6 lg:px-10 h-16 flex items-center justify-between gap-4">
         {/* Brand lockup — single clean line */}
         <button
           onClick={() => onNavigate('messages')}

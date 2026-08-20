@@ -59,6 +59,8 @@ export default function MessagesTab() {
   const [userOptions, setUserOptions] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const userSearchTimer = useRef(null);
+  // Which optional filter chips are currently active/visible
+  const [activeFilters, setActiveFilters] = useState([]);
 
   const handleUserSearch = useCallback((searchText) => {
     if (userSearchTimer.current) clearTimeout(userSearchTimer.current);
@@ -415,26 +417,31 @@ export default function MessagesTab() {
         />
       )}
 
-      {/* Filters Card */}
-      <div className="bg-slate-50 border-l-4 border-indigo-500 rounded-r-xl rounded-l-md p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-100 px-2.5 py-1 rounded-full">
+      {/* Filters Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-indigo-700">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
             </svg>
             Filters
           </span>
-          <span className="text-xs text-slate-500">Narrow down what you export</span>
+          <span className="text-xs text-slate-400">Narrow down what you export</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Channel</label>
+
+        {/* Chip row: always-visible common controls + active optional chips + Search */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Channel pill */}
+          <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full pl-3 pr-1 py-0.5 hover:border-indigo-300 transition-colors">
+            <span className="text-xs font-semibold text-slate-500">Channel</span>
             <Select
               value={filters.channel}
               onChange={(value) => setFilters({ ...filters, channel: value })}
-              className="w-full"
-              size="large"
+              variant="borderless"
+              size="small"
+              popupMatchSelectWidth={false}
               placeholder="All Channels"
+              className="min-w-[130px]"
               options={[
                 { value: '', label: 'All Channels Except Email' },
                 { value: 'SMS', label: 'SMS' },
@@ -448,110 +455,41 @@ export default function MessagesTab() {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+          {/* Start Date pill */}
+          <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full pl-3 pr-1 py-0.5 hover:border-indigo-300 transition-colors">
+            <span className="text-xs font-semibold text-slate-500">From</span>
             <DatePicker
               value={filters.startDate ? dayjs(filters.startDate) : null}
               onChange={(date) => setFilters({ ...filters, startDate: date ? date.format('YYYY-MM-DD') : '' })}
-              className="w-full"
-              size="large"
-              placeholder="Select start date"
+              variant="borderless"
+              size="small"
+              className="w-[120px]"
+              placeholder="Start date"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+          {/* End Date pill */}
+          <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full pl-3 pr-1 py-0.5 hover:border-indigo-300 transition-colors">
+            <span className="text-xs font-semibold text-slate-500">To</span>
             <DatePicker
               value={filters.endDate ? dayjs(filters.endDate) : null}
               onChange={(date) => setFilters({ ...filters, endDate: date ? date.format('YYYY-MM-DD') : '' })}
-              className="w-full"
-              size="large"
-              placeholder="Select end date"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Contact</label>
-            <Select
-              showSearch
-              value={filters.contactId || undefined}
-              onChange={(val) => setFilters({ ...filters, contactId: val || '' })}
-              onSearch={handleContactSearch}
-              placeholder="Search contacts..."
-              allowClear
-              loading={contactsLoading}
-              filterOption={false}
-              notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
-              className="w-full"
-              size="large"
-            >
-              {contactOptions.map(c => (
-                <Select.Option key={c.id} value={c.id}>
-                  <div className="flex flex-col leading-tight">
-                    <span className="text-sm">{c.name || '(No name)'}</span>
-                    {(c.email || c.phone) && (
-                      <span className="text-xs text-gray-400">{c.email || c.phone}</span>
-                    )}
-                  </div>
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Contact ID</label>
-            <Input
-              value={filters.contactId}
-              onChange={(e) => setFilters({ ...filters, contactId: e.target.value })}
-              placeholder="Paste contact ID..."
-              size="large"
+              variant="borderless"
+              size="small"
+              className="w-[120px]"
+              placeholder="End date"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">User</label>
-            <Select
-              showSearch
-              value={filters.userId || undefined}
-              onChange={(val) => setFilters({ ...filters, userId: val || '' })}
-              onSearch={handleUserSearch}
-              placeholder="Search users..."
-              allowClear
-              loading={usersLoading}
-              filterOption={false}
-              notFoundContent={usersLoading ? 'Searching...' : 'No users found'}
-              className="w-full"
-              size="large"
-            >
-              {userOptions.map(u => (
-                <Select.Option key={u.id} value={u.id}>
-                  <div className="flex flex-col leading-tight">
-                    <span className="text-sm">{u.name}</span>
-                    {u.email && (
-                      <span className="text-xs text-gray-400">{u.email}</span>
-                    )}
-                  </div>
-                </Select.Option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Conversation ID</label>
-            <Input
-              value={filters.conversationId}
-              onChange={(e) => setFilters({ ...filters, conversationId: e.target.value })}
-              placeholder="Filter by conversation ID"
-              size="large"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Page Size</label>
+          {/* Page Size pill */}
+          <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full pl-3 pr-1 py-0.5 hover:border-indigo-300 transition-colors">
+            <span className="text-xs font-semibold text-slate-500">Show</span>
             <Select
               value={filters.limit}
               onChange={(value) => setFilters({ ...filters, limit: value })}
-              className="w-full"
-              size="large"
+              variant="borderless"
+              size="small"
+              popupMatchSelectWidth={false}
               options={[
                 { value: 20, label: '20' },
                 { value: 50, label: '50' },
@@ -562,7 +500,162 @@ export default function MessagesTab() {
             />
           </div>
 
-          <div className="flex items-end">
+          {/* Active optional filter chips */}
+          {activeFilters.includes('contact') && (
+            <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-full pl-3 pr-1 py-0.5">
+              <span className="text-xs font-semibold text-indigo-600">Contact</span>
+              <Select
+                showSearch
+                value={filters.contactId || undefined}
+                onChange={(val) => setFilters({ ...filters, contactId: val || '' })}
+                onSearch={handleContactSearch}
+                placeholder="Search contacts..."
+                allowClear
+                loading={contactsLoading}
+                filterOption={false}
+                notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
+                variant="borderless"
+                size="small"
+                popupMatchSelectWidth={false}
+                className="min-w-[150px]"
+              >
+                {contactOptions.map(c => (
+                  <Select.Option key={c.id} value={c.id}>
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-sm">{c.name || '(No name)'}</span>
+                      {(c.email || c.phone) && (
+                        <span className="text-xs text-gray-400">{c.email || c.phone}</span>
+                      )}
+                    </div>
+                  </Select.Option>
+                ))}
+              </Select>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveFilters(activeFilters.filter(f => f !== 'contact'));
+                  setFilters({ ...filters, contactId: '' });
+                }}
+                className="flex items-center justify-center w-5 h-5 rounded-full text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                aria-label="Remove Contact filter"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {activeFilters.includes('contactId') && (
+            <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-full pl-3 pr-1 py-0.5">
+              <span className="text-xs font-semibold text-indigo-600">Contact ID</span>
+              <Input
+                value={filters.contactId}
+                onChange={(e) => setFilters({ ...filters, contactId: e.target.value })}
+                placeholder="Paste contact ID..."
+                variant="borderless"
+                size="small"
+                className="w-[150px]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveFilters(activeFilters.filter(f => f !== 'contactId'));
+                  setFilters({ ...filters, contactId: '' });
+                }}
+                className="flex items-center justify-center w-5 h-5 rounded-full text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                aria-label="Remove Contact ID filter"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {activeFilters.includes('user') && (
+            <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-full pl-3 pr-1 py-0.5">
+              <span className="text-xs font-semibold text-indigo-600">User</span>
+              <Select
+                showSearch
+                value={filters.userId || undefined}
+                onChange={(val) => setFilters({ ...filters, userId: val || '' })}
+                onSearch={handleUserSearch}
+                placeholder="Search users..."
+                allowClear
+                loading={usersLoading}
+                filterOption={false}
+                notFoundContent={usersLoading ? 'Searching...' : 'No users found'}
+                variant="borderless"
+                size="small"
+                popupMatchSelectWidth={false}
+                className="min-w-[150px]"
+              >
+                {userOptions.map(u => (
+                  <Select.Option key={u.id} value={u.id}>
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-sm">{u.name}</span>
+                      {u.email && (
+                        <span className="text-xs text-gray-400">{u.email}</span>
+                      )}
+                    </div>
+                  </Select.Option>
+                ))}
+              </Select>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveFilters(activeFilters.filter(f => f !== 'user'));
+                  setFilters({ ...filters, userId: '' });
+                }}
+                className="flex items-center justify-center w-5 h-5 rounded-full text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                aria-label="Remove User filter"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {activeFilters.includes('conversationId') && (
+            <div className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 rounded-full pl-3 pr-1 py-0.5">
+              <span className="text-xs font-semibold text-indigo-600">Conversation ID</span>
+              <Input
+                value={filters.conversationId}
+                onChange={(e) => setFilters({ ...filters, conversationId: e.target.value })}
+                placeholder="Filter by conversation ID"
+                variant="borderless"
+                size="small"
+                className="w-[170px]"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveFilters(activeFilters.filter(f => f !== 'conversationId'));
+                  setFilters({ ...filters, conversationId: '' });
+                }}
+                className="flex items-center justify-center w-5 h-5 rounded-full text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                aria-label="Remove Conversation ID filter"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {/* "+ Add filter" chips for inactive optional filters */}
+          {[
+            { key: 'contact', label: 'Contact' },
+            { key: 'contactId', label: 'Contact ID' },
+            { key: 'user', label: 'User' },
+            { key: 'conversationId', label: 'Conversation ID' },
+          ].filter(o => !activeFilters.includes(o.key)).map(o => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => setActiveFilters([...activeFilters, o.key])}
+              className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 bg-white border border-dashed border-slate-300 rounded-full px-3 py-1.5 hover:text-indigo-600 hover:border-indigo-400 transition-colors"
+            >
+              <span className="text-sm leading-none">+</span> {o.label}
+            </button>
+          ))}
+
+          {/* Search button */}
+          <div className="ml-auto">
             <Button
               onClick={() => {
                 setAppliedFilters({...filters}); // Apply current filters (create new object)
@@ -571,8 +664,7 @@ export default function MessagesTab() {
                 setSearchTimestamp(Date.now()); // Force refetch even if filters unchanged
               }}
               type="primary"
-              size="large"
-              className="w-full"
+              size="middle"
               loading={isLoading}
               icon={
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
