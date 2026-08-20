@@ -30,22 +30,6 @@ export default function Header({ activeTab = 'messages', onNavigate = () => {} }
     window.location.href = `${window.location.pathname}?location_id=${newLocationId}&company_id=${ghlContext.companyId}&user_id=${ghlContext.userId}`;
   };
 
-  const openApiDocs = async () => {
-    try {
-      // Request temporary docs access token from backend
-      const { docsToken, userToken } = await docsAPI.getAccess();
-
-      // Open docs with short-lived docs token (t) and user's API token (ut)
-      // The docs token expires in 5 minutes, user token is for API testing
-      const docsUrl = `${API_DOCS_BASE_URL}?t=${docsToken}&ut=${encodeURIComponent(userToken)}`;
-      window.open(docsUrl, '_blank');
-
-    } catch (error) {
-      console.error('Error opening API docs:', error);
-      alert('Failed to access API documentation. Please try again.');
-    }
-  };
-
   // Header nav links drive the same view state the Dashboard uses. "Messages" is the
   // default/home view; Export History & Support are secondary destinations reached from here.
   const navLinks = [
@@ -112,17 +96,6 @@ export default function Header({ activeTab = 'messages', onNavigate = () => {} }
               );
             })}
           </nav>
-
-          {/* API Docs link */}
-          <button
-            onClick={openApiDocs}
-            className="flex items-center gap-1.5 px-3 h-9 rounded-md text-[13px] font-medium text-indigo-100/90 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-            </svg>
-            <span className="hidden sm:inline">API Docs</span>
-          </button>
 
           {/* Sub-Account Name */}
           {location?.name && (

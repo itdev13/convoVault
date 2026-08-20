@@ -71,7 +71,7 @@ export default function Dashboard() {
 
       {/* Single-page shell. Distinct from ExportKit: no top tab-card row — a centered content
           column with a light section heading, then one card holding the active view. */}
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="w-full px-6 lg:px-10 py-8">
         {!showConversationView && (
           <div className="mb-6">
             <h2 className="text-xl font-semibold tracking-tight text-slate-900">{meta.title}</h2>
