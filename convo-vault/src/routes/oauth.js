@@ -75,8 +75,9 @@ router.get('/callback', async (req, res) => {
   }
 
   // App identity: the lite "Export Messages" GHL app is configured with a redirect_uri of
-  // .../api/oauth/callback?app=lite, so the query param is the authoritative signal (GHL controls
-  // the authorize URL, so we can't rely on `state`). We still allow app:'lite' in state as a fallback.
+  // .../oauth/callback?app=lite (the router is mounted at /oauth, NOT /api/oauth), so the query
+  // param is the authoritative signal (GHL controls the authorize URL, so we can't rely on `state`).
+  // We still allow app:'lite' in state as a fallback.
   let referralCode = null;
   let referralCampaign = null;
   let isLite = app === 'lite'; // true when the install came from the lite "Export Messages" app
@@ -100,8 +101,26 @@ router.get('/callback', async (req, res) => {
   // App-aware branding for the callback pages. Lite = "Export Messages" (own logo, no website
   // button); premium = "ExportKit". Referenced by all three HTML pages below.
   const brand = isLite
-    ? { name: 'Export Messages', icon: '/assets/export-messages-icon.png', website: null }
-    : { name: 'ExportKit', icon: '/assets/icon.png', website: 'https://exportkit.vaultsuite.store' };
+    ? {
+        name: 'Export Messages', icon: '/assets/export-messages-icon.png', website: null, poweredBy: false,
+        // Lite "Export Messages" identity: indigo accents on a soft indigo page.
+        pageBg: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
+        boxBg: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
+        boxBorder: '#4f46e5',
+        heading: '#3730a3',
+        accent: '#4f46e5',
+        linkColor: '#4f46e5'
+      }
+    : {
+        name: 'ExportKit', icon: '/assets/icon.png', website: 'https://exportkit.vaultsuite.store', poweredBy: true,
+        // Premium "ExportKit": EXACT current hardcoded colors so the page renders byte-for-byte identically.
+        pageBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        boxBg: 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)',
+        boxBorder: '#2563EB',
+        heading: '#1E40AF',
+        accent: '#2563EB',
+        linkColor: '#667eea'
+      };
 
   try {
     logger.info('Exchanging code for token...', { isLite });
@@ -298,15 +317,16 @@ router.get('/callback', async (req, res) => {
             align-items: center;
             height: 100vh;
             margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: ${brand.pageBg};
           }
           .container {
             text-align: center;
             background: white;
             padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            border-radius: ${isLite ? '18px' : '10px'};
+            box-shadow: ${isLite ? '0 12px 40px rgba(79,70,229,0.28)' : '0 4px 20px rgba(0,0,0,0.2)'};
             max-width: 500px;
+            ${isLite ? 'border-top: 5px solid #4f46e5;' : ''}
           }
           .success-icon {
             font-size: 64px;
@@ -333,14 +353,14 @@ router.get('/callback', async (req, res) => {
             margin: 8px 0;
           }
           .access-box {
-            background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+            background: ${brand.boxBg};
             padding: 20px;
             border-radius: 10px;
             margin: 20px 0;
-            border: 2px solid #2563EB;
+            border: 2px solid ${brand.boxBorder};
           }
           .access-box h3 {
-            color: #1E40AF;
+            color: ${brand.heading};
             font-size: 16px;
             margin-bottom: 12px;
           }
@@ -355,7 +375,7 @@ router.get('/callback', async (req, res) => {
             content: "→";
             position: absolute;
             left: 0;
-            color: #2563EB;
+            color: ${brand.accent};
             font-weight: bold;
           }
         </style>
@@ -365,7 +385,7 @@ router.get('/callback', async (req, res) => {
           <img src="${brand.icon}" alt="${brand.name}" width="80" height="80" style="margin-bottom: 12px;">
           <div style="margin-bottom: 16px;">
             <div style="font-size: 22px; font-weight: 700; color: #111827;">${brand.name}</div>
-            <div style="font-size: 11px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>
+            ${brand.poweredBy ? `<div style="font-size: 11px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>` : ""}
           </div>
           <h1>Connected Successfully!</h1>
           <p>${successMessage}</p>
@@ -376,7 +396,7 @@ router.get('/callback', async (req, res) => {
             <div class="access-box">
               <h3>🎯 How to Access ${brand.name}:</h3>
               <div class="step-instruction">Open your sub-account dashboard</div>
-              <div class="step-instruction">Look for <strong style="color: #2563EB;">"${brand.name}"</strong> in the left navigation menu</div>
+              <div class="step-instruction">Look for <strong style="color: ${brand.accent};">"${brand.name}"</strong> in the left navigation menu</div>
               <div class="step-instruction">Click to launch the app</div>
               <p style="color: #6B7280; font-size: 12px; margin-top: 12px; font-style: italic;">
                 💡 ${brand.name} will appear as a new menu item in your sub-account's left navigation menu
@@ -398,7 +418,7 @@ router.get('/callback', async (req, res) => {
           </div>
 
           ${brand.website ? `<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <a href="${brand.website}" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
+            <a href="${brand.website}" target="_blank" style="color: ${brand.linkColor}; text-decoration: none; font-size: 14px; font-weight: 600;">
               🌐 Visit ${brand.name} Website
             </a>
           </div>` : ''}
@@ -430,7 +450,7 @@ router.get('/callback', async (req, res) => {
               align-items: center;
               height: 100vh;
               margin: 0;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              background: ${brand.pageBg};
             }
             .container {
               text-align: center;
@@ -456,14 +476,14 @@ router.get('/callback', async (req, res) => {
               line-height: 1.6;
             }
             .highlight-box {
-              background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
+              background: ${brand.boxBg};
               padding: 25px;
               border-radius: 12px;
               margin: 25px 0;
-              border: 2px solid #2563EB;
+              border: 2px solid ${brand.boxBorder};
             }
             .highlight-box h3 {
-              color: #1E40AF;
+              color: ${brand.heading};
               font-size: 18px;
               margin: 0 0 15px 0;
             }
@@ -479,7 +499,7 @@ router.get('/callback', async (req, res) => {
               content: "→";
               position: absolute;
               left: 0;
-              color: #2563EB;
+              color: ${brand.accent};
               font-weight: bold;
               font-size: 18px;
             }
@@ -503,7 +523,7 @@ router.get('/callback', async (req, res) => {
             <img src="${brand.icon}" alt="${brand.name}" width="60" height="60" style="margin-bottom: 8px;">
             <div style="margin-bottom: 12px;">
               <div style="font-size: 18px; font-weight: 700; color: #111827;">${brand.name}</div>
-              <div style="font-size: 10px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>
+              ${brand.poweredBy ? `<div style="font-size: 10px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>` : ""}
             </div>
             <div class="icon">✅</div>
             <h1>Authorization Already Completed!</h1>
@@ -512,7 +532,7 @@ router.get('/callback', async (req, res) => {
             <div class="highlight-box">
               <h3>🎯 How to Access ${brand.name}:</h3>
               <div class="step">Open your account dashboard</div>
-              <div class="step">Find <strong style="color: #2563EB;">"${brand.name}"</strong> in the left sidebar menu</div>
+              <div class="step">Find <strong style="color: ${brand.accent};">"${brand.name}"</strong> in the left sidebar menu</div>
               <div class="step">Click to launch and start managing conversations</div>
             </div>
 
@@ -521,7 +541,7 @@ router.get('/callback', async (req, res) => {
             </div>
 
             ${brand.website ? `<div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-              <a href="${brand.website}" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; margin-bottom: 15px;">
+              <a href="${brand.website}" target="_blank" style="color: ${brand.linkColor}; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; margin-bottom: 15px;">
                 🌐 Visit ${brand.name} Website
               </a>
             </div>` : ''}
@@ -550,7 +570,7 @@ router.get('/callback', async (req, res) => {
             align-items: center;
             height: 100vh;
             margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: ${brand.pageBg};
           }
           .container {
             text-align: center;
@@ -590,7 +610,7 @@ router.get('/callback', async (req, res) => {
           <img src="${brand.icon}" alt="${brand.name}" width="60" height="60" style="margin-bottom: 8px;">
           <div style="margin-bottom: 12px;">
             <div style="font-size: 18px; font-weight: 700; color: #111827;">${brand.name}</div>
-            <div style="font-size: 10px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>
+            ${brand.poweredBy ? `<div style="font-size: 10px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>` : ""}
           </div>
           <div class="icon">⚠️</div>
           <h1>Connection Failed</h1>
