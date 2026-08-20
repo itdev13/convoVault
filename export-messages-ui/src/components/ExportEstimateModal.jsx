@@ -322,7 +322,7 @@ export default function ExportEstimateModal({
             if (tiers.length === 0) return null;
             const topPct = Math.max(...tiers.map(t => t.pct));
             return (
-              <div className="relative overflow-hidden rounded-lg bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 p-3 shadow-md">
+              <div className="relative overflow-hidden rounded-lg bg-gradient-to-br from-indigo-500 via-indigo-600 to-indigo-700 p-3 shadow-md">
                 <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/15 rounded-full blur-2xl pointer-events-none"></div>
                 <div className="absolute -bottom-10 -left-6 w-32 h-32 bg-teal-300/20 rounded-full blur-3xl pointer-events-none"></div>
                 <div className="relative flex items-start gap-3">
@@ -331,14 +331,14 @@ export default function ExportEstimateModal({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-[10px] font-bold bg-white text-emerald-700 px-1.5 py-0.5 rounded uppercase tracking-wider">Tier unlocked</span>
+                      <span className="text-[10px] font-bold bg-white text-indigo-700 px-1.5 py-0.5 rounded uppercase tracking-wider">Tier unlocked</span>
                       <span className="text-white font-bold text-sm">You're saving up to {topPct}%</span>
                     </div>
                     <ul className="space-y-0.5">
                       {tiers.map((t, i) => (
-                        <li key={i} className="text-emerald-50 text-xs flex items-center gap-1.5">
+                        <li key={i} className="text-indigo-50 text-xs flex items-center gap-1.5">
                           <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                          <span><strong className="text-white">{t.label}</strong> — {t.detail} <span className="text-emerald-100">({t.pct}% off)</span></span>
+                          <span><strong className="text-white">{t.label}</strong> — {t.detail} <span className="text-indigo-100">({t.pct}% off)</span></span>
                         </li>
                       ))}
                     </ul>
@@ -596,7 +596,6 @@ export default function ExportEstimateModal({
                   <div className="flex justify-between items-center">
                     <span className="text-gray-700">Price per Credit</span>
                     <span className="font-medium flex items-center gap-2">
-                      <span className="line-through text-gray-400 text-xs">{formatUnitPrice(OLD_UNIT_PRICES.conversations)}</span>
                       <span className="text-indigo-600">{formatUnitPrice(getPricePerCredit(estimate))}</span>
                     </span>
                   </div>
@@ -738,7 +737,7 @@ export default function ExportEstimateModal({
               )}
 
               {estimate.discountPercent > 0 && (
-                <div className="flex justify-between items-center text-green-600">
+                <div className="flex justify-between items-center text-indigo-600">
                   <span className="flex items-center gap-1">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
@@ -758,7 +757,7 @@ export default function ExportEstimateModal({
 
           {/* Savings Banner - Show prominently when discount applied */}
           {estimate.discountPercent > 0 && (
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg px-4 py-2 text-white">
+            <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-lg px-4 py-2 text-white">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
@@ -789,10 +788,10 @@ export default function ExportEstimateModal({
                 <span className="text-xs text-gray-600 font-medium flex items-center gap-2">
                   {estimate.discountPercent > 0 ? (
                     <>
-                      <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-4 h-4 text-indigo-500" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      <span>Your Tier: <strong className="text-green-600">{estimate.discountPercent}% Discount</strong></span>
+                      <span>Your Tier: <strong className="text-indigo-600">{estimate.discountPercent}% Discount</strong></span>
                     </>
                   ) : (
                     'View Volume Discount Tiers'
@@ -807,7 +806,7 @@ export default function ExportEstimateModal({
                     key={tier.discount}
                     className={`flex justify-between p-1.5 rounded ${
                       estimate.discountPercent === tier.discount
-                        ? 'bg-green-100 text-green-700 font-medium'
+                        ? 'bg-indigo-100 text-indigo-700 font-medium'
                         : 'text-gray-500'
                     }`}
                   >
