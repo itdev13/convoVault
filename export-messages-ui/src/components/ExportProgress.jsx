@@ -43,57 +43,56 @@ export default function ExportProgress({ job, onDownload, onRefresh }) {
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h4 className="font-semibold text-gray-800 capitalize">
-              {job.exportType} Export
-            </h4>
-            <Tag className="uppercase text-xs">{job.format || 'csv'}</Tag>
+    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+      {/* Header — thin indigo-tinted strip so it reads as a distinct card */}
+      <div className="flex justify-between items-center px-5 py-3 bg-slate-50 border-b border-slate-100">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4.5 h-4.5 text-indigo-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
           </div>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Started {formatDate(job.startedAt || job.createdAt)}
-          </p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h4 className="font-semibold text-slate-800 capitalize truncate">{job.exportType} Export</h4>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500 bg-slate-200/70 px-1.5 py-0.5 rounded">{job.format || 'csv'}</span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">Started {formatDate(job.startedAt || job.createdAt)}</p>
+          </div>
         </div>
-        <Tag color={statusConfig.color}>
+        <Tag color={statusConfig.color} className="rounded-full">
           {statusConfig.icon} {statusConfig.text}
         </Tag>
       </div>
 
+      <div className="p-5">
       {/* Progress Bar (for processing status) */}
       {job.status === 'processing' && (
         <div className="mb-4">
           <Progress
             percent={job.progress?.percent || 0}
             status="active"
-            strokeColor={{
-              '0%': '#10B981',
-              '100%': '#059669'
-            }}
+            strokeColor={{ '0%': '#818cf8', '100%': '#4f46e5' }}
             trailColor="#E5E7EB"
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             {job.progress?.processed?.toLocaleString() || 0} / {job.progress?.total?.toLocaleString() || 0} items processed
           </p>
         </div>
       )}
 
-      {/* Completed State */}
+      {/* Completed State — distinct success panel: big count, download as focal CTA */}
       {job.status === 'completed' && job.downloadUrl && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">Items Exported</span>
-            <span className="font-medium text-gray-800">
-              {job.progress?.processed?.toLocaleString() || job.totalItems?.toLocaleString() || '-'}
-            </span>
+        <div className="rounded-xl bg-indigo-50/60 border border-indigo-100 p-5 text-center">
+          <div className="text-4xl font-extrabold text-indigo-600 leading-none">
+            {job.progress?.processed?.toLocaleString() || job.totalItems?.toLocaleString() || '-'}
           </div>
+          <div className="text-xs font-medium uppercase tracking-wide text-indigo-500 mt-1.5">Messages exported</div>
 
           <Button
             type="primary"
             onClick={handleDownload}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700"
+            className="mt-4 w-full h-11 bg-indigo-600 hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700 rounded-lg shadow-sm"
             icon={
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -104,7 +103,7 @@ export default function ExportProgress({ job, onDownload, onRefresh }) {
           </Button>
 
           {job.downloadUrlExpiresAt && (
-            <p className="text-xs text-gray-500 text-center">
+            <p className="text-[11px] text-slate-400 mt-2">
               Link expires {formatDate(job.downloadUrlExpiresAt)}
             </p>
           )}
@@ -177,6 +176,7 @@ export default function ExportProgress({ job, onDownload, onRefresh }) {
           </Tooltip>
         </div>
       )}
+      </div>
     </div>
   );
 }
