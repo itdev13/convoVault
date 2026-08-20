@@ -100,7 +100,12 @@ async function handleInstall(data) {
     whitelabelDetails,
     companyName
   } = data;
-  
+
+  // Which app is this install from? The webhook's appId identifies the marketplace app.
+  // Lite ("Export Messages") installs carry GHL_LITE_APP_ID → stamp lite:true so the record
+  // is attributed to the lite app (and its appId is preserved as-is from the payload).
+  const isLite = !!process.env.GHL_LITE_APP_ID && appId === process.env.GHL_LITE_APP_ID;
+
   try {
     // Check if installation already exists
     const query = locationId 
@@ -123,7 +128,8 @@ async function handleInstall(data) {
       installation.companyName = companyName || installation.companyName;
       installation.rawWebhookData = data;
       installation.installedAt = new Date();
-      
+      installation.lite = isLite;
+
       await installation.save();
       
       logger.info('✅ Installation updated', { installationId: installation._id });
@@ -143,9 +149,10 @@ async function handleInstall(data) {
         companyName,
         status: 'active',
         installedAt: new Date(),
-        rawWebhookData: data
+        rawWebhookData: data,
+        lite: isLite
       });
-      
+
       await installation.save();
       
       logger.info('✅ New installation created', { 
