@@ -175,21 +175,28 @@ export default function ExportTab() {
   return (
     <div>
       {/* Export History */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Export History
-            {totalItems > 0 && (
-              <span className="text-xs text-gray-400 font-normal">({totalItems} total)</span>
-            )}
-          </h3>
+      <div className="bg-white border border-solid border-slate-200 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                Export History
+                {totalItems > 0 && (
+                  <span className="text-xs text-slate-400 font-normal">({totalItems} total)</span>
+                )}
+              </h3>
+              <p className="text-xs text-slate-500">Your recent exports and download links</p>
+            </div>
+          </div>
           <button
             onClick={() => loadExportHistory(currentPage)}
             disabled={historyLoading}
-            className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
+            className="text-xs font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50 px-3 py-1.5 rounded-lg border border-solid border-slate-200 hover:bg-indigo-50 transition-colors"
           >
             <svg className={`w-4 h-4 ${historyLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -199,16 +206,16 @@ export default function ExportTab() {
         </div>
 
         {historyLoading && exportHistory.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">Loading...</div>
+          <div className="text-center py-8 text-slate-500">Loading...</div>
         ) : exportHistory.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
             </div>
-            <h4 className="text-lg font-semibold text-gray-700 mb-2">No Exports Yet</h4>
-            <p className="text-sm text-gray-500 max-w-xs">
+            <h4 className="text-lg font-semibold text-slate-800 mb-2">No Exports Yet</h4>
+            <p className="text-sm text-slate-500 max-w-xs">
               You haven't exported any data yet. Go to the Messages or Conversations tab to start an export.
             </p>
           </div>
@@ -224,33 +231,33 @@ export default function ExportTab() {
                 return (
                   <div
                     key={job.jobId}
-                    className="p-4 bg-gray-50 rounded-lg border border-gray-100"
+                    className="p-4 bg-white rounded-xl border border-solid border-slate-200 shadow-sm hover:border-slate-300 transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         {/* Header row */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-gray-800 capitalize">
+                          <span className="font-semibold text-slate-900 capitalize">
                             {job.exportType} Export
                           </span>
-                          <span className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded uppercase">
+                          <span className="text-xs font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md uppercase tracking-wide">
                             {job.format || 'csv'}
                           </span>
                         </div>
 
                         {/* Date and items */}
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs text-slate-500 mt-1">
                           {new Date(job.createdAt).toLocaleDateString()} at {new Date(job.createdAt).toLocaleTimeString()} • {job.totalItems?.toLocaleString()} items
                         </div>
 
                         {/* Applied Filters */}
                         {appliedFilters.length > 0 && (
                           <div className="flex items-center gap-2 mt-2 flex-wrap">
-                            <span className="text-xs text-gray-400">Filters:</span>
+                            <span className="text-xs text-slate-400">Filters:</span>
                             {appliedFilters.map((filter, idx) => (
                               <span
                                 key={idx}
-                                className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-100"
+                                className="text-xs font-medium px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full border border-solid border-slate-200"
                               >
                                 {filter.label}: {filter.value}
                               </span>
@@ -261,7 +268,7 @@ export default function ExportTab() {
                         {/* Progress bar for processing jobs */}
                         {isProcessing && (
                           <div className="mt-2">
-                            <div className="flex items-center justify-between text-xs text-blue-600 mb-1">
+                            <div className="flex items-center justify-between text-xs text-indigo-600 mb-1">
                               <div className="flex items-center gap-2">
                                 <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -272,7 +279,7 @@ export default function ExportTab() {
                               <button
                                 onClick={() => refreshJobStatus(job.jobId)}
                                 disabled={isRefreshing}
-                                className="text-blue-600 hover:text-blue-700 disabled:opacity-50"
+                                className="text-indigo-600 hover:text-indigo-700 disabled:opacity-50"
                               >
                                 {isRefreshing ? (
                                   <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -311,14 +318,14 @@ export default function ExportTab() {
                       <div className="flex items-center gap-2 ml-4">
                         {job.status === 'completed' ? (
                           urlExpired ? (
-                            <span className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700">
+                            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
                               Expired
                             </span>
                           ) : (
                             <button
                               onClick={() => handleDownload(job.jobId)}
                               disabled={downloadingJobId === job.jobId}
-                              className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 flex items-center gap-1 disabled:bg-gray-400"
+                              className="px-3.5 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-indigo-700 flex items-center gap-1.5 disabled:bg-slate-300 transition-colors"
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -327,11 +334,11 @@ export default function ExportTab() {
                             </button>
                           )
                         ) : (
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            job.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                            job.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                          <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${
+                            job.status === 'processing' ? 'bg-indigo-100 text-indigo-700' :
+                            job.status === 'pending' ? 'bg-amber-100 text-amber-700' :
                             job.status === 'failed' ? 'bg-red-100 text-red-700' :
-                            'bg-gray-100 text-gray-600'
+                            'bg-slate-100 text-slate-600'
                           }`}>
                             {job.status}
                           </span>

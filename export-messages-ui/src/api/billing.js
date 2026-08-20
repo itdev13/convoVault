@@ -8,7 +8,7 @@ export const billingAPI = {
    * @param {Object} filters - Export filters { channel, startDate, endDate, contactId }
    */
   getEstimate: async (locationId, exportType, exportFilters = {}) => {
-    const response = await apiClient.post('/billing/estimate', {
+    const response = await apiClient.post('/billing-lite/estimate', {
       locationId,
       exportType,
       filters:exportFilters
@@ -24,7 +24,7 @@ export const billingAPI = {
    * @param {string} notificationEmail - Email for notification (optional)
    */
   chargeAndExport: async (locationId, exportType, format, filters = {}, notificationEmail = null) => {
-    const response = await apiClient.post('/billing/charge-and-export', {
+    const response = await apiClient.post('/billing-lite/charge-and-export', {
       locationId,
       exportType,
       format,
@@ -40,7 +40,7 @@ export const billingAPI = {
    * @param {string} locationId - Location ID (for verification)
    */
   getExportStatus: async (jobId, locationId) => {
-    const response = await apiClient.get(`/billing/export-status/${jobId}`, {
+    const response = await apiClient.get(`/billing-lite/export-status/${jobId}`, {
       params: { locationId }
     });
     return response;
@@ -54,7 +54,7 @@ export const billingAPI = {
    * @param {string} locationId - Location ID (for verification)
    */
   getDownloadUrl: async (jobId, locationId) => {
-    const response = await apiClient.get(`/billing/download/${jobId}`, {
+    const response = await apiClient.get(`/billing-lite/download/${jobId}`, {
       params: { locationId }
     });
     return response;
@@ -67,7 +67,7 @@ export const billingAPI = {
    * @param {number} limit - Max number of jobs per page (default 10)
    */
   getExportHistory: async (locationId, page = 1, limit = 10) => {
-    const response = await apiClient.get('/billing/export-history', {
+    const response = await apiClient.get('/billing-lite/export-history', {
       params: { locationId, page, limit }
     });
     return response;

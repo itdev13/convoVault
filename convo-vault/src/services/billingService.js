@@ -465,7 +465,10 @@ class BillingService {
    * @param {Array} meterCharges - Array of { meterId, qty, description }
    * @returns {Object} Charge result with charge IDs
    */
-  async chargeWallet(companyId, accessToken, meterCharges, locationId, transactionId, finalAmount) {
+  async chargeWallet(companyId, accessToken, meterCharges, locationId, transactionId, finalAmount, appId = null) {
+    // appId defaults to the premium app; the lite ("Export Messages") charge path passes its own
+    // GHL_LITE_APP_ID so charges bill the correct marketplace app.
+    const chargeAppId = appId || process.env.GHL_APP_ID || "694f93f8a6babf0c821b1356";
     // Look up referral code for this location (non-blocking)
     let referralCode = null;
     try {
@@ -524,7 +527,7 @@ class BillingService {
             meterId: charge.meterId,
             units: charge.qty,
             price: Number((finalAmount/charge.qty).toFixed(4)),
-            appId: process.env.GHL_APP_ID || "694f93f8a6babf0c821b1356",
+            appId: chargeAppId,
             eventId: transactionId,
             locationId: locationId,
             description: "Exported Data " + "_" + new Date().toDateString()

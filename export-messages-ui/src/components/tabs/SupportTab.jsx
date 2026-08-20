@@ -127,24 +127,24 @@ export default function SupportTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+        <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center shadow-sm ring-1 ring-indigo-500/20">
           <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
           </svg>
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Support</h2>
-          <p className="text-sm text-gray-500">Need help? Send us a message and we'll get back to you</p>
+          <h2 className="text-2xl font-bold text-slate-900">Support</h2>
+          <p className="text-sm text-slate-500">Need help? Send us a message and we'll get back to you</p>
         </div>
       </div>
 
       {/* Support Form */}
-      <div className="bg-white border-1 border-solid border-gray-200 rounded-xl p-6 shadow-sm">
+      <div className="bg-white border border-solid border-slate-200 rounded-2xl p-6 shadow-sm">
         <div className="space-y-4">
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Your Name <span className="text-gray-400">(Optional)</span>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Your Name <span className="text-slate-400">(Optional)</span>
             </label>
             <Input
               value={formData.name}
@@ -156,7 +156,7 @@ export default function SupportTab() {
 
           {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               Email Address <span className="text-red-500">*</span>
             </label>
             <Input
@@ -185,7 +185,7 @@ export default function SupportTab() {
 
           {/* Subject */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               Subject <span className="text-red-500">*</span>
             </label>
             <Input
@@ -199,7 +199,7 @@ export default function SupportTab() {
 
           {/* Message */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">
               Message <span className="text-red-500">*</span>
             </label>
             <TextArea
@@ -214,8 +214,8 @@ export default function SupportTab() {
 
           {/* Image Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Attachments <span className="text-gray-400">(Optional - Max 5 images, 5MB each)</span>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Attachments <span className="text-slate-400">(Optional - Max 5 images, 5MB each)</span>
             </label>
             <Upload
               listType="picture-card"
@@ -229,11 +229,11 @@ export default function SupportTab() {
               {fileList.length < 5 && (
                 <div className="text-center">
                   <div className="text-2xl mb-1">📷</div>
-                  <div className="text-xs text-gray-600">Upload Image</div>
+                  <div className="text-xs text-slate-600">Upload Image</div>
                 </div>
               )}
             </Upload>
-            <div className="text-xs text-gray-500 mt-2">
+            <div className="text-xs text-slate-500 mt-2">
               💡 Tip: Click on uploaded images to preview them
             </div>
           </div>
@@ -286,24 +286,24 @@ export default function SupportTab() {
       {result && (
         <div className={`rounded-xl p-6 ${
           result.success
-            ? 'bg-green-50 border-1 border-solid border-green-200'
-            : 'bg-red-50 border-1 border-solid border-red-200'
+            ? 'bg-emerald-50 border border-solid border-emerald-200'
+            : 'bg-red-50 border border-solid border-red-200'
         }`}>
           <div className={`font-semibold text-lg mb-2 ${
-            result.success ? 'text-green-700' : 'text-red-700'
+            result.success ? 'text-emerald-700' : 'text-red-700'
           }`}>
             {result.success ? '✅ Ticket Submitted!' : '❌ Submission Failed'}
           </div>
-          <div className={`text-sm ${result.success ? 'text-green-700' : 'text-red-700'}`}>
+          <div className={`text-sm ${result.success ? 'text-emerald-700' : 'text-red-700'}`}>
             {result.message}
           </div>
         </div>
       )}
 
       {/* Info */}
-      <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-1 border-solid border-indigo-200 rounded-xl p-6">
+      <div className="bg-indigo-50 border border-solid border-indigo-200 rounded-2xl p-6">
         <div className="flex items-start gap-4">
-          <div className="flex-shrink-0 w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
+          <div className="flex-shrink-0 w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -346,7 +346,7 @@ export default function SupportTab() {
               </span>
             </div>
             <div className="mt-3 text-xs text-indigo-700 bg-indigo-100 rounded-lg p-3">
-              <strong>📧 Response Time:</strong> We typically respond within 24 hours. You will receive a reply from <strong>binduchowdary856@gmail.com</strong>
+              If you have any issue, please reach out to <strong>binduchowdary856@gmail.com</strong> — we'll assist you immediately, typically within <strong>1 hour</strong> and no later than <strong>12 hours</strong>.
             </div>
           </div>
         </div>
