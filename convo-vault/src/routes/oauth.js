@@ -407,7 +407,7 @@ router.get('/callback', async (req, res) => {
             <ul>
               <li>📥 Download Conversations with Filters</li>
               <li>💬 Get Messages with Conversation Context</li>
-              <li>📤 Import from CSV/Excel Files</li>
+              ${isLite ? '' : '<li>📤 Import from CSV/Excel Files</li>'}
               <li>🚀 Advanced Export with conversationId</li>
             </ul>
           </div>
