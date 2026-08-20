@@ -57,7 +57,7 @@ export default function ErrorScreen({ error }) {
             {isTokenExpired
               ? 'Your authentication session has expired. Please reconnect the app to continue.'
               : isInstallRequired
-                ? 'ConvoVault is not installed in this sub-account. Please install the app first.'
+                ? 'ExportKit is not installed in this sub-account. Please install the app first.'
                 : errorString
             }
           </p>
@@ -70,7 +70,7 @@ export default function ErrorScreen({ error }) {
                 </h3>
                 <ol className="list-decimal list-inside space-y-3 text-sm text-purple-900">
                   <li className="font-medium">
-                    <strong>{isTokenExpired ? 'Reconnect' : 'Install'} ConvoVault via OAuth:</strong>
+                    <strong>{isTokenExpired ? 'Reconnect' : 'Install'} ExportKit via OAuth:</strong>
                     <br />
                     <a 
                       href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356" 
@@ -83,7 +83,7 @@ export default function ErrorScreen({ error }) {
                   </li>
                   <li className="mt-3">Login to your account and select a sub-account to connect</li>
                   <li>After successful {isTokenExpired ? 'reconnection' : 'installation'}, refresh this page</li>
-                  <li>Find "ConvoVault" in your sub-account's left sidebar to access</li>
+                  <li>Find "ExportKit" in your sub-account's left sidebar to access</li>
                 </ol>
               </div>
 
@@ -92,7 +92,7 @@ export default function ErrorScreen({ error }) {
                 <p className="text-yellow-800">
                   {isTokenExpired 
                     ? 'Your authentication has expired. Please reconnect the app to restore access. This is a security measure to protect your data.'
-                    : 'This app must be installed via OAuth before it can be used. After installation, it will appear as "ConvoVault" in your sub-account navigation menu.'
+                    : 'This app must be installed via OAuth before it can be used. After installation, it will appear as "ExportKit" in your sub-account navigation menu.'
                   }
                 </p>
               </div>
@@ -122,7 +122,7 @@ export default function ErrorScreen({ error }) {
                 rel="noopener noreferrer"
                 className="flex-1 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-center font-medium"
               >
-                {isTokenExpired ? '🔄 Reconnect App' : '📦 Install ConvoVault'}
+                {isTokenExpired ? '🔄 Reconnect App' : '📦 Install ExportKit'}
               </a>
             )}
           </div>

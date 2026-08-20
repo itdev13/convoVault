@@ -57,7 +57,7 @@ export default function Header() {
           <div className="flex items-center gap-2.5">
               <img
                 src="/assets/app-icon-marketplace.svg"
-                alt="ConvoVault"
+                alt="ExportKit"
                 className="w-8 h-8 object-contain rounded-full"
               />
             <div className="leading-tight">
