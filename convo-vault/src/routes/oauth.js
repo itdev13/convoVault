@@ -67,16 +67,19 @@ router.get('/authorize', (req, res) => {
  * OAuth callback
  */
 router.get('/callback', async (req, res) => {
-  const { code, state } = req.query;
+  const { code, state, app } = req.query;
   console.log("query: ", req.query)
 
   if (!code) {
     return res.status(400).send('Authorization code not provided');
   }
 
-  // Decode referral info from state parameter
+  // App identity: the lite "Export Messages" GHL app is configured with a redirect_uri of
+  // .../api/oauth/callback?app=lite, so the query param is the authoritative signal (GHL controls
+  // the authorize URL, so we can't rely on `state`). We still allow app:'lite' in state as a fallback.
   let referralCode = null;
   let referralCampaign = null;
+  let isLite = app === 'lite'; // true when the install came from the lite "Export Messages" app
   if (state) {
     try {
       console.log("state: ", state);
@@ -84,18 +87,27 @@ router.get('/callback', async (req, res) => {
       console.log("stateData: ", stateData);
       referralCode = stateData.ref || null;
       referralCampaign = stateData.campaign || null;
+      if (stateData.app === 'lite') isLite = true; // fallback signal (query param takes precedence)
       if (referralCode) {
         logger.info('Referral code detected:', { ref: referralCode, campaign: referralCampaign });
       }
+      if (isLite) logger.info('Lite (Export Messages) install detected');
     } catch (e) {
       logger.warn('Failed to decode state parameter:', state);
     }
   }
 
-  try {
-    logger.info('Exchanging code for token...');
+  // App-aware branding for the callback pages. Lite = "Export Messages" (own logo, no website
+  // button); premium = "ExportKit". Referenced by all three HTML pages below.
+  const brand = isLite
+    ? { name: 'Export Messages', icon: '/assets/export-messages-icon.png', website: null }
+    : { name: 'ExportKit', icon: '/assets/icon.png', website: 'https://exportkit.vaultsuite.store' };
 
-    const tokenData = await ghlService.getAccessToken(code);
+  try {
+    logger.info('Exchanging code for token...', { isLite });
+
+    // Exchange with the correct app's client credentials (lite vs premium).
+    const tokenData = await ghlService.getAccessToken(code, isLite);
 
     // Check if this is Sub-Account-level or Company-level installation
     const isLocationLevel = !!tokenData.locationId;
@@ -276,7 +288,7 @@ router.get('/callback', async (req, res) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Success - ExportKit</title>
+        <title>Success - ${brand.name}</title>
         <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
         <style>
           body {
@@ -350,9 +362,9 @@ router.get('/callback', async (req, res) => {
       </head>
       <body>
         <div class="container">
-          <img src="/assets/icon.png" alt="ExportKit" width="80" height="80" style="margin-bottom: 12px;">
+          <img src="${brand.icon}" alt="${brand.name}" width="80" height="80" style="margin-bottom: 12px;">
           <div style="margin-bottom: 16px;">
-            <div style="font-size: 22px; font-weight: 700; color: #111827;">ExportKit</div>
+            <div style="font-size: 22px; font-weight: 700; color: #111827;">${brand.name}</div>
             <div style="font-size: 11px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>
           </div>
           <h1>Connected Successfully!</h1>
@@ -362,12 +374,12 @@ router.get('/callback', async (req, res) => {
           </div>
           <div class="features">
             <div class="access-box">
-              <h3>🎯 How to Access ExportKit:</h3>
+              <h3>🎯 How to Access ${brand.name}:</h3>
               <div class="step-instruction">Open your sub-account dashboard</div>
-              <div class="step-instruction">Look for <strong style="color: #2563EB;">"ExportKit"</strong> in the left navigation menu</div>
+              <div class="step-instruction">Look for <strong style="color: #2563EB;">"${brand.name}"</strong> in the left navigation menu</div>
               <div class="step-instruction">Click to launch the app</div>
               <p style="color: #6B7280; font-size: 12px; margin-top: 12px; font-style: italic;">
-                💡 ExportKit will appear as a new menu item in your sub-account's left navigation menu
+                💡 ${brand.name} will appear as a new menu item in your sub-account's left navigation menu
               </p>
             </div>
 
@@ -381,15 +393,15 @@ router.get('/callback', async (req, res) => {
           </div>
           <div style="background: #FEF3C7; padding: 15px; border-radius: 8px; margin-top: 25px; border-left: 4px solid #F59E0B;">
             <p style="color: #92400E; font-size: 13px; font-weight: 600; margin: 0;">
-              ✓ Installation Complete! Close this window and find ExportKit in your account's left menu.
+              ✓ Installation Complete! Close this window and find ${brand.name} in your account's left menu.
             </p>
           </div>
 
-          <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <a href="https://export.vaultsuite.store" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
-              🌐 Visit ExportKit Website
+          ${brand.website ? `<div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <a href="${brand.website}" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
+              🌐 Visit ${brand.name} Website
             </a>
-          </div>
+          </div>` : ''}
         </div>
       </body>
       </html>
@@ -408,7 +420,7 @@ router.get('/callback', async (req, res) => {
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Authorization Complete - ExportKit</title>
+          <title>Authorization Complete - ${brand.name}</title>
           <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
           <style>
             body {
@@ -488,31 +500,31 @@ router.get('/callback', async (req, res) => {
         </head>
         <body>
           <div class="container">
-            <img src="/assets/icon.png" alt="ExportKit" width="60" height="60" style="margin-bottom: 8px;">
+            <img src="${brand.icon}" alt="${brand.name}" width="60" height="60" style="margin-bottom: 8px;">
             <div style="margin-bottom: 12px;">
-              <div style="font-size: 18px; font-weight: 700; color: #111827;">ExportKit</div>
+              <div style="font-size: 18px; font-weight: 700; color: #111827;">${brand.name}</div>
               <div style="font-size: 10px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>
             </div>
             <div class="icon">✅</div>
             <h1>Authorization Already Completed!</h1>
-            <p>Your ExportKit account has been successfully connected</p>
-            
+            <p>Your ${brand.name} account has been successfully connected</p>
+
             <div class="highlight-box">
-              <h3>🎯 How to Access ExportKit:</h3>
+              <h3>🎯 How to Access ${brand.name}:</h3>
               <div class="step">Open your account dashboard</div>
-              <div class="step">Find <strong style="color: #2563EB;">"ExportKit"</strong> in the left sidebar menu</div>
+              <div class="step">Find <strong style="color: #2563EB;">"${brand.name}"</strong> in the left sidebar menu</div>
               <div class="step">Click to launch and start managing conversations</div>
             </div>
-            
+
             <div class="tip">
-              <p>💡 ExportKit appears as a new menu item in your account navigation</p>
+              <p>💡 ${brand.name} appears as a new menu item in your account navigation</p>
             </div>
-            
-            <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-              <a href="https://convo.vaultsuite.store/about.html" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; margin-bottom: 15px;">
-                🌐 Visit ExportKit Website
+
+            ${brand.website ? `<div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+              <a href="${brand.website}" target="_blank" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; margin-bottom: 15px;">
+                🌐 Visit ${brand.name} Website
               </a>
-            </div>
+            </div>` : ''}
             
             <p style="font-size: 13px; color: #9CA3AF; margin-top: 15px;">
               You can safely close this window
@@ -528,7 +540,7 @@ router.get('/callback', async (req, res) => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Error - ExportKit</title>
+        <title>Error - ${brand.name}</title>
         <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
         <style>
           body {
@@ -575,24 +587,24 @@ router.get('/callback', async (req, res) => {
       </head>
       <body>
         <div class="container">
-          <img src="/assets/icon.png" alt="ExportKit" width="60" height="60" style="margin-bottom: 8px;">
+          <img src="${brand.icon}" alt="${brand.name}" width="60" height="60" style="margin-bottom: 8px;">
           <div style="margin-bottom: 12px;">
-            <div style="font-size: 18px; font-weight: 700; color: #111827;">ExportKit</div>
+            <div style="font-size: 18px; font-weight: 700; color: #111827;">${brand.name}</div>
             <div style="font-size: 10px; font-weight: 500; color: #6B7280; letter-spacing: 0.06em; text-transform: uppercase;">Powered by Vaultsuite</div>
           </div>
           <div class="icon">⚠️</div>
           <h1>Connection Failed</h1>
-          <p>We encountered an error while connecting ExportKit</p>
+          <p>We encountered an error while connecting ${brand.name}</p>
           <div class="error-detail">
             ${error.message}
           </div>
-      <a href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356">Try Again</a>
-          
-          <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-            <a href="https://convo.vaultsuite.store/about.html" target="_blank" style="color: #fff; text-decoration: none; font-size: 14px; font-weight: 600;">
-              🌐 Visit ExportKit Website
+      ${brand.website ? `<a href="https://marketplace.gohighlevel.com/integration/694f93f8a6babf0c821b1356">Try Again</a>` : ''}
+
+          ${brand.website ? `<div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <a href="${brand.website}" target="_blank" style="color: #fff; text-decoration: none; font-size: 14px; font-weight: 600;">
+              🌐 Visit ${brand.name} Website
             </a>
-          </div>
+          </div>` : ''}
         </div>
       </body>
       </html>

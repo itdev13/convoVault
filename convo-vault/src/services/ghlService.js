@@ -19,11 +19,16 @@ class GHLService {
   /**
    * Exchange code for token
    */
-  async getAccessToken(code) {
+  async getAccessToken(code, isLite = false) {
     try {
+      // The auth code is issued for a specific marketplace app, so it MUST be exchanged with
+      // that app's client credentials. The lite ("Export Messages") app has its own client;
+      // using the premium client here returns 401 UnAuthorized.
+      const clientId = isLite ? process.env.GHL_LITE_CLIENT_ID : process.env.GHL_CLIENT_ID;
+      const clientSecret = isLite ? process.env.GHL_LITE_CLIENT_SECRET : process.env.GHL_CLIENT_SECRET;
       const params = new URLSearchParams();
-      params.append('client_id', process.env.GHL_CLIENT_ID);
-      params.append('client_secret', process.env.GHL_CLIENT_SECRET);
+      params.append('client_id', clientId);
+      params.append('client_secret', clientSecret);
       params.append('grant_type', 'authorization_code');
       params.append('code', code);
 
