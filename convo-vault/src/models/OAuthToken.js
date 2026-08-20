@@ -80,7 +80,12 @@ const oauthTokenSchema = new mongoose.Schema({
   // shortly after the OAuth callback finishes; if the call fails these stay null.
   installerUserId: { type: String, default: null },
   installerEmail: { type: String, default: null },
-  installerName:  { type: String, default: null }
+  installerName:  { type: String, default: null },
+
+  // App scope: false/missing = premium ("ExportKit"), true = lite ("Export Messages").
+  // Legacy prod docs have NO lite field — premium lookups MUST match those via `lite: { $ne: true }`
+  // (never `lite: false` equality). Lite and premium tokens for the same location are SEPARATE rows.
+  lite: { type: Boolean, default: false, index: true }
 }, {
   timestamps: true
 });
@@ -91,20 +96,23 @@ oauthTokenSchema.methods.needsRefresh = function() {
   return fiveMinutesFromNow >= this.expiresAt;
 };
 
-// Find active token for sub-account
-oauthTokenSchema.statics.findActiveToken = async function(locationId) {
-  return await this.findOne({ 
-    locationId, 
-    isActive: true 
+// Find active token for sub-account.
+// opts.lite === true → only lite rows; otherwise premium (lite false OR missing → `$ne: true`).
+oauthTokenSchema.statics.findActiveToken = async function(locationId, opts = {}) {
+  return await this.findOne({
+    locationId,
+    isActive: true,
+    ...(opts.lite ? { lite: true } : { lite: { $ne: true } })
   });
 };
 
-// Find active company token
-oauthTokenSchema.statics.findActiveCompanyToken = async function(companyId) {
-  return await this.findOne({ 
+// Find active company token. Same lite-scoping rule as findActiveToken.
+oauthTokenSchema.statics.findActiveCompanyToken = async function(companyId, opts = {}) {
+  return await this.findOne({
     companyId,
     tokenType: 'company',
-    isActive: true 
+    isActive: true,
+    ...(opts.lite ? { lite: true } : { lite: { $ne: true } })
   });
 };
 

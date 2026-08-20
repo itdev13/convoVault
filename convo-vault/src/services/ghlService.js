@@ -110,11 +110,15 @@ class GHLService {
   /**
    * Refresh token
    */
-  async refreshAccessToken(refreshToken) {
+  async refreshAccessToken(refreshToken, isLite = false) {
     try {
+      // Lite tokens were issued by the lite ("Export Messages") app, so they MUST be refreshed
+      // with that app's client credentials. Default false = premium, unchanged.
+      const clientId = isLite ? process.env.GHL_LITE_CLIENT_ID : process.env.GHL_CLIENT_ID;
+      const clientSecret = isLite ? process.env.GHL_LITE_CLIENT_SECRET : process.env.GHL_CLIENT_SECRET;
       const params = new URLSearchParams();
-      params.append('client_id', process.env.GHL_CLIENT_ID);
-      params.append('client_secret', process.env.GHL_CLIENT_SECRET);
+      params.append('client_id', clientId);
+      params.append('client_secret', clientSecret);
       params.append('grant_type', 'refresh_token');
       params.append('refresh_token', refreshToken);
 
@@ -136,15 +140,18 @@ class GHLService {
    * Generate location-level token from company token
    * Required when company-level token can't access location APIs
    */
-  async getLocationTokenFromCompany(companyId, locationId, retryCount = 0) {
+  async getLocationTokenFromCompany(companyId, locationId, retryCount = 0, opts = {}) {
+    const isLite = !!opts.lite;
+    const liteFilter = isLite ? { lite: true } : { lite: { $ne: true } };
     try {
       logger.info('Generating location token from company token');
-      
-      // Get company token
-      let companyToken = await OAuthToken.findOne({ 
-        companyId, 
+
+      // Get company token (same app scope)
+      let companyToken = await OAuthToken.findOne({
+        companyId,
         tokenType: 'company',
-        isActive: true 
+        isActive: true,
+        ...liteFilter
       });
 
       if (!companyToken) {
@@ -156,7 +163,7 @@ class GHLService {
       if (companyToken.needsRefresh()) {
         logger.info('Company token needs refresh before generating location token');
         try {
-          const refreshedToken = await this.refreshAccessToken(companyToken.refreshToken);
+          const refreshedToken = await this.refreshAccessToken(companyToken.refreshToken, isLite);
 
           companyToken.accessToken = refreshedToken.accessToken;
           companyToken.refreshToken = refreshedToken.refreshToken;
@@ -169,11 +176,12 @@ class GHLService {
           if (refreshError.response?.data?.error === 'invalid_grant') {
             logger.info('Company refresh token already used, fetching latest...');
 
-            // Re-fetch latest company token from DB
+            // Re-fetch latest company token from DB (same app scope)
             const latestCompanyToken = await OAuthToken.findOne({
               companyId,
               tokenType: 'company',
-              isActive: true
+              isActive: true,
+              ...liteFilter
             });
 
             if (latestCompanyToken && latestCompanyToken.accessToken !== companyToken.accessToken) {
@@ -221,11 +229,12 @@ class GHLService {
         logger.info('🔄 Got 401 generating location token, refreshing company token and retrying...');
 
         try {
-          // Force refresh the company token
+          // Force refresh the company token (same app scope)
           const companyToken = await OAuthToken.findOne({
             companyId,
             tokenType: 'company',
-            isActive: true
+            isActive: true,
+            ...liteFilter
           });
 
           if (!companyToken || !companyToken.refreshToken) {
@@ -236,11 +245,11 @@ class GHLService {
           const expiresIn = companyToken.expiresAt - Date.now();
           if (expiresIn > 23 * 60 * 60 * 1000) {
             logger.info('Company token was recently refreshed, retrying with new token');
-            return await this.getLocationTokenFromCompany(companyId, locationId, retryCount + 1);
+            return await this.getLocationTokenFromCompany(companyId, locationId, retryCount + 1, { lite: isLite });
           }
 
           try {
-            const refreshedToken = await this.refreshAccessToken(companyToken.refreshToken);
+            const refreshedToken = await this.refreshAccessToken(companyToken.refreshToken, isLite);
 
             companyToken.accessToken = refreshedToken.accessToken;
             companyToken.refreshToken = refreshedToken.refreshToken;
@@ -256,7 +265,8 @@ class GHLService {
               const latestToken = await OAuthToken.findOne({
                 companyId,
                 tokenType: 'company',
-                isActive: true
+                isActive: true,
+                ...liteFilter
               });
 
               if (!latestToken || latestToken.accessToken === companyToken.accessToken) {
@@ -269,7 +279,7 @@ class GHLService {
           }
 
           // Retry ONCE
-          return await this.getLocationTokenFromCompany(companyId, locationId, retryCount + 1);
+          return await this.getLocationTokenFromCompany(companyId, locationId, retryCount + 1, { lite: isLite });
 
         } catch (refreshError) {
           logger.error('❌ Company token refresh failed:', refreshError.message);
@@ -298,12 +308,17 @@ class GHLService {
    * Get valid access token (auto-refresh if needed)
    * Handles both location and company tokens
    */
-  async getValidToken(locationId) {
+  async getValidToken(locationId, opts = {}) {
+    const isLite = !!opts.lite;
+    // Lite scoping: lite rows match `lite:true`; premium matches lite false OR missing (`$ne: true`)
+    // so legacy prod docs (no lite field) still resolve.
+    const liteFilter = isLite ? { lite: true } : { lite: { $ne: true } };
     // STEP 1: Try to find location-specific token first (preferred)
-    let tokenDoc = await OAuthToken.findOne({ 
-      locationId, 
+    let tokenDoc = await OAuthToken.findOne({
+      locationId,
       tokenType: 'location',
-      isActive: true 
+      isActive: true,
+      ...liteFilter
     });
 
     // STEP 2: If no location token exists, find company via CompanyLocation mapping
@@ -319,11 +334,12 @@ class GHLService {
         throw error;
       }
 
-      // Get the company's OAuth token
+      // Get the company's OAuth token (scoped to the same app so lite/premium don't cross over)
       const companyToken = await OAuthToken.findOne({
         companyId: companyLoc.companyId,
         tokenType: 'company',
-        isActive: true
+        isActive: true,
+        ...liteFilter
       });
 
       if (!companyToken) {
@@ -337,12 +353,14 @@ class GHLService {
       logger.info('Generating location token from company token for:', locationId);
       const locationToken = await this.getLocationTokenFromCompany(
         companyLoc.companyId,
-        locationId
+        locationId,
+        0,
+        { lite: isLite }
       );
 
-      // Store location-specific token
+      // Store location-specific token (stamp lite so lite/premium stay separate rows)
       tokenDoc = await OAuthToken.findOneAndUpdate(
-        { locationId, tokenType: 'location' },
+        { locationId, tokenType: 'location', ...liteFilter },
         {
           locationId,
           companyId: companyLoc.companyId,
@@ -350,7 +368,8 @@ class GHLService {
           accessToken: locationToken.accessToken,
           refreshToken: locationToken.refreshToken,
           expiresAt: new Date(Date.now() + locationToken.expiresIn * 1000),
-          isActive: true
+          isActive: true,
+          lite: isLite
         },
         { upsert: true, new: true }
       );
@@ -363,7 +382,7 @@ class GHLService {
       logger.info('Refreshing token for location:', locationId);
 
       try {
-        const newToken = await this.refreshAccessToken(tokenDoc.refreshToken);
+        const newToken = await this.refreshAccessToken(tokenDoc.refreshToken, isLite);
 
         tokenDoc.accessToken = newToken.accessToken;
         tokenDoc.refreshToken = newToken.refreshToken;
@@ -376,8 +395,8 @@ class GHLService {
         if (refreshErr.response?.data?.error === 'invalid_grant') {
           logger.info('Refresh token already used by another process, fetching latest...');
 
-          // Re-fetch latest token from DB
-          const latestToken = await OAuthToken.findActiveToken(locationId);
+          // Re-fetch latest token from DB (same app scope)
+          const latestToken = await OAuthToken.findActiveToken(locationId, { lite: isLite });
           if (latestToken && latestToken.accessToken !== tokenDoc.accessToken) {
             logger.info('Using token refreshed by another process');
             return latestToken.accessToken;
@@ -393,14 +412,18 @@ class GHLService {
   /**
    * Get sub-account details
    */
-  async getLocationDetails(locationId) {
+  async getLocationDetails(locationId, opts = {}) {
     try {
       logger.info('Fetching sub-account details for:', locationId);
-      
+
       const response = await this.apiRequest(
         'GET',
         `/locations/${locationId}`,
-        locationId
+        locationId,
+        null,
+        null,
+        0,
+        { lite: opts.lite }
       );
 
       // Extract relevant sub-account data
@@ -477,9 +500,9 @@ class GHLService {
    * @param {*} params - Query params
    * @param {number} retryCount - Internal retry counter
    */
-  async apiRequest(method, endpoint, locationId, data = null, params = null, retryCount = 0) {
+  async apiRequest(method, endpoint, locationId, data = null, params = null, retryCount = 0, opts = {}) {
     try {
-    const accessToken = await this.getValidToken(locationId);
+    const accessToken = await this.getValidToken(locationId, { lite: opts.lite });
     const config = {
       method,
       url: `${this.baseURL}${endpoint}`,
@@ -511,8 +534,8 @@ class GHLService {
 
         try {
           // CRITICAL: Re-fetch latest token from DB to avoid race condition
-          // Another request might have already refreshed the token
-          const tokenDoc = await OAuthToken.findActiveToken(locationId);
+          // Another request might have already refreshed the token (same app scope)
+          const tokenDoc = await OAuthToken.findActiveToken(locationId, { lite: opts.lite });
 
           if (!tokenDoc || !tokenDoc.refreshToken) {
             throw new Error('No refresh token available');
@@ -523,13 +546,13 @@ class GHLService {
           const expiresIn = tokenDoc.expiresAt - Date.now();
           if (expiresIn > 23 * 60 * 60 * 1000) {
             logger.info('Token was recently refreshed by another process, retrying with new token');
-            return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1);
+            return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1, opts);
           }
 
           logger.info('Refreshing token after 401 error');
 
           try {
-            const newToken = await this.refreshAccessToken(tokenDoc.refreshToken);
+            const newToken = await this.refreshAccessToken(tokenDoc.refreshToken, opts.lite);
 
             // Update token in database
             tokenDoc.accessToken = newToken.accessToken;
@@ -543,8 +566,8 @@ class GHLService {
             if (refreshErr.response?.data?.error === 'invalid_grant') {
               logger.info('Refresh token already used by another process, fetching latest...');
 
-              // Re-fetch - another process should have updated the token
-              const latestToken = await OAuthToken.findActiveToken(locationId);
+              // Re-fetch - another process should have updated the token (same app scope)
+              const latestToken = await OAuthToken.findActiveToken(locationId, { lite: opts.lite });
               if (latestToken && latestToken.accessToken !== tokenDoc.accessToken) {
                 logger.info('Using token refreshed by another process');
                 // Continue to retry with the new token
@@ -557,7 +580,7 @@ class GHLService {
           }
 
           // Retry the request ONCE
-          return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1);
+          return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1, opts);
 
         } catch (refreshError) {
           logger.error('❌ Token refresh failed:', refreshError.message);
@@ -580,7 +603,7 @@ class GHLService {
         const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : backoffMs;
 
         await new Promise(resolve => setTimeout(resolve, waitMs));
-        return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1);
+        return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1, opts);
       }
 
       // Handle transient GHL slowness with a SINGLE backoff retry (read endpoints only).
@@ -599,7 +622,7 @@ class GHLService {
       if (isTimeoutish && isReadEndpoint && retryCount < 1) {
         logger.warn(`⏳ Transient GHL timeout, retrying once in 2s`, { endpoint, status, message: ghlMsg });
         await new Promise(resolve => setTimeout(resolve, 2000));
-        return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1);
+        return await this.apiRequest(method, endpoint, locationId, data, params, retryCount + 1, opts);
       }
 
       // For other errors or after retry failed, throw original error
@@ -863,7 +886,9 @@ class GHLService {
             '/conversations/messages/export',
             locationId,
             null,
-            params
+            params,
+            0,
+            { lite: options.lite }
           );
         } catch (error) {
           lastError = error;

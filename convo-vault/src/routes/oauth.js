@@ -135,9 +135,14 @@ router.get('/callback', async (req, res) => {
       // ===== SUB-ACCOUNT-LEVEL INSTALLATION =====
       logger.info('📍 Sub-Account-level installation for:', tokenData.locationId);
       
+      // App-scope filter: lite and premium tokens are SEPARATE rows for the same location.
+      // Premium matches lite false OR missing (`$ne: true`) so legacy rows aren't clobbered;
+      // lite matches only `lite: true`. The update always stamps the canonical `lite` value.
+      const liteFilter = isLite ? { lite: true } : { lite: { $ne: true } };
+
       // Save sub-account token
       let savedToken = await OAuthToken.findOneAndUpdate(
-        { locationId: tokenData.locationId },
+        { locationId: tokenData.locationId, ...liteFilter },
         {
           locationId: tokenData.locationId,
           companyId: tokenData.companyId,
@@ -145,18 +150,19 @@ router.get('/callback', async (req, res) => {
           accessToken: tokenData.accessToken,
           refreshToken: tokenData.refreshToken,
           expiresAt: new Date(Date.now() + tokenData.expiresIn * 1000),
-          isActive: true
+          isActive: true,
+          lite: isLite
         },
         { upsert: true, new: true }
       );
 
-      // Fetch sub-account details
+      // Fetch sub-account details (use the lite token for lite installs)
       logger.info('Fetching sub-account details...');
-      const locationDetails = await ghlService.getLocationDetails(tokenData.locationId);
+      const locationDetails = await ghlService.getLocationDetails(tokenData.locationId, { lite: isLite });
 
       // Update with sub-account details
       savedToken = await OAuthToken.findOneAndUpdate(
-        { locationId: tokenData.locationId },
+        { locationId: tokenData.locationId, ...liteFilter },
         { ...locationDetails },
         { new: true }
       );
@@ -173,7 +179,7 @@ router.get('/callback', async (req, res) => {
             const installer = await ghlService.getUserWithToken(tokenData.userId, tokenData.accessToken);
             if (installer?.email) {
               await OAuthToken.findOneAndUpdate(
-                { locationId: tokenData.locationId },
+                { locationId: tokenData.locationId, lite: { $ne: true } },
                 {
                   installerUserId: installer.id,
                   installerEmail: installer.email,
@@ -222,16 +228,20 @@ router.get('/callback', async (req, res) => {
       // ===== COMPANY-LEVEL INSTALLATION =====
       logger.info('🏢 Company-level installation for:', tokenData.companyId);
       
+      // App-scope filter (see sub-account branch): keep lite/premium company rows separate.
+      const liteFilter = isLite ? { lite: true } : { lite: { $ne: true } };
+
       // Save company-level token
       await OAuthToken.findOneAndUpdate(
-        { companyId: tokenData.companyId, tokenType: 'company' },
+        { companyId: tokenData.companyId, tokenType: 'company', ...liteFilter },
         {
           companyId: tokenData.companyId,
           tokenType: 'company',
           accessToken: tokenData.accessToken,
           refreshToken: tokenData.refreshToken,
           expiresAt: new Date(Date.now() + tokenData.expiresIn * 1000),
-          isActive: true
+          isActive: true,
+          lite: isLite
         },
         { upsert: true, new: true }
       );
@@ -261,7 +271,7 @@ router.get('/callback', async (req, res) => {
             const installer = await ghlService.getUserWithToken(tokenData.userId, tokenData.accessToken);
             if (installer?.email) {
               await OAuthToken.findOneAndUpdate(
-                { companyId: tokenData.companyId, tokenType: 'company' },
+                { companyId: tokenData.companyId, tokenType: 'company', lite: { $ne: true } },
                 {
                   installerUserId: installer.id,
                   installerEmail: installer.email,

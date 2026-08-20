@@ -66,9 +66,11 @@ function validateDateRange(startDate, endDate) {
  * `messages` branch of POST /estimate exactly (email = TYPE_EMAIL / type 3, everything else text).
  */
 async function computeMessageCounts(locationId, filters) {
+  // lite: true → use the LITE token + lite refresh creds for this location.
   const result = await ghlService.exportMessages(locationId, {
     ...filters,
-    limit: 100
+    limit: 100,
+    lite: true
   });
 
   const messages = result.messages || [];
@@ -207,8 +209,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    // Step 3: Access token for billing API.
-    const tokenData = await ghlService.getValidToken(locationId);
+    // Step 3: Access token for billing API (LITE token — lite:true selects the lite row + lite refresh creds).
+    const tokenData = await ghlService.getValidToken(locationId, { lite: true });
     const accessToken = tokenData.accessToken || tokenData;
 
     // Meter charge: qty is the MESSAGE count (not credits — the price already encodes credits).
@@ -305,8 +307,8 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    // Step 6: Verify OAuth token exists for this location.
-    const oauthToken = await OAuthToken.findActiveToken(locationId);
+    // Step 6: Verify OAuth token exists for this location (lite row).
+    const oauthToken = await OAuthToken.findActiveToken(locationId, { lite: true });
     if (!oauthToken || !oauthToken.refreshToken) {
       return res.status(400).json({
         success: false,
