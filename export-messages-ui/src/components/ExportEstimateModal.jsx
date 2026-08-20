@@ -360,248 +360,165 @@ export default function ExportEstimateModal({
             </div>
           )}
 
-          {/* Export Summary */}
-          <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
-            <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              {importMode ? 'Import Summary' : 'Export Summary'}
-            </h4>
-            <div className="space-y-2 text-sm">
+          {/* ─────────────────────────────────────────────────────────────
+              HERO COST PANEL
+              A single rounded panel that leads with the big Total, then a
+              compact per-channel breakdown, then the "N credits × $X" line.
+              Replaces ExportKit's stacked "Summary card + Credits/Total box".
+              All numbers/logic identical — layout only.
+              ───────────────────────────────────────────────────────────── */}
+          <div className="rounded-2xl border border-indigo-100 bg-white overflow-hidden shadow-sm">
+            {/* Big total at the top */}
+            <div className="px-6 pt-6 pb-5 text-center bg-gradient-to-b from-indigo-50/70 to-white">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-500 mb-2">
+                {importMode ? 'Total to import' : 'Total to export'}
+              </div>
+              <div className="text-5xl font-extrabold text-indigo-600 leading-none tracking-tight">
+                {formatCurrency(estimate.finalAmount)}
+              </div>
+              <div className="mt-2 text-sm text-gray-500">
+                for {formatNumber(estimate.itemCounts?.total)} {importMode ? 'items' : 'messages'}
+              </div>
+            </div>
+
+            {/* Compact per-channel breakdown line */}
+            <div className="border-t border-indigo-50 px-6 py-4 space-y-2 text-sm">
               {/* Conversations */}
               {estimate.breakdown?.conversations?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Conversations</span>
-                    <div className="text-xs text-gray-500">{CREDIT_MULTIPLIERS.conversations} credit per conversation</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.conversations.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(getCredits('conversations', estimate.breakdown.conversations.count))} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Conversations</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.conversations.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(getCredits('conversations', estimate.breakdown.conversations.count))} cr</span></span>
                 </div>
               )}
 
               {/* Text Messages (SMS, WhatsApp, etc.) */}
               {estimate.breakdown?.smsWhatsapp?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Text Messages</span>
-                    <div className="text-xs text-gray-500">{CREDIT_MULTIPLIERS.smsWhatsapp} credit per message</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.smsWhatsapp.count)} </span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(getCredits('smsWhatsapp', estimate.breakdown.smsWhatsapp.count))} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Text Messages</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.smsWhatsapp.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(getCredits('smsWhatsapp', estimate.breakdown.smsWhatsapp.count))} cr</span></span>
                 </div>
               )}
 
               {/* Email Messages */}
               {estimate.breakdown?.email?.count > 0 && !importMode && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Email Messages</span>
-                    <div className="text-xs text-gray-500">{estimate.breakdown.email.creditsPerItem || CREDIT_MULTIPLIERS.email} credits per email</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.email.count)} emails</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber((Number(estimate.breakdown.email.count) || 0) * (estimate.breakdown.email.creditsPerItem || CREDIT_MULTIPLIERS.email))} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Email Messages</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.email.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber((Number(estimate.breakdown.email.count) || 0) * (estimate.breakdown.email.creditsPerItem || CREDIT_MULTIPLIERS.email))} cr</span></span>
                 </div>
               )}
 
               {/* Notes */}
               {estimate.breakdown?.notes?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Notes</span>
-                    <div className="text-xs text-gray-500">1 credit per note</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.notes.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.notes.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Notes</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.notes.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.notes.count)} cr</span></span>
                 </div>
               )}
 
               {/* Tasks */}
               {estimate.breakdown?.tasks?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Tasks</span>
-                    <div className="text-xs text-gray-500">1 credit per task</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.tasks.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.tasks.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Tasks</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.tasks.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.tasks.count)} cr</span></span>
                 </div>
               )}
 
               {/* Opportunities */}
               {estimate.breakdown?.opportunities?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Opportunities</span>
-                    <div className="text-xs text-gray-500">1 credit per opportunity</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.opportunities.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.opportunities.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Opportunities</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.opportunities.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.opportunities.count)} cr</span></span>
                 </div>
               )}
 
               {/* Form Submissions */}
               {estimate.breakdown?.formSubmissions?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Form Submissions</span>
-                    <div className="text-xs text-gray-500">1 credit per submission</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.formSubmissions.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.formSubmissions.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Form Submissions</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.formSubmissions.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.formSubmissions.count)} cr</span></span>
                 </div>
               )}
 
               {/* Links */}
               {estimate.breakdown?.links?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Links</span>
-                    <div className="text-xs text-gray-500">1 credit per link</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.links.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.links.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Links</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.links.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.links.count)} cr</span></span>
                 </div>
               )}
 
               {/* Social Posts */}
               {estimate.breakdown?.socialPosts?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Social Posts</span>
-                    <div className="text-xs text-gray-500">1 credit per post</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.socialPosts.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.socialPosts.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Social Posts</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.socialPosts.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.socialPosts.count)} cr</span></span>
                 </div>
               )}
 
               {/* Call Logs */}
               {estimate.breakdown?.callLogs?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Call Logs</span>
-                    <div className="text-xs text-gray-500">1 credit per call log</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.callLogs.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.callLogs.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Call Logs</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.callLogs.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.callLogs.count)} cr</span></span>
                 </div>
               )}
 
               {/* Templates */}
               {estimate.breakdown?.templates?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Templates</span>
-                    <div className="text-xs text-gray-500">1 credit per template</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.templates.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.templates.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Templates</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.templates.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.templates.count)} cr</span></span>
                 </div>
               )}
 
               {/* Contacts */}
               {!importMode && estimate.breakdown?.contacts?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Contacts</span>
-                    <div className="text-xs text-gray-500">1 credit per contact</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.contacts.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.contacts.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Contacts</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.contacts.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.contacts.count)} cr</span></span>
                 </div>
               )}
 
               {/* Custom Fields */}
               {!importMode && estimate.breakdown?.customFields?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Custom Fields</span>
-                    <div className="text-xs text-gray-500">1 credit per field</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.customFields.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.customFields.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Custom Fields</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.customFields.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.customFields.count)} cr</span></span>
                 </div>
               )}
 
               {/* Custom Values */}
               {!importMode && estimate.breakdown?.customValues?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Custom Values</span>
-                    <div className="text-xs text-gray-500">1 credit per item</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.customValues.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.customValues.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Custom Values</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.customValues.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.customValues.count)} cr</span></span>
                 </div>
               )}
 
               {/* Tags */}
               {estimate.breakdown?.tags?.count > 0 && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <div>
-                    <span className="text-gray-700 font-medium">Tags</span>
-                    <div className="text-xs text-gray-500">1 credit per tag</div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-medium text-gray-800">{formatNumber(estimate.breakdown.tags.count)}</span>
-                    <div className="text-xs text-indigo-600 font-medium">{formatNumber(estimate.breakdown.tags.count)} credits</div>
-                  </div>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-gray-600">Tags</span>
+                  <span className="text-gray-800"><span className="font-semibold">{formatNumber(estimate.breakdown.tags.count)}</span> <span className="text-gray-400">·</span> <span className="text-indigo-600 font-medium">{formatNumber(estimate.breakdown.tags.count)} cr</span></span>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Pricing Breakdown */}
-          <div className="bg-blue-50 rounded-lg px-4 py-2 border border-blue-200">
-            <div className="space-y-2 text-sm">
+            {/* Subtle "N credits × $X per credit" footer line + non-messages breakdowns */}
+            <div className="border-t border-indigo-50 px-6 py-3 bg-indigo-50/40">
               {/* Credit-based pricing for every export type. Every item = 1 credit at $0.018 base;
                   messages (SMS/WhatsApp + email) drop by volume via the message price ladder. */}
               {!importMode && ['conversations', 'messages', 'contacts', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'customFields', 'customValues', 'tags'].includes(exportType) && (
-                <>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Credits</span>
-                    <span className="font-medium">{formatNumber(getTotalCredits(estimate))}</span>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-700">Price per Credit</span>
-                    <span className="font-medium flex items-center gap-2">
-                      <span className="text-indigo-600">{formatUnitPrice(getPricePerCredit(estimate))}</span>
-                    </span>
-                  </div>
-                </>
+                <div className="text-center text-xs text-gray-500">
+                  <span className="font-semibold text-gray-700">{formatNumber(getTotalCredits(estimate))} credits</span>
+                  <span className="mx-1.5 text-gray-300">×</span>
+                  <span className="font-semibold text-indigo-600">{formatUnitPrice(getPricePerCredit(estimate))}</span>
+                  <span className="text-gray-400"> per credit</span>
+                </div>
               )}
 
+              {/* Non-message / import breakdowns keep their detailed rows */}
+              <div className="space-y-2 text-sm">
               {/* Import mode (notes / contacts / custom fields / custom values) — flat per-row pricing, no discount tiers */}
               {importMode && (() => {
                 const importLabels = {
@@ -747,10 +664,6 @@ export default function ExportEstimateModal({
                   <span className="font-medium">-{formatCurrency(estimate.discountAmount)}</span>
                 </div>
               )}
-
-              <div className="flex justify-between items-center pt-3 border-t border-blue-200">
-                <span className="text-lg font-bold text-gray-800">Total</span>
-                <span className="text-xl font-bold text-indigo-600">{formatCurrency(estimate.finalAmount)}</span>
               </div>
             </div>
           </div>
@@ -826,72 +739,74 @@ export default function ExportEstimateModal({
           </Collapse>
           )}
 
-          {/* Email Notification - Required (export only) */}
+          {/* ─────────────────────────────────────────────────────────────
+              DELIVERY SECTION — borderless, cleaner rhythm than ExportKit's
+              stacked gray cards. Email on its own row; format as a segmented
+              control. Export only.
+              ───────────────────────────────────────────────────────────── */}
           {!importMode && (
-          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              Email Address
-              <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              size="large"
-              className="rounded-lg"
-              status={email && !isValidEmail(email) ? 'error' : ''}
-              style={{
-                backgroundColor: 'white',
-                borderColor: email && !isValidEmail(email) ? '#ef4444' : '#d1d5db',
-                fontSize: '14px'
-              }}
-            />
-            {email && !isValidEmail(email) && (
-              <p className="text-xs text-red-500 mt-1">
-                Please enter a valid email address
+          <div className="pt-1 space-y-4">
+            {/* Email address */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                Deliver to <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="email"
+                placeholder="your@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                size="large"
+                className="rounded-lg"
+                status={email && !isValidEmail(email) ? 'error' : ''}
+                style={{
+                  backgroundColor: 'white',
+                  borderColor: email && !isValidEmail(email) ? '#ef4444' : '#d1d5db',
+                  fontSize: '14px'
+                }}
+              />
+              {email && !isValidEmail(email) && (
+                <p className="text-xs text-red-500 mt-1">
+                  Please enter a valid email address
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mt-1.5">
+                We'll email your download link when the export is ready. Links expire after 1 week.
               </p>
-            )}
-            <p className="text-xs text-gray-500 mt-2">
-              We'll send you the download link when your export is ready. Download links expire after 1 week.
-            </p>
+            </div>
+
+            {/* Export format as a segmented control */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                Format
+              </label>
+              <Radio.Group
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+                optionType="button"
+                buttonStyle="solid"
+                size="large"
+              >
+                <Radio.Button value="csv">CSV</Radio.Button>
+                <Radio.Button value="json">JSON</Radio.Button>
+              </Radio.Group>
+              <p className="text-xs text-gray-500 mt-1.5">
+                {exportFormat === 'csv' ? 'Spreadsheet-friendly. Opens in Excel, Google Sheets, etc.' : 'Structured data. Ideal for developers and integrations.'}
+              </p>
+            </div>
           </div>
           )}
 
-          {/* Export Format (export only) */}
-          {!importMode && (
-          <div className="bg-gray-50 rounded-lg px-4 py-2 border border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              Export Format
-            </label>
-            <Radio.Group value={exportFormat} onChange={(e) => setExportFormat(e.target.value)}>
-              <Radio value="csv">CSV</Radio>
-              <Radio value="json">JSON</Radio>
-            </Radio.Group>
-            <p className="text-xs text-gray-500 mt-2">
-              {exportFormat === 'csv' ? 'Spreadsheet-friendly format. Opens in Excel, Google Sheets, etc.' : 'Structured data format. Ideal for developers and integrations.'}
-            </p>
-          </div>
-          )}
-
-          {/* Payment Info */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
-            <svg className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Payment note — slim inline line (was a large yellow box) */}
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 pt-1">
+            <svg className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            <p className="text-sm text-yellow-800">
-              Payment will be deducted from your <strong>wallet balance</strong>. No card required.
-            </p>
+            <span>Charged to your <strong className="text-gray-700 font-medium">wallet balance</strong> — no card required.</span>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 pt-2">
             <Button
               onClick={onCancel}
               className="flex-1 h-11"
