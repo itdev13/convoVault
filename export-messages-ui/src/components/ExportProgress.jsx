@@ -1,7 +1,11 @@
-import React from 'react';
-import { Progress, Tag, Button, Tooltip } from 'antd';
+import React, { useState } from 'react';
+import { Progress, Tag, Button, Tooltip, message as antMessage } from 'antd';
+import { useAuth } from '../context/AuthContext';
+import { billingAPI } from '../api/billing';
 
 export default function ExportProgress({ job, onDownload, onRefresh }) {
+  const { location } = useAuth() || {};
+  const [downloading, setDownloading] = useState(false);
   if (!job) return null;
 
   // Get status color and text
@@ -34,11 +38,27 @@ export default function ExportProgress({ job, onDownload, onRefresh }) {
     });
   };
 
-  // Handle download click
-  const handleDownload = () => {
-    if (job.downloadUrl) {
-      window.open(job.downloadUrl, '_blank');
-      if (onDownload) onDownload(job.downloadUrl);
+  // Handle download click — regenerate a FRESH presigned URL server-side (the stored downloadUrl
+  // is signed with short-lived creds and dies within hours), then open it. Mirrors the History tab.
+  const handleDownload = async () => {
+    const jobId = job.jobId || job._id;
+    if (!jobId) return;
+    setDownloading(true);
+    try {
+      const response = await billingAPI.getDownloadUrl(jobId, location?.id);
+      if (response.success && response.data?.url) {
+        window.open(response.data.url, '_blank');
+        if (onDownload) onDownload(response.data.url);
+      } else {
+        antMessage.error(response.error || 'Could not generate download link. Please try again.');
+      }
+    } catch (err) {
+      const msg = err?.code === 'DOWNLOAD_EXPIRED'
+        ? 'This download link has expired (7-day limit). Please run the export again.'
+        : (err?.message || 'Could not generate download link. Please try again.');
+      antMessage.error(msg);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -92,14 +112,15 @@ export default function ExportProgress({ job, onDownload, onRefresh }) {
           <Button
             type="primary"
             onClick={handleDownload}
+            loading={downloading}
             className="mt-4 w-full h-11 bg-indigo-600 hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700 rounded-lg shadow-sm"
-            icon={
+            icon={!downloading && (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-            }
+            )}
           >
-            Download Export
+            {downloading ? 'Preparing…' : 'Download Export'}
           </Button>
 
           {job.downloadUrlExpiresAt && (
