@@ -177,34 +177,39 @@ async function handleInstall(data) {
     // installing on 50+ locations at once) don't hammer GHL and trigger 429s.
     // Webhook returns immediately; token gen happens in background at ~3/sec.
     if (locationId && companyId) {
+      // Scope token gen to THIS app so a lite install doesn't get skipped just because the
+      // premium token exists (and vice versa). Premium matches lite false OR missing (`$ne: true`).
+      const liteFilter = isLite ? { lite: true } : { lite: { $ne: true } };
       tokenGenQueue.push(async () => {
         try {
           const existingLocationToken = await OAuthToken.findOne({
             locationId,
             tokenType: 'location',
-            isActive: true
+            isActive: true,
+            ...liteFilter
           });
           if (existingLocationToken) {
-            logger.info('ℹ️ Location token already exists - skipping generation', { locationId });
+            logger.info('ℹ️ Location token already exists - skipping generation', { locationId, lite: isLite });
             return;
           }
 
           const companyToken = await OAuthToken.findOne({
             companyId,
             tokenType: 'company',
-            isActive: true
+            isActive: true,
+            ...liteFilter
           });
           if (!companyToken) {
-            logger.info('ℹ️ No company token found - skipping proactive location token generation', { locationId });
+            logger.info('ℹ️ No company token found - skipping proactive location token generation', { locationId, lite: isLite });
             return;
           }
 
-          logger.info('🔄 Proactively generating location token for new installation', { locationId, queueSize: tokenGenQueue.size() });
+          logger.info('🔄 Proactively generating location token for new installation', { locationId, lite: isLite, queueSize: tokenGenQueue.size() });
 
-          const locationToken = await GHLService.getLocationTokenFromCompany(companyId, locationId);
+          const locationToken = await GHLService.getLocationTokenFromCompany(companyId, locationId, 0, { lite: isLite });
 
           await OAuthToken.findOneAndUpdate(
-            { locationId, tokenType: 'location' },
+            { locationId, tokenType: 'location', ...liteFilter },
             {
               locationId,
               companyId,
@@ -212,12 +217,13 @@ async function handleInstall(data) {
               accessToken: locationToken.accessToken,
               refreshToken: locationToken.refreshToken,
               expiresAt: new Date(Date.now() + locationToken.expiresIn * 1000),
-              isActive: true
+              isActive: true,
+              lite: isLite
             },
             { upsert: true, new: true }
           );
 
-          logger.info('✅ Location token generated and stored proactively', { locationId });
+          logger.info('✅ Location token generated and stored proactively', { locationId, lite: isLite });
         } catch (tokenError) {
           // Non-critical: token will be lazily generated on first API call
           logger.error('⚠️ Failed to generate location token proactively (non-critical):', {
