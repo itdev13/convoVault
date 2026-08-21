@@ -296,6 +296,11 @@ async function handleInstall(data) {
 async function handleUninstall(data) {
   const { appId, companyId, locationId } = data;
 
+  // Which app is uninstalling? Scope all cleanup to this app so a lite uninstall doesn't wipe
+  // premium tokens for a location that has both (and vice versa).
+  const isLite = !!process.env.GHL_LITE_APP_ID && appId === process.env.GHL_LITE_APP_ID;
+  logger.info('📥 UNINSTALL webhook', { appId, matchedLite: isLite, companyId, locationId: locationId || '(company-level)' });
+
   try {
     // Snapshot installer contact info BEFORE token archive/delete so we can send the win-back
     // email after cleanup. Done up front because the original OAuthToken doc is wiped by
@@ -318,7 +323,7 @@ async function handleUninstall(data) {
       });
 
       // SECURITY: Still archive and delete OAuth tokens even if no installation record
-      await archiveAndDeleteTokens(locationId, companyId, null, data);
+      await archiveAndDeleteTokens(locationId, companyId, null, data, isLite);
 
       // Fire win-back email async (don't block webhook response)
       await maybeSendWinBack(installerSnapshot, companyId);
@@ -357,7 +362,7 @@ async function handleUninstall(data) {
     
     // SECURITY: Archive OAuth tokens before deletion
     // Keeps audit trail while preventing access
-    await archiveAndDeleteTokens(locationId, companyId, installation._id, data);
+    await archiveAndDeleteTokens(locationId, companyId, installation._id, data, isLite);
 
     // Fire one-shot pricing-first win-back email (async — never blocks webhook response).
     await maybeSendWinBack(installerSnapshot, companyId);
@@ -467,13 +472,16 @@ async function captureInstallerSnapshot(locationId, companyId) {
  * Archive OAuth tokens before deletion
  * Keeps audit trail for 90 days then auto-deletes
  */
-async function archiveAndDeleteTokens(locationId, companyId, installationId, webhookData) {
+async function archiveAndDeleteTokens(locationId, companyId, installationId, webhookData, isLite = false) {
   try {
-    const findQuery = locationId 
-      ? { locationId }
-      : { companyId };
-    
-    // Find all active tokens for this location/company
+    // Scope to THIS app so uninstalling one app doesn't wipe the other app's token for a
+    // location that has both installed. Premium matches lite false OR missing (`$ne: true`).
+    const liteFilter = isLite ? { lite: true } : { lite: { $ne: true } };
+    const findQuery = locationId
+      ? { locationId, ...liteFilter }
+      : { companyId, ...liteFilter };
+
+    // Find all active tokens for this location/company (this app only)
     const tokensToArchive = await OAuthToken.find(findQuery);
     
     if (tokensToArchive.length === 0) {
