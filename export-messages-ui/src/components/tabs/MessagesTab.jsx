@@ -85,10 +85,7 @@ export default function MessagesTab() {
     }, 300);
   }, [location?.id]);
 
-  // Load users on mount
-  useEffect(() => {
-    if (location?.id) handleUserSearch('');
-  }, [location?.id]);
+  // (Removed) users-on-mount fetch — the lite app has no User filter and lacks users.readonly scope.
 
   const handleContactSearch = useCallback((searchText) => {
     if (contactSearchTimer.current) clearTimeout(contactSearchTimer.current);
@@ -113,10 +110,7 @@ export default function MessagesTab() {
     }, 300);
   }, [location?.id]);
 
-  // Load contacts on mount
-  useEffect(() => {
-    if (location?.id) handleContactSearch('');
-  }, [location?.id]);
+  // (Removed) contacts-on-mount fetch — the lite app has no Contact filter and lacks contacts.readonly scope.
 
 
   const { showError, ErrorModalComponent } = useErrorModal();
@@ -477,118 +471,10 @@ export default function MessagesTab() {
             />
           </div>
 
-          {/* Active optional filter chips */}
-          {activeFilters.includes('contact') && (
-            <div className="inline-flex items-center gap-1 bg-indigo-50 rounded-full pl-3 pr-1 py-1">
-              <span className="text-xs font-semibold text-indigo-600">Contact</span>
-              <Select
-                showSearch
-                value={filters.contactId || undefined}
-                onChange={(val) => setFilters({ ...filters, contactId: val || '' })}
-                onSearch={handleContactSearch}
-                placeholder="Search contacts..."
-                allowClear
-                loading={contactsLoading}
-                filterOption={false}
-                notFoundContent={contactsLoading ? 'Searching...' : 'No contacts found'}
-                variant="borderless"
-                size="small"
-                popupMatchSelectWidth={false}
-                className="min-w-[150px]"
-              >
-                {contactOptions.map(c => (
-                  <Select.Option key={c.id} value={c.id}>
-                    <div className="flex flex-col leading-tight">
-                      <span className="text-sm">{c.name || '(No name)'}</span>
-                      {(c.email || c.phone) && (
-                        <span className="text-xs text-gray-400">{c.email || c.phone}</span>
-                      )}
-                    </div>
-                  </Select.Option>
-                ))}
-              </Select>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveFilters(activeFilters.filter(f => f !== 'contact'));
-                  setFilters({ ...filters, contactId: '' });
-                }}
-                className="flex items-center justify-center w-5 h-5 rounded-full text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
-                aria-label="Remove Contact filter"
-              >
-                ×
-              </button>
-            </div>
-          )}
-
-          {activeFilters.includes('contactId') && (
-            <div className="inline-flex items-center gap-1 bg-indigo-50 rounded-full pl-3 pr-1 py-1">
-              <span className="text-xs font-semibold text-indigo-600">Contact ID</span>
-              <Input
-                value={filters.contactId}
-                onChange={(e) => setFilters({ ...filters, contactId: e.target.value })}
-                placeholder="Paste contact ID..."
-                variant="borderless"
-                size="small"
-                className="w-[150px]"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveFilters(activeFilters.filter(f => f !== 'contactId'));
-                  setFilters({ ...filters, contactId: '' });
-                }}
-                className="flex items-center justify-center w-5 h-5 rounded-full text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
-                aria-label="Remove Contact ID filter"
-              >
-                ×
-              </button>
-            </div>
-          )}
-
-          {activeFilters.includes('user') && (
-            <div className="inline-flex items-center gap-1 bg-indigo-50 rounded-full pl-3 pr-1 py-1">
-              <span className="text-xs font-semibold text-indigo-600">User</span>
-              <Select
-                showSearch
-                value={filters.userId || undefined}
-                onChange={(val) => setFilters({ ...filters, userId: val || '' })}
-                onSearch={handleUserSearch}
-                placeholder="Search users..."
-                allowClear
-                loading={usersLoading}
-                filterOption={false}
-                notFoundContent={usersLoading ? 'Searching...' : 'No users found'}
-                variant="borderless"
-                size="small"
-                popupMatchSelectWidth={false}
-                className="min-w-[150px]"
-              >
-                {userOptions.map(u => (
-                  <Select.Option key={u.id} value={u.id}>
-                    <div className="flex flex-col leading-tight">
-                      <span className="text-sm">{u.name}</span>
-                      {u.email && (
-                        <span className="text-xs text-gray-400">{u.email}</span>
-                      )}
-                    </div>
-                  </Select.Option>
-                ))}
-              </Select>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveFilters(activeFilters.filter(f => f !== 'user'));
-                  setFilters({ ...filters, userId: '' });
-                }}
-                className="flex items-center justify-center w-5 h-5 rounded-full text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
-                aria-label="Remove User filter"
-              >
-                ×
-              </button>
-            </div>
-          )}
-
+          {/* Active optional filter chips.
+              NOTE: Contact / Contact ID / User filters are intentionally removed for the lite
+              app — its OAuth scopes don't include contacts.readonly / users.readonly, so those
+              GHL endpoints return 401 "not authorized for this scope". Conversation ID is kept. */}
           {activeFilters.includes('conversationId') && (
             <div className="inline-flex items-center gap-1 bg-indigo-50 rounded-full pl-3 pr-1 py-1">
               <span className="text-xs font-semibold text-indigo-600">Conversation ID</span>
@@ -616,9 +502,6 @@ export default function MessagesTab() {
 
           {/* "+ Add filter" chips for inactive optional filters */}
           {[
-            { key: 'contact', label: 'Contact' },
-            { key: 'contactId', label: 'Contact ID' },
-            { key: 'user', label: 'User' },
             { key: 'conversationId', label: 'Conversation ID' },
           ].filter(o => !activeFilters.includes(o.key)).map(o => (
             <button
