@@ -21,6 +21,9 @@ const GHL_API_URL = process.env.GHL_API_URL || 'https://services.leadconnectorhq
 const GHL_OAUTH_URL = process.env.GHL_OAUTH_URL || 'https://services.leadconnectorhq.com/oauth';
 const GHL_CLIENT_ID = process.env.GHL_CLIENT_ID;
 const GHL_CLIENT_SECRET = process.env.GHL_CLIENT_SECRET;
+// Lite ("Export Messages") app credentials — used to refresh lite jobs' tokens.
+const GHL_LITE_CLIENT_ID = process.env.GHL_LITE_CLIENT_ID;
+const GHL_LITE_CLIENT_SECRET = process.env.GHL_LITE_CLIENT_SECRET;
 
 // Brevo Email configuration
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
@@ -64,10 +67,11 @@ async function getDb() {
  * Refresh GHL access token
  * Returns both the new access token and new refresh token
  */
-async function refreshAccessToken(refreshToken) {
+async function refreshAccessToken(refreshToken, isLite = false) {
+  // Lite tokens were issued by the lite app → refresh with lite creds, else premium.
   const params = new URLSearchParams();
-  params.append('client_id', GHL_CLIENT_ID);
-  params.append('client_secret', GHL_CLIENT_SECRET);
+  params.append('client_id', isLite ? GHL_LITE_CLIENT_ID : GHL_CLIENT_ID);
+  params.append('client_secret', isLite ? GHL_LITE_CLIENT_SECRET : GHL_CLIENT_SECRET);
   params.append('grant_type', 'refresh_token');
   params.append('refresh_token', refreshToken);
 
@@ -1544,11 +1548,17 @@ exports.handler = async (event, context) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Max retries exceeded' }) };
   }
 
-  // Fetch OAuth token from oauthtokens collection
+  // Fetch OAuth token from oauthtokens collection, SCOPED TO THIS JOB'S APP.
+  // Lite ("Export Messages") jobs must use the lite token; premium jobs match lite false OR
+  // missing (`$ne: true`) so legacy tokens still match. Prevents a lite job grabbing the premium
+  // token (or vice versa) when a location has both apps, and pairs with lite-cred refresh below.
+  const isLiteJob = !!job.lite;
+  const liteFilter = isLiteJob ? { lite: true } : { lite: { $ne: true } };
   const oauthToken = await db.collection('oauthtokens').findOne({
     locationId: job.locationId,
     tokenType: 'location',
     isActive: true,
+    ...liteFilter
   });
 
   log('OAuth token found for location:', job.locationId);
@@ -1595,7 +1605,8 @@ exports.handler = async (event, context) => {
     const currentRefreshToken = latestToken.refreshToken;
 
     try {
-      const tokenData = await refreshAccessToken(currentRefreshToken);
+      // Refresh with the job's app credentials (lite vs premium).
+      const tokenData = await refreshAccessToken(currentRefreshToken, isLiteJob);
       accessToken = tokenData.accessToken;
       refreshToken = tokenData.refreshToken;
 

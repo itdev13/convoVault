@@ -82,6 +82,9 @@ router.get('/messages', authenticateSession, async (req, res) => {
       options.userIds = Array.isArray(userIds) ? userIds : [userIds];
     }
     if (cursor) options.cursor = cursor;
+    // Lite ("Export Messages") app sends X-App: lite → use the lite GHL token for this location,
+    // otherwise the premium-scoped lookup finds no token for a lite-only location and 401s.
+    if (req.get('X-App') === 'lite') options.lite = true;
     // Export messages using advanced endpoint
     const result = await ghlService.exportMessages(locationId, options);
 
@@ -247,6 +250,7 @@ router.get('/messages/all', authenticateSession, async (req, res) => {
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
     if (contactId) filters.contactId = contactId;
+    if (req.get('X-App') === 'lite') filters.lite = true; // lite app → lite GHL token
 
     // Export all messages (handles pagination automatically)
     const allMessages = await ghlService.exportAllMessages(

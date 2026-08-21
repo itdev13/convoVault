@@ -1116,7 +1116,9 @@ class GHLService {
         '/contacts/',
         locationId,
         null,
-        params
+        params,
+        0,
+        { lite: !!options.lite }
       );
 
       return {
@@ -1374,7 +1376,9 @@ class GHLService {
         '/users/search',
         locationId,
         null,
-        { companyId: options.companyId, locationId:locationId, query: options.query || '' }
+        { companyId: options.companyId, locationId:locationId, query: options.query || '' },
+        0,
+        { lite: !!options.lite }
       );
       return response.users || [];
     } catch (error) {

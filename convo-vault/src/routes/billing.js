@@ -3578,7 +3578,7 @@ router.get('/users', authenticateSession, async (req, res) => {
     if (!companyLocation) {
       return res.status(404).json({ success: false, error: 'Company not found for this location' });
     }
-    const users = await ghlService.searchUsers(locationId, { companyId: companyLocation.companyId, query });
+    const users = await ghlService.searchUsers(locationId, { companyId: companyLocation.companyId, query, lite: req.get('X-App') === 'lite' });
     res.json({ success: true, data: { users } });
   } catch (error) {
     logError('Search users error', error, { locationId: req.query?.locationId });
@@ -3600,7 +3600,8 @@ router.get('/contacts/search', authenticateSession, async (req, res) => {
 
     const options = {
       query: query || '',
-      limit: parseInt(limit) || 20
+      limit: parseInt(limit) || 20,
+      lite: req.get('X-App') === 'lite'
     };
     if (tag) options.tag = tag;
 
