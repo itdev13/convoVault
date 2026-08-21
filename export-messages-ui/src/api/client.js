@@ -33,21 +33,30 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    // Don't auto-reload on 401 during initial authentication
+    // Handle session-auth 401s (not during initial /verify, which the auth flow handles itself).
     if (error.response?.status === 401 && !error.config.url.includes('/auth/verify')) {
-      // Unauthorized - clear session (only for non-verify endpoints)
+      const errorCode = error.response?.data?.code;
+
+      // A missing/absent session token ("No authentication token provided") means the request
+      // fired before the session was established (early race), OR a prior 401 wiped it. In BOTH
+      // cases we must RE-AUTHENTICATE, not just clear-and-stall. Previously we only reloaded on
+      // TOKEN_EXPIRED, so any other 401 wiped the token and left the app stuck tokenless — that's
+      // why "a few people" saw "No authentication token provided" until a manual refresh.
+      // To avoid a reload loop, only reload if we haven't just tried (guard via sessionStorage).
       localStorage.removeItem('sessionToken');
 
-      // Check if it's a session token expiration (TOKEN_EXPIRED)
-      // Reload the page to trigger fresh authentication from GHL context
-      const errorCode = error.response?.data?.code;
-      if (errorCode === 'TOKEN_EXPIRED') {
-        console.log('[apiClient] Session expired - reloading to re-authenticate');
+      const lastReload = Number(sessionStorage.getItem('authReloadAt') || 0);
+      const now = Date.now();
+      if (now - lastReload > 5000) {
+        sessionStorage.setItem('authReloadAt', String(now));
+        console.log('[apiClient] Session 401 — reloading to re-authenticate', { code: errorCode });
         window.location.reload();
         return; // Prevent further error handling
       }
+      // If we reloaded very recently, don't loop — fall through and surface the error.
+      console.warn('[apiClient] Session 401 again shortly after reload — not reloading to avoid a loop', { code: errorCode });
     }
-    
+
     // Extract comprehensive error message from backend
     // Priority: details > message > error
     const backendDetails = error.response?.data?.details;
