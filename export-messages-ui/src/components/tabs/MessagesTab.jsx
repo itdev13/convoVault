@@ -21,7 +21,7 @@ const getDefaultDates = () => ({
 });
 
 export default function MessagesTab() {
-  const { location } = useAuth();
+  const { location, session } = useAuth();
   const defaultDates = getDefaultDates();
   const [filters, setFilters] = useState({
     channel: '',
@@ -137,7 +137,9 @@ export default function MessagesTab() {
       
       return response;
     },
-    enabled: !!location?.id && shouldFetch, // Load on tab open or when search is clicked
+    // Gate on the SESSION TOKEN, not just location — fetching before the token is set produces a
+    // tokenless 401 ("No authentication token provided"). Waiting for session.token avoids the race.
+    enabled: !!location?.id && !!session?.token && shouldFetch,
     cacheTime: 0, // Don't cache - always fetch fresh
     staleTime: 0, // Data is immediately stale
     refetchOnMount: 'always', // Always refetch on mount
