@@ -36,25 +36,27 @@ apiClient.interceptors.response.use(
     // Handle session-auth 401s (not during initial /verify, which the auth flow handles itself).
     if (error.response?.status === 401 && !error.config.url.includes('/auth/verify')) {
       const errorCode = error.response?.data?.code;
+      // Was a session token actually SENT? If not, this is the harmless early-startup race:
+      // a data call fired before the auth handshake set the token. The AuthProvider completes
+      // auth on its own moments later, so we must NOT wipe the token or reload here — doing so
+      // interrupts a working handshake (the flicker/"failing" symptom). Just let it error quietly.
+      const sentToken = !!error.config?.headers?.Authorization;
 
-      // A missing/absent session token ("No authentication token provided") means the request
-      // fired before the session was established (early race), OR a prior 401 wiped it. In BOTH
-      // cases we must RE-AUTHENTICATE, not just clear-and-stall. Previously we only reloaded on
-      // TOKEN_EXPIRED, so any other 401 wiped the token and left the app stuck tokenless — that's
-      // why "a few people" saw "No authentication token provided" until a manual refresh.
-      // To avoid a reload loop, only reload if we haven't just tried (guard via sessionStorage).
-      localStorage.removeItem('sessionToken');
-
-      const lastReload = Number(sessionStorage.getItem('authReloadAt') || 0);
-      const now = Date.now();
-      if (now - lastReload > 5000) {
-        sessionStorage.setItem('authReloadAt', String(now));
-        console.log('[apiClient] Session 401 — reloading to re-authenticate', { code: errorCode });
-        window.location.reload();
-        return; // Prevent further error handling
+      // Only recover when a token was actually sent and rejected — i.e. a genuine expiry/invalid
+      // session mid-use. Reload once (guarded) to re-authenticate; a tokenless early 401 falls through.
+      if (sentToken && (errorCode === 'TOKEN_EXPIRED' || errorCode === 'INVALID_TOKEN' || !errorCode)) {
+        localStorage.removeItem('sessionToken');
+        const lastReload = Number(sessionStorage.getItem('authReloadAt') || 0);
+        const now = Date.now();
+        if (now - lastReload > 5000) {
+          sessionStorage.setItem('authReloadAt', String(now));
+          console.log('[apiClient] Session expired/invalid — reloading to re-authenticate', { code: errorCode });
+          window.location.reload();
+          return; // Prevent further error handling
+        }
+        console.warn('[apiClient] Session 401 again shortly after reload — not reloading to avoid a loop', { code: errorCode });
       }
-      // If we reloaded very recently, don't loop — fall through and surface the error.
-      console.warn('[apiClient] Session 401 again shortly after reload — not reloading to avoid a loop', { code: errorCode });
+      // else: tokenless early-startup 401 — ignore; the auth flow will establish the session.
     }
 
     // Extract comprehensive error message from backend
