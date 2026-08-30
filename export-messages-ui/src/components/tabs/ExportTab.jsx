@@ -5,7 +5,7 @@ import { Pagination } from 'antd';
 import dayjs from 'dayjs';
 
 export default function ExportTab() {
-  const { location } = useAuth();
+  const { location, session } = useAuth();
 
   // Export history state
   const [exportHistory, setExportHistory] = useState([]);
@@ -152,10 +152,11 @@ export default function ExportTab() {
     loadExportHistory(page);
   };
 
-  // Load history on mount
+  // Load history on mount — gated on the session token so it doesn't fire tokenless during the
+  // auth handshake (same race the Messages tab had → "No authentication token provided" 401).
   useEffect(() => {
-    loadExportHistory(1);
-  }, [location?.id]);
+    if (location?.id && session?.token) loadExportHistory(1);
+  }, [location?.id, session?.token]);
 
   // Auto-poll for processing jobs
   useEffect(() => {

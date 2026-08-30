@@ -3574,11 +3574,19 @@ router.get('/users', authenticateSession, async (req, res) => {
     if (!locationId) {
       return res.status(400).json({ success: false, error: 'locationId is required' });
     }
-    const companyLocation = await CompanyLocation.findCompanyByLocation(locationId);
-    if (!companyLocation) {
+    const isLite = req.get('X-App') === 'lite';
+    // Resolve companyId: prefer the CompanyLocation map, but fall back to the location's OAuth
+    // token (which also stores companyId) for locations that have no CompanyLocation record
+    // (e.g. sub-account-level installs, or older installs from before that map existed).
+    let companyId = (await CompanyLocation.findCompanyByLocation(locationId))?.companyId;
+    if (!companyId) {
+      const tokenDoc = await OAuthToken.findActiveToken(locationId, { lite: isLite });
+      companyId = tokenDoc?.companyId;
+    }
+    if (!companyId) {
       return res.status(404).json({ success: false, error: 'Company not found for this location' });
     }
-    const users = await ghlService.searchUsers(locationId, { companyId: companyLocation.companyId, query, lite: req.get('X-App') === 'lite' });
+    const users = await ghlService.searchUsers(locationId, { companyId, query, lite: isLite });
     res.json({ success: true, data: { users } });
   } catch (error) {
     logError('Search users error', error, { locationId: req.query?.locationId });
