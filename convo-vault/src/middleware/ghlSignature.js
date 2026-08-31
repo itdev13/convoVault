@@ -19,9 +19,9 @@ const logger = require('../utils/logger');
  *   'off'               → skip verification entirely.
  */
 
-const GHL_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAi2HR1srL4o18O8BRa7gVJY7G7bupbN3H9AwJrHCDiOg=
------END PUBLIC KEY-----`;
+// Ed25519 public key for X-GHL-Signature — supplied via env (no hardcoded fallback).
+// Newlines may arrive escaped ("\n") from some env loaders; normalize them.
+const GHL_PUBLIC_KEY = (process.env.GHL_WEBHOOK_ED25519_PUBLIC_KEY || '').replace(/\\n/g, '\n');
 
 const LEGACY_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAokvo/r9tVgcfZ5DysOSC
@@ -43,6 +43,7 @@ const GHL_WEBHOOK_VERIFY_MODE = (process.env.GHL_WEBHOOK_VERIFY_MODE || 'enforce
 // Ed25519 (X-GHL-Signature) — pass null as the algorithm to crypto.verify.
 function verifyGhl(payload, signature) {
   if (!signature || signature === 'N/A') return { ok: false, reason: 'no signature' };
+  if (!GHL_PUBLIC_KEY) return { ok: false, reason: 'GHL_WEBHOOK_ED25519_PUBLIC_KEY not set' };
   try {
     const ok = crypto.verify(null, Buffer.from(payload, 'utf8'), GHL_PUBLIC_KEY, Buffer.from(signature, 'base64'));
     return { ok, reason: ok ? null : 'verify failed' };
