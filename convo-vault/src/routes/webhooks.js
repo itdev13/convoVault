@@ -9,6 +9,7 @@ const { authenticateSession } = require('../middleware/auth');
 const GHLService = require('../services/ghlService');
 const ThrottleQueue = require('../utils/throttleQueue');
 const AppConfig = require('../models/AppConfig');
+const { ghlSignatureGuard } = require('../middleware/ghlSignature');
 
 // Win-back email on uninstall has been removed entirely.
 
@@ -24,7 +25,7 @@ const tokenGenQueue = new ThrottleQueue({ name: 'proactive-token-gen', delayMs: 
  * @desc Handle ConvoVault webhook events (AppInstall, AppUninstall)
  * @access Public (GHL sends webhooks)
  */
-router.post('/convo-vault', async (req, res) => {
+router.post('/convo-vault', ghlSignatureGuard, async (req, res) => {
   try {
     const webhookData = req.body;
     const { type, appId, companyId, locationId } = webhookData;
