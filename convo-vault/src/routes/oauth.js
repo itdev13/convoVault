@@ -438,13 +438,20 @@ router.get('/callback', async (req, res) => {
     `);
 
   } catch (error) {
-    logError('OAuth callback error', error, { code: req.query?.code });
-    
-    // Check if it's a reused authorization code (already completed)
-    const isCodeReused = error.response?.data?.error === 'invalid_grant' && 
-                         error.response?.data?.error_description?.includes('authorization code');
-    
+    // Detect a reused/expired/invalid authorization code. GHL returns this a few ways:
+    //   • { error: 'invalid_grant', error_description: '...authorization code...' }
+    //   • { error: 'UnAuthorized!', error_description: 'Authorization code not found' }
+    // All mean the code was already consumed (duplicate callback fire — browser prefetch, refresh,
+    // link scanner) or expired. This is EXPECTED and harmless (the first callback already installed),
+    // so show the friendly "already connected" page instead of a 500.
+    const desc = String(error.response?.data?.error_description || '').toLowerCase();
+    const isCodeReused =
+      error.response?.data?.error === 'invalid_grant' ||
+      desc.includes('authorization code') ||
+      desc.includes('code not found');
+
     if (isCodeReused) {
+      logger.info('OAuth callback: authorization code already used/expired (duplicate callback) — showing completion page');
       // Authorization already completed - show success message
       return res.send(`
         <!DOCTYPE html>
@@ -564,7 +571,10 @@ router.get('/callback', async (req, res) => {
         </html>
       `);
     }
-    
+
+    // Genuine failure (not a duplicate/expired code) — log as an error and show the error page.
+    logError('OAuth callback error', error, { code: req.query?.code });
+
     // Other errors - show generic error page
     res.status(500).send(`
       <!DOCTYPE html>
