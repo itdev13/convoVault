@@ -1557,35 +1557,35 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         }
       };
 
-      // 1) Discover every group/internal conversation in the location (paginate by skip).
+      // 1) Resolve the conversations to export.
+      //    - If the caller picked a specific thread (filters.conversationId), export just that one.
+      //    - Otherwise discover every group/internal conversation in the location (paginate by skip).
+      const conversationIdFilter = typeof filters?.conversationId === 'string' ? filters.conversationId.trim() : '';
       const allConversationIds = [];
-      const seen = new Set();
-      let skip = 0;
-      const SEARCH_LIMIT = 100;
-      const MAX_SEARCH_PAGES = 200; // hard stop (20,000 threads) — protects against a runaway loop
-      for (let page = 0; page < MAX_SEARCH_PAGES; page++) {
-        const searchFilters = {
-          conversationType,
-          limit: SEARCH_LIMIT,
-          skip
-        };
-        if (filters?.startDate) searchFilters.startDate = filters.startDate;
-        if (filters?.endDate) searchFilters.endDate = filters.endDate;
-
-        const result = await withRetry(() => ghlService.searchConversations(locationId, searchFilters));
-        const convos = result.conversations || [];
-        for (const c of convos) {
-          if (c?.id && !seen.has(c.id)) {
-            seen.add(c.id);
-            allConversationIds.push(c.id);
+      if (conversationIdFilter) {
+        allConversationIds.push(conversationIdFilter);
+        logger.info(`${exportType}: single conversation selected`, { conversationId: conversationIdFilter });
+      } else {
+        const seen = new Set();
+        let skip = 0;
+        const SEARCH_LIMIT = 100;
+        const MAX_SEARCH_PAGES = 200; // hard stop (20,000 threads) — protects against a runaway loop
+        for (let page = 0; page < MAX_SEARCH_PAGES; page++) {
+          const searchFilters = { conversationType, limit: SEARCH_LIMIT, skip };
+          const result = await withRetry(() => ghlService.searchConversations(locationId, searchFilters));
+          const convos = result.conversations || [];
+          for (const c of convos) {
+            if (c?.id && !seen.has(c.id)) {
+              seen.add(c.id);
+              allConversationIds.push(c.id);
+            }
           }
+          logger.info(`${exportType}: conversation search page`, { page, skip, returned: convos.length, totalSoFar: allConversationIds.length });
+          if (convos.length < SEARCH_LIMIT) break;
+          skip += SEARCH_LIMIT;
         }
-        logger.info(`${exportType}: conversation search page`, { page, skip, returned: convos.length, totalSoFar: allConversationIds.length });
-        if (convos.length < SEARCH_LIMIT) break;
-        skip += SEARCH_LIMIT;
+        logger.info(`${exportType}: conversations resolved`, { count: allConversationIds.length, conversationType });
       }
-
-      logger.info(`${exportType}: conversations resolved`, { count: allConversationIds.length, conversationType });
 
       // 2) Walk each conversation's messages (5 parallel), filtering to the group/internal type.
       const allMessages = [];

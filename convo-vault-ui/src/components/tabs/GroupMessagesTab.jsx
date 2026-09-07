@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { billingAPI } from '../../api/billing';
-import { Button, DatePicker, message as antMessage } from 'antd';
-import dayjs from 'dayjs';
+import { conversationsAPI } from '../../api/conversations';
+import { Button, Select, message as antMessage } from 'antd';
 import ExportEstimateModal from '../ExportEstimateModal';
 import ExportProgress from '../ExportProgress';
 
@@ -25,8 +25,28 @@ export default function GroupMessagesTab() {
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
 
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // Group-conversation dropdown. Empty selection = export ALL group conversations.
+  const [conversations, setConversations] = useState([]);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState('');
+
+  // Load group conversations (conversationType=5) for the dropdown on mount.
+  useEffect(() => {
+    if (!location?.id) return;
+    setConversationsLoading(true);
+    conversationsAPI.search(location.id, { conversationType: 5, limit: 100 })
+      .then(res => {
+        const list = res?.data?.conversations || res?.conversations || [];
+        setConversations(list);
+      })
+      .catch(() => {})
+      .finally(() => setConversationsLoading(false));
+  }, [location?.id]);
+
+  const conversationOptions = conversations.map(c => ({
+    value: c.id,
+    label: c.fullName || c.contactName || c.lastMessageBody?.slice(0, 40) || c.id
+  }));
 
   // Poll active job
   useEffect(() => {
@@ -46,8 +66,7 @@ export default function GroupMessagesTab() {
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
   const buildExportFilters = () => ({
-    startDate: startDate || undefined,
-    endDate: endDate || undefined
+    conversationId: selectedConversationId || undefined
   });
 
   const handleGetEstimate = async () => {
@@ -142,28 +161,27 @@ export default function GroupMessagesTab() {
       )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        {/* Date range (optional) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-            <DatePicker
-              value={startDate ? dayjs(startDate) : null}
-              onChange={(date) => setStartDate(date ? date.format('YYYY-MM-DD') : '')}
-              className="w-full"
-              size="large"
-              placeholder="Select start date"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-            <DatePicker
-              value={endDate ? dayjs(endDate) : null}
-              onChange={(date) => setEndDate(date ? date.format('YYYY-MM-DD') : '')}
-              className="w-full"
-              size="large"
-              placeholder="Select end date"
-            />
-          </div>
+        {/* Group conversation picker — leave empty to export ALL group conversations. */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Group Conversation</label>
+          <Select
+            allowClear
+            showSearch
+            value={selectedConversationId || undefined}
+            onChange={(val) => setSelectedConversationId(val || '')}
+            optionFilterProp="label"
+            loading={conversationsLoading}
+            placeholder="All group conversations"
+            options={conversationOptions}
+            style={{ width: '100%' }}
+            size="large"
+            notFoundContent={conversationsLoading ? 'Loading conversations…' : 'No group conversations found'}
+          />
+          <p className="text-xs text-gray-500 mt-2">
+            {selectedConversationId
+              ? 'Exporting just the selected group conversation.'
+              : 'Leave empty to export every group conversation in this sub-account.'}
+          </p>
         </div>
 
         <Button
