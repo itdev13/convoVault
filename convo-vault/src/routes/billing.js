@@ -118,7 +118,7 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle', 'messagesByTag'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle', 'messagesByTag', 'groupMessages', 'internalMessages'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -1521,6 +1521,156 @@ router.post('/estimate', authenticateSession, async (req, res) => {
           specialExportId: specialExport._id
         }
       });
+    } else if (exportType === 'groupMessages' || exportType === 'internalMessages') {
+      // Group & Internal chat export.
+      //
+      // These threads are INVISIBLE to the normal message export: group SMS is excluded from the
+      // default /conversations/search (GHL requires conversationType=5 explicitly), and internal
+      // chat (conversationType=6) is never queried. So we discover the threads by type, then walk
+      // each thread's messages with the matching message-type filter.
+      //
+      //   groupMessages    → conversationType=5, message type TYPE_GROUP_SMS
+      //   internalMessages → conversationType=6, message type TYPE_INTERNAL_CHAT
+      //
+      // Everything after discovery (chunked SpecialExport storage, per-message pricing, the Lambda
+      // reader) is identical to specialTabMessages — Lambda reads these via the same chunk path.
+      const isGroup = exportType === 'groupMessages';
+      const conversationType = isGroup ? 5 : 6;
+      const messageType = isGroup ? 'TYPE_GROUP_SMS' : 'TYPE_INTERNAL_CHAT';
+
+      // Retry on 429 with exponential backoff (mirrors specialTabMessages)
+      const withRetry = async (fn, maxRetries = 4) => {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            return await fn();
+          } catch (err) {
+            const is429 = err.response?.status === 429;
+            const is5xx = err.response?.status >= 500 && err.response?.status < 600;
+            if ((is429 || is5xx) && attempt < maxRetries) {
+              const delay = Math.min(30000, Math.pow(2, attempt) * 2000) + Math.floor(Math.random() * 500);
+              logger.warn(`${exportType}: transient error, retrying`, { status: err.response?.status, attempt: attempt + 1, delay });
+              await new Promise(r => setTimeout(r, delay));
+            } else {
+              throw err;
+            }
+          }
+        }
+      };
+
+      // 1) Discover every group/internal conversation in the location (paginate by skip).
+      const allConversationIds = [];
+      const seen = new Set();
+      let skip = 0;
+      const SEARCH_LIMIT = 100;
+      const MAX_SEARCH_PAGES = 200; // hard stop (20,000 threads) — protects against a runaway loop
+      for (let page = 0; page < MAX_SEARCH_PAGES; page++) {
+        const searchFilters = {
+          conversationType,
+          limit: SEARCH_LIMIT,
+          skip
+        };
+        if (filters?.startDate) searchFilters.startDate = filters.startDate;
+        if (filters?.endDate) searchFilters.endDate = filters.endDate;
+
+        const result = await withRetry(() => ghlService.searchConversations(locationId, searchFilters));
+        const convos = result.conversations || [];
+        for (const c of convos) {
+          if (c?.id && !seen.has(c.id)) {
+            seen.add(c.id);
+            allConversationIds.push(c.id);
+          }
+        }
+        logger.info(`${exportType}: conversation search page`, { page, skip, returned: convos.length, totalSoFar: allConversationIds.length });
+        if (convos.length < SEARCH_LIMIT) break;
+        skip += SEARCH_LIMIT;
+      }
+
+      logger.info(`${exportType}: conversations resolved`, { count: allConversationIds.length, conversationType });
+
+      // 2) Walk each conversation's messages (5 parallel), filtering to the group/internal type.
+      const allMessages = [];
+      const PARALLEL = 5;
+      for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
+        const batch = allConversationIds.slice(i, i + PARALLEL);
+        const results = await Promise.allSettled(
+          batch.map(async (cId) => {
+            const msgs = [];
+            let cursor = undefined;
+            const PAGE_SIZE = 300;
+            while (true) {
+              const msgOptions = { limit: PAGE_SIZE, type: messageType };
+              if (cursor) msgOptions.lastMessageId = cursor;
+              const r = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
+              const wrapper = r.messages || {};
+              const pageMsgs = wrapper.messages || [];
+              msgs.push(...pageMsgs.map(m => ({ ...m, conversationId: cId })));
+              if (pageMsgs.length < PAGE_SIZE || !wrapper.nextPage) break;
+              cursor = wrapper.lastMessageId;
+            }
+            return msgs;
+          })
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') allMessages.push(...r.value);
+        }
+      }
+
+      logger.info(`${exportType}: fetched`, { totalMessages: allMessages.length, totalConversations: allConversationIds.length });
+
+      // 3) Chunk into 5,000-message SpecialExport docs (same as specialTabMessages → same Lambda reader).
+      const CHUNK_SIZE = 5000;
+      const totalChunks = Math.max(1, Math.ceil(allMessages.length / CHUNK_SIZE));
+      const firstChunkMessages = allMessages.slice(0, CHUNK_SIZE);
+      const specialExport = await SpecialExport.create({
+        locationId,
+        filters: { type: messageType, conversationType },
+        messages: firstChunkMessages,
+        totalMessages: allMessages.length,
+        totalConversations: allConversationIds.length,
+        chunkIndex: 0,
+        totalChunks,
+        status: 'ready'
+      });
+
+      if (totalChunks > 1) {
+        const chunkDocs = [];
+        for (let ci = 1; ci < totalChunks; ci++) {
+          chunkDocs.push({
+            locationId,
+            filters: { type: messageType, conversationType },
+            messages: allMessages.slice(ci * CHUNK_SIZE, (ci + 1) * CHUNK_SIZE),
+            totalMessages: allMessages.length,
+            totalConversations: allConversationIds.length,
+            groupId: specialExport._id,
+            chunkIndex: ci,
+            totalChunks,
+            status: 'ready',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+        }
+        await SpecialExport.insertMany(chunkDocs);
+        logger.info(`${exportType}: chunks stored`, { totalChunks, totalMessages: allMessages.length });
+      }
+
+      const total = allMessages.length;
+      const unitPrice = 0.018; // same per-message pricing as Special Messages
+      const finalAmount = total * unitPrice;
+      return res.json({
+        success: true,
+        data: {
+          estimate: {
+            itemCounts: { [exportType]: total, total },
+            baseAmount: finalAmount,
+            discountPercent: 0,
+            discountAmount: 0,
+            finalAmount
+          },
+          filters,
+          exportType,
+          specialExportId: specialExport._id
+        }
+      });
     } else if (exportType === 'specialTabMessages') {
       // Special Messages: fetch messages matching the type(s) from a SCOPED set of conversations.
       // Caller must provide either filters.conversationId OR filters.contactIds — the previous
@@ -2285,7 +2435,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       });
     }
 
-    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle', 'messagesByTag'];
+    const validExportTypes = ['conversations', 'messages', 'notes', 'tasks', 'opportunities', 'formSubmissions', 'links', 'socialPosts', 'callLogs', 'templates', 'specialTabMessages', 'callTranscriptions', 'contacts', 'customFields', 'customValues', 'tags', 'opportunityStageHistory', 'contactBundle', 'messagesByTag', 'groupMessages', 'internalMessages'];
     if (!exportType || !validExportTypes.includes(exportType)) {
       return res.status(400).json({
         success: false,
@@ -2467,6 +2617,11 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
         // Use estimatedTotal from frontend (do not re-walk GHL).
         totalItems = filters?.estimatedTotal || 0;
 
+      } else if (exportType === 'groupMessages' || exportType === 'internalMessages') {
+        // Group / Internal chat: messages already gathered + chunked during /estimate.
+        // Use estimatedTotal from frontend (do not re-walk GHL).
+        totalItems = filters?.estimatedTotal || 0;
+
       } else if (exportType === 'callTranscriptions') {
         // Use estimatedTotal from frontend (already counted during estimate — heavy task, do not re-walk)
         totalItems = filters?.estimatedTotal || 0;
@@ -2580,6 +2735,13 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
       const finalAmount = totalItems * unitPrice;
       estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
       meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: 'Messages by tag export' }];
+    } else if (exportType === 'groupMessages' || exportType === 'internalMessages') {
+      // Group / Internal chat: same per-message pricing as Special Messages ($0.018/msg, same meter).
+      const unitPrice = 0.018;
+      const finalAmount = totalItems * unitPrice;
+      estimate = { baseAmount: finalAmount, discountPercent: 0, discountAmount: 0, finalAmount };
+      const desc = exportType === 'groupMessages' ? 'Group messages export' : 'Internal messages export';
+      meterCharges = [{ meterId: '69864aed1265653fdd7c0620', qty: totalItems, description: desc }];
     } else if (exportType === 'callTranscriptions') {
       // Call Transcriptions: standalone billing (flat $0.05/record, single meter charge, no discount).
       // Reuses the same meter as specialTabMessages.
@@ -2833,7 +2995,7 @@ router.post('/charge-and-export', authenticateSession, async (req, res) => {
 
     // Step 9a: Link the SpecialExport to this job.
     // For specialTabMessages and opportunityStageHistory it was created during /estimate; for callTranscriptions it was created in Step 7a (post-charge).
-    if (['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle', 'messagesByTag'].includes(exportType) && filters?.specialExportId) {
+    if (['specialTabMessages', 'callTranscriptions', 'opportunityStageHistory', 'contactBundle', 'messagesByTag', 'groupMessages', 'internalMessages'].includes(exportType) && filters?.specialExportId) {
       try {
         await SpecialExport.findByIdAndUpdate(filters.specialExportId, {
           exportJobId: exportJob._id

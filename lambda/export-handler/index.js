@@ -1412,6 +1412,8 @@ async function sendEmail(email, downloadUrl, jobDetails) {
         jobDetails.exportType === 'tags' ? 'Tags' :
         jobDetails.exportType === 'specialTabMessages' ? 'Special Messages' :
         jobDetails.exportType === 'messagesByTag' ? 'Messages by Tag' :
+        jobDetails.exportType === 'groupMessages' ? 'Group Messages' :
+        jobDetails.exportType === 'internalMessages' ? 'Internal Messages' :
         jobDetails.exportType === 'callTranscriptions' ? 'Call Transcriptions' :
         jobDetails.exportType === 'opportunityStageHistory' ? 'Opportunity Stage History' :
         jobDetails.exportType === 'contacts' ? 'Contacts' : 'Messages'
@@ -2185,7 +2187,7 @@ exports.handler = async (event, context) => {
       cursor = contactsCursor ? JSON.stringify(contactsCursor) : null;
       hasMoreData = !!cursor;
 
-    } else if (job.exportType === 'specialTabMessages' || job.exportType === 'messagesByTag' || job.exportType === 'callTranscriptions' || job.exportType === 'opportunityStageHistory' || job.exportType === 'contactBundle') {
+    } else if (job.exportType === 'specialTabMessages' || job.exportType === 'messagesByTag' || job.exportType === 'groupMessages' || job.exportType === 'internalMessages' || job.exportType === 'callTranscriptions' || job.exportType === 'opportunityStageHistory' || job.exportType === 'contactBundle') {
       // === SPECIAL MESSAGES / CALL TRANSCRIPTIONS: Read pre-fetched records from chunked specialexports ===
       // Chunk 0 is the "root" doc (has exportJobId). Remaining chunks share groupId = root._id.
       // Each chunk holds up to CHUNK_SIZE (5000) messages, matching BATCH_SIZE so one invocation = one chunk.
@@ -2421,7 +2423,7 @@ exports.handler = async (event, context) => {
         content = customValuesToCSV(records, isFirstContent);
       } else if (job.exportType === 'tags') {
         content = tagsToCSV(records, isFirstContent);
-      } else if (job.exportType === 'specialTabMessages' || job.exportType === 'messagesByTag') {
+      } else if (job.exportType === 'specialTabMessages' || job.exportType === 'messagesByTag' || job.exportType === 'groupMessages' || job.exportType === 'internalMessages') {
         content = specialMessagesToCSV(records, isFirstContent);
       } else if (job.exportType === 'opportunityStageHistory') {
         content = opportunityStageHistoryToCSV(records, isFirstContent, oshContactCfNames, oshOpportunityCfNames);

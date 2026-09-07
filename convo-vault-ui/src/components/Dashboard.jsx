@@ -16,6 +16,8 @@ import SpecialMessagesTab from './tabs/SpecialMessagesTab';
 import CallTranscriptionsTab from './tabs/CallTranscriptionsTab';
 import ContactBundleTab from './tabs/ContactBundleTab';
 import MessagesByTagTab from './tabs/MessagesByTagTab';
+import GroupMessagesTab from './tabs/GroupMessagesTab';
+import InternalMessagesTab from './tabs/InternalMessagesTab';
 import ExportContactsTab from './tabs/ExportContactsTab';
 import ConversationMessages from './ConversationMessages';
 import { billingAPI } from '../api/billing';
@@ -83,6 +85,8 @@ export default function Dashboard() {
         { id: 'specialTabMessages', label: 'Activity Messages', icon: '💎' },
         { id: 'contactBundle', label: 'All Contact Communication', icon: '📦' },
         { id: 'messagesByTag', label: 'Messages by Tag', icon: '🏷️' },
+        { id: 'groupMessages', label: 'Group Messages', icon: '👥' },
+        { id: 'internalMessages', label: 'Internal Messages', icon: '🗂️' },
         ...(callTranscriptionsEnabled ? [{ id: 'callTranscriptions', label: 'Call Transcriptions', icon: '🎙️' }] : []),
       ]
     },
@@ -519,6 +523,8 @@ export default function Dashboard() {
                 {activeTab === 'callTranscriptions' && callTranscriptionsEnabled && <CallTranscriptionsTab />}
                 {activeTab === 'contactBundle' && <ContactBundleTab />}
                 {activeTab === 'messagesByTag' && <MessagesByTagTab />}
+                {activeTab === 'groupMessages' && <GroupMessagesTab />}
+                {activeTab === 'internalMessages' && <InternalMessagesTab />}
                 {activeTab === 'customCharge' && customChargeEnabled && <CustomChargeTab />}
                 {activeTab === 'importContacts' && <ImportContactsTab />}
                 {activeTab === 'importNotes' && <ImportNotesTab />}
