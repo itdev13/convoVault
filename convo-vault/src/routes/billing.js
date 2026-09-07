@@ -1558,13 +1558,19 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       };
 
       // 1) Resolve the conversations to export.
-      //    - If the caller picked a specific thread (filters.conversationId), export just that one.
+      //    - If the caller picked specific thread(s) (filters.conversationIds[] or filters.conversationId),
+      //      export just those.
       //    - Otherwise discover every group/internal conversation in the location (paginate by skip).
-      const conversationIdFilter = typeof filters?.conversationId === 'string' ? filters.conversationId.trim() : '';
+      const pickedIds = [
+        ...(Array.isArray(filters?.conversationIds) ? filters.conversationIds : []),
+        ...(typeof filters?.conversationId === 'string' ? [filters.conversationId] : [])
+      ].map(id => String(id || '').trim()).filter(Boolean);
+      const uniquePickedIds = [...new Set(pickedIds)];
+
       const allConversationIds = [];
-      if (conversationIdFilter) {
-        allConversationIds.push(conversationIdFilter);
-        logger.info(`${exportType}: single conversation selected`, { conversationId: conversationIdFilter });
+      if (uniquePickedIds.length > 0) {
+        allConversationIds.push(...uniquePickedIds);
+        logger.info(`${exportType}: specific conversations selected`, { count: uniquePickedIds.length });
       } else {
         const seen = new Set();
         let skip = 0;

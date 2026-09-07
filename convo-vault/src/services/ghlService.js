@@ -509,7 +509,9 @@ class GHLService {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Version': '2021-07-28'
+        // Some endpoints (e.g. group-chat conversation search with conversationType=5) require a
+        // newer API version than the default. Callers can override via opts.version.
+        'Version': opts.version || '2021-07-28'
       }
     };
 
@@ -697,14 +699,19 @@ class GHLService {
     });
 
     try {
+      // Group/internal chat search (conversationType 5/6) needs a newer API version than the
+      // default 2021-07-28 to return results — request v3 when a conversationType is specified.
+      const reqOpts = params.conversationType != null ? { version: 'v3' } : {};
       const result = await this.apiRequest(
         'GET',
         '/conversations/search',
         locationId,
         null,
-        params
+        params,
+        0,
+        reqOpts
       );
-      
+
       logger.info('✅ Conversations search successful', {
         count: result.conversations?.length || 0
       });

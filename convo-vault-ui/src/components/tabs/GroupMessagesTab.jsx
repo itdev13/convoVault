@@ -25,23 +25,36 @@ export default function GroupMessagesTab() {
   const [processing, setProcessing] = useState(false);
   const [activeJob, setActiveJob] = useState(null);
 
-  // Group-conversation dropdown. Empty selection = export ALL group conversations.
+  // Group-conversation multi-select. Empty selection = export ALL group conversations.
   const [conversations, setConversations] = useState([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
-  const [selectedConversationId, setSelectedConversationId] = useState('');
+  const [selectedConversationIds, setSelectedConversationIds] = useState([]);
 
-  // Load group conversations (conversationType=5) for the dropdown on mount.
-  useEffect(() => {
+  // Fetch group conversations (conversationType=5). `query` searches server-side across subject,
+  // participant names/emails/phones and last message body. Empty query = most recent 100 threads.
+  const fetchConversations = (query = '') => {
     if (!location?.id) return;
     setConversationsLoading(true);
-    conversationsAPI.search(location.id, { conversationType: 5, limit: 100 })
+    const filters = { conversationType: 5, limit: 100 };
+    if (query) filters.query = query;
+    conversationsAPI.search(location.id, filters)
       .then(res => {
         const list = res?.data?.conversations || res?.conversations || [];
         setConversations(list);
       })
       .catch(() => {})
       .finally(() => setConversationsLoading(false));
-  }, [location?.id]);
+  };
+
+  // Initial load.
+  useEffect(() => { fetchConversations(''); }, [location?.id]);
+
+  // Debounce the type-to-search so we hit the API at most every 400ms.
+  const searchTimer = React.useRef(null);
+  const handleSearch = (value) => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => fetchConversations(value.trim()), 400);
+  };
 
   const conversationOptions = conversations.map(c => ({
     value: c.id,
@@ -66,7 +79,7 @@ export default function GroupMessagesTab() {
   }, [activeJob?.jobId, activeJob?.status, location?.id]);
 
   const buildExportFilters = () => ({
-    conversationId: selectedConversationId || undefined
+    conversationIds: selectedConversationIds.length > 0 ? selectedConversationIds : undefined
   });
 
   const handleGetEstimate = async () => {
@@ -165,22 +178,25 @@ export default function GroupMessagesTab() {
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">Group Conversation</label>
           <Select
+            mode="multiple"
             allowClear
             showSearch
-            value={selectedConversationId || undefined}
-            onChange={(val) => setSelectedConversationId(val || '')}
-            optionFilterProp="label"
+            value={selectedConversationIds}
+            onChange={setSelectedConversationIds}
+            onSearch={handleSearch}
+            filterOption={false}
             loading={conversationsLoading}
             placeholder="All group conversations"
             options={conversationOptions}
             style={{ width: '100%' }}
             size="large"
+            maxTagCount="responsive"
             notFoundContent={conversationsLoading ? 'Loading conversations…' : 'No group conversations found'}
           />
           <p className="text-xs text-gray-500 mt-2">
-            {selectedConversationId
-              ? 'Exporting just the selected group conversation.'
-              : 'Leave empty to export every group conversation in this sub-account.'}
+            {selectedConversationIds.length > 0
+              ? <>Exporting <strong>{selectedConversationIds.length}</strong> selected group conversation{selectedConversationIds.length === 1 ? '' : 's'}.</>
+              : 'Type to search. Leave empty to export every group conversation in this sub-account.'}
           </p>
         </div>
 
