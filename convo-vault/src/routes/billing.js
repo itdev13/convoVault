@@ -1529,14 +1529,17 @@ router.post('/estimate', authenticateSession, async (req, res) => {
       // chat (conversationType=6) is never queried. So we discover the threads by type, then walk
       // each thread's messages with the matching message-type filter.
       //
-      //   groupMessages    → conversationType=5, message type TYPE_GROUP_SMS
+      //   groupMessages    → conversationType=5, message type TYPE_SMS (no TYPE_GROUP_SMS exists)
       //   internalMessages → conversationType=6, message type TYPE_INTERNAL_CHAT
       //
       // Everything after discovery (chunked SpecialExport storage, per-message pricing, the Lambda
       // reader) is identical to specialTabMessages — Lambda reads these via the same chunk path.
       const isGroup = exportType === 'groupMessages';
       const conversationType = isGroup ? 5 : 6;
-      const messageType = isGroup ? 'TYPE_GROUP_SMS' : 'TYPE_INTERNAL_CHAT';
+      // Group chat passes NO message-type filter (fetch every message in the thread by
+      // conversationId — the conversationType=5 search already scoped us to group threads).
+      // Internal chat filters to TYPE_INTERNAL_CHAT.
+      const messageType = isGroup ? null : 'TYPE_INTERNAL_CHAT';
 
       // Retry on 429 with exponential backoff (mirrors specialTabMessages)
       const withRetry = async (fn, maxRetries = 4) => {
@@ -1593,7 +1596,10 @@ router.post('/estimate', authenticateSession, async (req, res) => {
         logger.info(`${exportType}: conversations resolved`, { count: allConversationIds.length, conversationType });
       }
 
-      // 2) Walk each conversation's messages (5 parallel), filtering to the group/internal type.
+      // 2) Walk each conversation's messages (5 parallel).
+      //    For group chat we do NOT pass a message-type filter — just fetch every message in the
+      //    conversation by conversationId (the conversationType=5 search already scoped us to group
+      //    threads). Internal chat still filters to TYPE_INTERNAL_CHAT.
       const allMessages = [];
       const PARALLEL = 5;
       for (let i = 0; i < allConversationIds.length; i += PARALLEL) {
@@ -1604,7 +1610,8 @@ router.post('/estimate', authenticateSession, async (req, res) => {
             let cursor = undefined;
             const PAGE_SIZE = 300;
             while (true) {
-              const msgOptions = { limit: PAGE_SIZE, type: messageType };
+              const msgOptions = { limit: PAGE_SIZE };
+              if (!isGroup) msgOptions.type = messageType;
               if (cursor) msgOptions.lastMessageId = cursor;
               const r = await withRetry(() => ghlService.getMessages(locationId, cId, msgOptions));
               const wrapper = r.messages || {};
